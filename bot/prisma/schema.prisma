@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id          Int       @id @default(autoincrement())
+  telegramId  BigInt    @unique @map("telegram_id")
+  username    String?   @db.VarChar(255)
+  firstName   String?   @map("first_name") @db.VarChar(255)
+  role        Role      @default(USER)
+  vpnBlocked  Boolean   @default(false) @map("vpn_blocked")
+  isBanned    Boolean   @default(false) @map("is_banned")
+  bannedAt    DateTime? @map("banned_at") @db.Timestamptz()
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  vpnKeys VpnKey[]
+
+  @@map("users")
+}
+
+model VpnKey {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @map("user_id")
+  xuiClientId     String   @map("xui_client_id") @db.VarChar(255)
+  subId           String?  @map("sub_id") @db.VarChar(128)
+  subscriptionUrl String   @map("subscription_url")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  expiresAt       DateTime @map("expires_at") @db.Timestamptz()
+  isActive        Boolean  @default(true) @map("is_active")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, isActive])
+  @@index([subId])
+  @@index([expiresAt])
+  @@map("vpn_keys")
+}
