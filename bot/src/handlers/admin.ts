@@ -182,3 +182,21 @@ export async function usersHandler(ctx: AuthContext): Promise<void> {
     await ctx.reply(text);
   }
 }
+
+export async function adminPhotoIdHandler(ctx: AuthContext): Promise<void> {
+  if (ctx.dbUser.role !== Role.ADMIN) return;
+  if (!ctx.message || !("photo" in ctx.message) || ctx.message.photo.length === 0) return;
+
+  const bestPhoto = ctx.message.photo[ctx.message.photo.length - 1];
+
+  await ctx.reply(
+    [
+      "ID изображения для постов:",
+      `<code>${bestPhoto.file_id}</code>`,
+      "",
+      "file_unique_id:",
+      `<code>${bestPhoto.file_unique_id}</code>`,
+    ].join("\n"),
+    { parse_mode: "HTML" }
+  );
+}

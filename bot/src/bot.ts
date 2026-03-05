@@ -4,6 +4,7 @@ import { type AuthContext, authMiddleware, adminOnly } from "./middlewares/auth.
 import { startHandler } from "./handlers/start.js";
 import { vpnHandler, statusHandler } from "./handlers/vpn.js";
 import {
+  adminPhotoIdHandler,
   blockHandler,
   unblockHandler,
   banHandler,
@@ -27,6 +28,7 @@ export function createBot(): Telegraf<AuthContext> {
   bot.command("unban", adminOnly(), unbanHandler);
   bot.command("promote", adminOnly(), promoteHandler);
   bot.command("users", adminOnly(), usersHandler);
+  bot.on("photo", adminPhotoIdHandler);
 
   return bot;
 }

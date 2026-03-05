@@ -15,6 +15,8 @@ const envSchema = z.object({
 
   VPN_KEY_DURATION_DAYS: z.coerce.number().int().positive().default(7),
   VPN_TRAFFIC_LIMIT_GB: z.coerce.number().int().positive().default(50),
+  VPN_SETUP_IMAGE_FILE_ID: z.string().min(1),
+  VPN_SETUP_IMAGE_FILE_ID_2: z.string().optional().default(""),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -39,4 +41,6 @@ export const config = {
 
   vpnKeyDurationDays: parsed.data.VPN_KEY_DURATION_DAYS,
   vpnTrafficLimitGb: parsed.data.VPN_TRAFFIC_LIMIT_GB,
+  vpnSetupImageFileId: parsed.data.VPN_SETUP_IMAGE_FILE_ID,
+  vpnSetupImageFileId2: parsed.data.VPN_SETUP_IMAGE_FILE_ID_2,
 } as const;

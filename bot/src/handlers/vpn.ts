@@ -1,36 +1,38 @@
 import { logger } from "../logger.js";
 import { type AuthContext } from "../middlewares/auth.js";
+import { config } from "../config.js";
 import { vpnService } from "../services/vpn.service.js";
-
-const VPN_SETUP_INSTRUCTIONS = [
-  "<b>Как подключиться</b>",
-  "",
-  "<b>1) Установите V2Box</b>",
-  "• <a href=\"https://apps.apple.com/us/app/v2box-v2ray-client/id6446814690\">iOS (App Store)</a>",
-  "• <a href=\"https://play.google.com/store/apps/details?id=dev.hexasoftware.v2box\">Android (Google Play)</a>",
-  "",
-  "<b>2) Импортируйте ключ в V2Box</b>",
-  "2.1 Скопируйте ссылку из блока <b>Ваш ключ</b> целиком",
-  "2.2 Откройте приложение V2Box",
-  "2.3 Внизу нажмите <b>Конфигурации</b>",
-  "2.4 Сверху нажмите кнопку <b>+</b>",
-  "2.5 Выберите <b>Импортировать v2ray URI из буфера обмена</b>",
-  "",
-  "<b>3) Подключитесь</b>",
-  "• Выберите импортированный профиль",
-  "• Нажмите Connect",
-  "",
-  "<b>Если не подключается</b>",
-  "• Обновите подписку в приложении",
-  "• Проверьте автонастройку даты и времени на устройстве",
-  "• Попробуйте другую сеть (Wi-Fi/мобильный интернет)",
-].join("\n");
 
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+function buildSetupInstructions(subscriptionUrl: string): string {
+  return [
+    "Привет! Чтобы установить на свой телефон наш клубный VPN «МОЖНО», просто пройди по шагам:",
+    "",
+    "<b>1.</b> Сначала установи приложение V2Box:",
+    "• <a href=\"https://apps.apple.com/us/app/v2box-v2ray-client/id6446814690\">для iOS</a>",
+    "• <a href=\"https://play.google.com/store/apps/details?id=dev.hexasoftware.v2box\">для Android</a>",
+    "",
+    "<b>2.</b> Эти буквы и цифры — ключ (нажми на него и скопируй):",
+    `<pre>${escapeHtml(subscriptionUrl)}</pre>`,
+    "",
+    "<b>3.</b> Открой приложение:",
+    "• Внизу нажми <b>Конфигурации</b> (если непонятно, см. картинку под этим текстом)",
+    "• Сверху нажми кнопку <b>➕</b>",
+    "• Выбери <b>Импортировать v2ray URI из буфера обмена</b>",
+    "",
+    "<b>4.</b> Подключайся — нажми <b>Connect</b>",
+    "",
+    "<i>Если не подключается</i>",
+    "<i>• Обнови подписку в приложении</i>",
+    "<i>• Проверь автонастройку даты и времени на устройстве</i>",
+    "<i>• Попробуй другую сеть (Wi-Fi/мобильный интернет)</i>",
+  ].join("\n");
 }
 
 function formatDate(date: Date): string {
@@ -64,19 +66,32 @@ export async function vpnHandler(ctx: AuthContext): Promise<void> {
 
   try {
     const result = await vpnService.getOrCreateKey(user);
-    const { key, alreadyExisted } = result;
+    const { key } = result;
+    const text = buildSetupInstructions(key.subscriptionUrl);
 
-    let text: string;
-    if (alreadyExisted) {
-      text = `У вас уже есть активный ключ.\n\nСрок действия до: ${formatDate(key.expiresAt)}\nОсталось: ${remainingTime(key.expiresAt)}`;
-    } else {
-      text = `VPN-ключ создан!\n\nСрок действия до: ${formatDate(key.expiresAt)}`;
+    if (config.vpnSetupImageFileId2) {
+      await ctx.replyWithMediaGroup([
+        {
+          type: "photo",
+          media: config.vpnSetupImageFileId,
+          caption: text,
+          parse_mode: "HTML",
+          show_caption_above_media: true,
+        },
+        {
+          type: "photo",
+          media: config.vpnSetupImageFileId2,
+          show_caption_above_media: true,
+        },
+      ] as any);
+      return;
     }
 
-    text += `\n\n<b>Ваш ключ (нажмите, чтобы скопировать)</b>:\n<pre>${escapeHtml(key.subscriptionUrl)}</pre>`;
-    text += `\n\n${VPN_SETUP_INSTRUCTIONS}`;
-
-    await ctx.reply(text, { parse_mode: "HTML" });
+    await ctx.replyWithPhoto(config.vpnSetupImageFileId, {
+      caption: text,
+      parse_mode: "HTML",
+      show_caption_above_media: true,
+    } as any);
   } catch (err) {
     logger.error("vpnHandler error:", err);
     await ctx.reply("Не удалось создать VPN-ключ, попробуйте позже.");
