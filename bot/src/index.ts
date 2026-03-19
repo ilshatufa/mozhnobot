@@ -2,6 +2,7 @@ import { logger } from "./logger.js";
 import { prisma } from "./database.js";
 import { createBot } from "./bot.js";
 import { config } from "./config.js";
+import { registerProcessErrorHandlers } from "./error-handling.js";
 
 async function main(): Promise<void> {
   await prisma.$connect();
@@ -27,6 +28,8 @@ async function main(): Promise<void> {
   await bot.launch();
   logger.info("Bot started");
 }
+
+registerProcessErrorHandlers();
 
 main().catch((err) => {
   logger.fatal("Failed to start:", err);

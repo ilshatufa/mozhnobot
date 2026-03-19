@@ -3,6 +3,7 @@ import { Role, type User } from "@prisma/client";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
 import { userRepository } from "../repositories/user.repository.js";
+import { isBotBlockedError } from "../telegram-errors.js";
 
 export interface AuthContext extends Context {
   dbUser: User;
@@ -15,8 +16,8 @@ export function authMiddleware(): MiddlewareFn<AuthContext> {
     const telegramId = ctx.from?.id;
     if (!telegramId) return;
 
-    // Только ЛС
-    if (ctx.chat?.type !== "private") return;
+    // Обрабатываем только личные сообщения/команды пользователя.
+    if (ctx.chat?.type !== "private" || ctx.updateType !== "message") return;
 
     const tgId = BigInt(telegramId);
 
@@ -34,6 +35,10 @@ export function authMiddleware(): MiddlewareFn<AuthContext> {
         return;
       }
     } catch (err) {
+      if (isBotBlockedError(err)) {
+        logger.info(`Skipping auth for blocked bot user ${telegramId}`);
+        return;
+      }
       logger.error("getChatMember failed:", err);
       await ctx.reply("Сервис временно недоступен. Попробуйте позже.");
       return;

@@ -12,9 +12,14 @@ import {
   promoteHandler,
   usersHandler,
 } from "./handlers/admin.js";
+import { handleBotError } from "./error-handling.js";
 
 export function createBot(): Telegraf<AuthContext> {
   const bot = new Telegraf<AuthContext>(config.botToken);
+
+  bot.catch((err, ctx) => {
+    handleBotError(err, ctx);
+  });
 
   bot.use(authMiddleware());
 
