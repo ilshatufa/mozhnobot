@@ -44,6 +44,50 @@ docker compose up -d
 
 Сервис `migrate` автоматически применит миграции при первом запуске.
 
+## Backup And Restore
+
+Скрипты лежат в `scripts/` и используют `docker compose` для дампа и восстановления PostgreSQL.
+
+### Создать backup-архив
+
+```bash
+./scripts/backup-create.sh
+```
+
+Архив попадёт в `./backups/` и будет содержать:
+
+- `docker-compose.yml`
+- `.env`
+- `bot/`
+- `postgres/`
+- `scripts/`
+- дамп PostgreSQL `backup/postgres.dump`
+
+### Передать архив на другой сервер
+
+```bash
+./scripts/backup-transfer.sh ./backups/mozhno-backup-<timestamp>.tar.gz user@host /opt/mozhnobot/mozhno-backup.tar.gz
+```
+
+### Развернуть архив на другом сервере
+
+```bash
+./scripts/backup-restore.sh /opt/mozhnobot/mozhno-backup.tar.gz /opt/mozhnobot
+```
+
+Скрипт:
+
+- копирует файлы проекта в целевую папку
+- поднимает `postgres`
+- восстанавливает дамп БД через `pg_restore`
+- запускает сервисы через `docker compose up -d --build`
+
+### Один запуск: backup + transfer + remote restore
+
+```bash
+./scripts/backup-deploy-remote.sh user@host /opt/mozhnobot
+```
+
 ## Команды бота
 
 | Команда | Доступ | Описание |
