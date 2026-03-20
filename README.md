@@ -83,7 +83,13 @@ docker compose up -d
 ./scripts/backup-restore-mounted.sh postgres-<timestamp>.dump
 ```
 
-Скрипт использует примонтированную папку `/backups` внутри контейнера `postgres`.
+Или так, если восстанавливаешь из полного архива:
+
+```bash
+./scripts/backup-restore-mounted.sh ./postgres/backups/mozhno-backup-<timestamp>.tar.gz
+```
+
+Скрипт принимает `postgres-*.dump` и `mozhno-backup-*.tar.gz`, использует примонтированную папку `/backups` внутри контейнера `postgres` и также понимает пути вида `./postgres/backups/...`.
 
 Скрипт:
 
