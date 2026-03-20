@@ -3,5 +3,7 @@ dist/
 .env
 .DS_Store
 *.log
-postgres/db_data/
-postgres/backups/
+postgres/db_data/*
+!postgres/db_data/.gitkeep
+postgres/backups/*
+!postgres/backups/.gitkeep

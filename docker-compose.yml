@@ -28,7 +28,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/db_data:/var/lib/postgresql/data
+      - ./postgres/backups:/backups
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
@@ -41,7 +42,6 @@ services:
     restart: unless-stopped
 
 volumes:
-  postgres_data:
   bot_node_modules:
 
 networks:
