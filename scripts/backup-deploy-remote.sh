@@ -11,7 +11,7 @@ fi
 
 REMOTE_HOST="$1"
 REMOTE_DIR="${2:-/opt/mozhnobot}"
-LOCAL_OUTPUT_DIR="${3:-$ROOT_DIR/backups}"
+LOCAL_OUTPUT_DIR="${3:-$ROOT_DIR/postgres/backups}"
 
 ARCHIVE_PATH="$("$SCRIPT_DIR/backup-create.sh" "$LOCAL_OUTPUT_DIR" | tail -n 1)"
 REMOTE_ARCHIVE_PATH="${REMOTE_DIR}/$(basename "$ARCHIVE_PATH")"

@@ -54,7 +54,9 @@ docker compose up -d
 ./scripts/backup-create.sh
 ```
 
-Архив попадёт в `./backups/` и будет содержать:
+Архив попадёт в `./postgres/backups/`. Туда же отдельно сохранится raw dump `postgres-<timestamp>.dump`, а сама папка примонтирована в контейнер `postgres` как `/backups`.
+
+Архив будет содержать:
 
 - `docker-compose.yml`
 - `.env`
@@ -66,7 +68,7 @@ docker compose up -d
 ### Передать архив на другой сервер
 
 ```bash
-./scripts/backup-transfer.sh ./backups/mozhno-backup-<timestamp>.tar.gz user@host /opt/mozhnobot/mozhno-backup.tar.gz
+./scripts/backup-transfer.sh ./postgres/backups/mozhno-backup-<timestamp>.tar.gz user@host /opt/mozhnobot/mozhno-backup.tar.gz
 ```
 
 ### Развернуть архив на другом сервере
@@ -74,6 +76,14 @@ docker compose up -d
 ```bash
 ./scripts/backup-restore.sh /opt/mozhnobot/mozhno-backup.tar.gz /opt/mozhnobot
 ```
+
+### Восстановить локальную БД из dump в `postgres/backups`
+
+```bash
+./scripts/backup-restore-mounted.sh postgres-<timestamp>.dump
+```
+
+Скрипт использует примонтированную папку `/backups` внутри контейнера `postgres`.
 
 Скрипт:
 

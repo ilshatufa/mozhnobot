@@ -4,10 +4,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 
-OUTPUT_DIR="${1:-$ROOT_DIR/backups}"
+OUTPUT_DIR="${1:-$ROOT_DIR/postgres/backups}"
 TIMESTAMP="${BACKUP_TIMESTAMP:-$(date -u +"%Y%m%dT%H%M%SZ")}"
 BUNDLE_NAME="mozhno-backup-${TIMESTAMP}"
 ARCHIVE_PATH="${OUTPUT_DIR}/${BUNDLE_NAME}.tar.gz"
+RAW_DUMP_PATH="${OUTPUT_DIR}/postgres-${TIMESTAMP}.dump"
 TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mozhno-backup-create.XXXXXX")"
 BUNDLE_DIR="${TEMP_DIR}/${BUNDLE_NAME}"
 
@@ -58,6 +59,8 @@ echo "Creating PostgreSQL dump via docker compose..."
   '
 ) > "$BUNDLE_DIR/backup/postgres.dump"
 
+cp "$BUNDLE_DIR/backup/postgres.dump" "$RAW_DUMP_PATH"
+
 copy_if_exists "docker-compose.yml"
 copy_if_exists ".env"
 copy_if_exists ".env.example"
@@ -75,6 +78,9 @@ archive_name=$(basename "$ARCHIVE_PATH")
 EOF
 
 tar -czf "$ARCHIVE_PATH" -C "$TEMP_DIR" "$BUNDLE_NAME"
+
+echo "PostgreSQL dump created:"
+echo "$RAW_DUMP_PATH"
 
 echo "Backup archive created:"
 echo "$ARCHIVE_PATH"
