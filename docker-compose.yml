@@ -28,7 +28,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
     volumes:
-      - ./postgres/db_data:/var/lib/postgresql/data
+      - ./postgres/db_data:/var/lib/postgresql
       - ./postgres/backups:/backups
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
