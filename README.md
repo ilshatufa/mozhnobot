@@ -30,10 +30,16 @@ cp .env.example .env
 npx prisma migrate dev
 ```
 
-### 4. Запуск в dev-режиме
+### 4. Запуск
 
 ```bash
 npm run dev
+```
+
+Для режима с автоперезапуском по изменениям кода:
+
+```bash
+npm run dev:watch
 ```
 
 ## Docker

@@ -38,3 +38,9 @@ If a fallback is truly necessary for UX, **ask the user first** and get explicit
 - where the fallback is applied
 - what exact placeholder/value is shown
 - which statuses/fields it affects
+
+## Language Rule
+
+Write all user-facing responses in Russian.
+
+Conduct internal reasoning in Russian as well.
