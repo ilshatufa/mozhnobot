@@ -28,6 +28,29 @@ export function authMiddleware(): MiddlewareFn<AuthContext> {
       return;
     }
 
+    if (dbUser?.role === Role.ADMIN) {
+      ctx.dbUser = await userRepository.upsert(
+        tgId,
+        ctx.from?.username,
+        ctx.from?.first_name,
+      );
+      return next();
+    }
+
+    if (tgId === config.seedAdminId) {
+      const hasAdmin = await userRepository.hasAnyAdmin();
+      if (!hasAdmin) {
+        dbUser = await userRepository.upsert(
+          tgId,
+          ctx.from?.username,
+          ctx.from?.first_name,
+        );
+        ctx.dbUser = await userRepository.setRole(tgId, Role.ADMIN);
+        logger.info(`Seed admin assigned: ${tgId}`);
+        return next();
+      }
+    }
+
     try {
       const member = await ctx.telegram.getChatMember(config.clubGroupId, telegramId);
       if (!ALLOWED_STATUSES.has(member.status)) {
@@ -49,15 +72,6 @@ export function authMiddleware(): MiddlewareFn<AuthContext> {
       ctx.from?.username,
       ctx.from?.first_name,
     );
-
-    // Seed-админ: если в БД нет ни одного ADMIN и это seed_admin_id
-    if (dbUser.role === Role.USER && tgId === config.seedAdminId) {
-      const hasAdmin = await userRepository.hasAnyAdmin();
-      if (!hasAdmin) {
-        dbUser = await userRepository.setRole(tgId, Role.ADMIN);
-        logger.info(`Seed admin assigned: ${tgId}`);
-      }
-    }
 
     ctx.dbUser = dbUser;
     return next();
