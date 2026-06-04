@@ -11,6 +11,7 @@
     "dev": "tsx src/index.ts",
     "dev:media-worker": "tsx src/media-worker.ts",
     "dev:watch": "tsx watch src/index.ts",
+    "sync:club-users": "tsx src/scripts/sync-known-club-users.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy"
