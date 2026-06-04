@@ -14,6 +14,11 @@ function formatCountLine(label: string, value: number): string {
   return `${label}: ${value}`;
 }
 
+function formatTopicLabel(topic: { name: string | null } | undefined, threadId: number | null): string {
+  if (!threadId) return "без подтемы";
+  return topic?.name ?? "подтема без названия";
+}
+
 export async function statsHandler(ctx: AuthContext): Promise<void> {
   const since = new Date(Date.now() - STATS_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
@@ -143,9 +148,7 @@ export async function statsHandler(ctx: AuthContext): Promise<void> {
     const topic = item.telegramMessageThreadId
       ? topicsByThreadId.get(item.telegramMessageThreadId)
       : null;
-    const label = item.telegramMessageThreadId
-      ? (topic?.name ?? `topic ${item.telegramMessageThreadId}`)
-      : "без подтемы";
+    const label = formatTopicLabel(topic ?? undefined, item.telegramMessageThreadId);
     return `${index + 1}. ${label}: ${item._count._all}`;
   });
 

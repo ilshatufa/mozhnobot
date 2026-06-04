@@ -303,7 +303,10 @@ export class EventLoggerService {
   private async upsertTopicFromMessage(message: TelegramMessageLike): Promise<void> {
     if (!message.message_thread_id || !isClubChat(message.chat)) return;
 
-    const name = message.forum_topic_created?.name ?? message.forum_topic_edited?.name;
+    const name =
+      message.forum_topic_created?.name ??
+      message.forum_topic_edited?.name ??
+      message.reply_to_message?.forum_topic_created?.name;
     let status: ClubTopicStatus = ClubTopicStatus.ACTIVE;
 
     if (message.forum_topic_closed) status = ClubTopicStatus.CLOSED;
