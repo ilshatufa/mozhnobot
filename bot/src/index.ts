@@ -64,7 +64,18 @@ function sleep(ms: number): Promise<void> {
 async function launchBotWithRetry(bot: ReturnType<typeof createBot>): Promise<void> {
   for (let attempt = 1; attempt <= STARTUP_RETRY_ATTEMPTS; attempt += 1) {
     try {
-      await bot.launch();
+      await bot.launch({
+        allowedUpdates: [
+          "message",
+          "edited_message",
+          "message_reaction",
+          "message_reaction_count",
+          "chat_member",
+          "my_chat_member",
+          "chat_join_request",
+          "callback_query",
+        ],
+      });
       return;
     } catch (error) {
       if (!isRetriableStartupError(error) || attempt === STARTUP_RETRY_ATTEMPTS) {

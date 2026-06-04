@@ -7,3 +7,4 @@ postgres/db_data/*
 !postgres/db_data/.gitkeep
 postgres/backups/*
 !postgres/backups/.gitkeep
+media/

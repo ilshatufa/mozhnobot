@@ -12,20 +12,66 @@ enum Role {
   ADMIN
 }
 
+enum ClubMembershipStatus {
+  UNKNOWN
+  JOIN_REQUESTED
+  MEMBER
+  LEFT
+  REMOVED
+}
+
+enum BotInteractionStatus {
+  UNKNOWN
+  ACTIVE
+  BLOCKED
+}
+
+enum ClubTopicStatus {
+  ACTIVE
+  CLOSED
+  HIDDEN
+}
+
+enum MediaProcessingStatus {
+  PENDING
+  DOWNLOADING
+  DOWNLOADED
+  TRANSCRIBING
+  TRANSCRIBED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  SKIPPED
+  DISABLED
+}
+
 model User {
-  id          Int       @id @default(autoincrement())
-  telegramId  BigInt    @unique @map("telegram_id")
-  username    String?   @db.VarChar(255)
-  firstName   String?   @map("first_name") @db.VarChar(255)
-  role        Role      @default(USER)
-  vpnBlocked  Boolean   @default(false) @map("vpn_blocked")
-  isBanned    Boolean   @default(false) @map("is_banned")
-  bannedAt    DateTime? @map("banned_at") @db.Timestamptz()
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  id           Int                  @id @default(autoincrement())
+  telegramId   BigInt               @unique @map("telegram_id")
+  username     String?              @db.VarChar(255)
+  firstName    String?              @map("first_name") @db.VarChar(255)
+  lastName     String?              @map("last_name") @db.VarChar(255)
+  isBot        Boolean              @default(false) @map("is_bot")
+  role         Role                 @default(USER)
+  vpnBlocked   Boolean              @default(false) @map("vpn_blocked")
+  isBanned     Boolean              @default(false) @map("is_banned")
+  bannedAt     DateTime?            @map("banned_at") @db.Timestamptz()
+  clubStatus   ClubMembershipStatus @default(UNKNOWN) @map("club_status")
+  joinedAt     DateTime?            @map("joined_at") @db.Timestamptz()
+  leftAt       DateTime?            @map("left_at") @db.Timestamptz()
+  botStatus    BotInteractionStatus @default(UNKNOWN) @map("bot_status")
+  botStartedAt DateTime?            @map("bot_started_at") @db.Timestamptz()
+  botBlockedAt DateTime?            @map("bot_blocked_at") @db.Timestamptz()
+  firstSeenAt  DateTime?            @map("first_seen_at") @db.Timestamptz()
+  lastSeenAt   DateTime?            @map("last_seen_at") @db.Timestamptz()
+  createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime             @updatedAt @map("updated_at") @db.Timestamptz()
 
   vpnKeys VpnKey[]
 
+  @@index([clubStatus])
+  @@index([botStatus])
+  @@index([lastSeenAt])
   @@map("users")
 }
 
@@ -45,4 +91,122 @@ model VpnKey {
   @@index([subId])
   @@index([expiresAt])
   @@map("vpn_keys")
+}
+
+model ClubTopic {
+  id                      Int             @id @default(autoincrement())
+  chatTelegramId          BigInt          @map("chat_telegram_id")
+  telegramMessageThreadId Int             @map("telegram_message_thread_id")
+  name                    String?         @db.VarChar(255)
+  status                  ClubTopicStatus @default(ACTIVE)
+  createdAt               DateTime        @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt               DateTime        @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@unique([chatTelegramId, telegramMessageThreadId])
+  @@index([status])
+  @@index([chatTelegramId])
+  @@map("club_topics")
+}
+
+model ClubMessageIndex {
+  id                       Int       @id @default(autoincrement())
+  chatTelegramId           BigInt    @map("chat_telegram_id")
+  telegramMessageId        Int       @map("telegram_message_id")
+  telegramMessageThreadId  Int?      @map("telegram_message_thread_id")
+  authorTelegramId         BigInt?   @map("author_telegram_id")
+  replyToTelegramMessageId Int?      @map("reply_to_telegram_message_id")
+  messageType              String    @map("message_type") @db.VarChar(50)
+  text                     String?   @db.Text
+  caption                  String?   @db.Text
+  textLength               Int?      @map("text_length")
+  captionLength            Int?      @map("caption_length")
+  postedAt                 DateTime  @map("posted_at") @db.Timestamptz()
+  editedAt                 DateTime? @map("edited_at") @db.Timestamptz()
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt                DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@unique([chatTelegramId, telegramMessageId])
+  @@index([authorTelegramId, postedAt])
+  @@index([telegramMessageThreadId, postedAt])
+  @@index([replyToTelegramMessageId])
+  @@index([postedAt])
+  @@map("club_message_index")
+}
+
+model ClubEvent {
+  id                      Int      @id @default(autoincrement())
+  telegramUpdateId        BigInt?  @map("telegram_update_id")
+  dedupeKey               String   @unique @map("dedupe_key") @db.VarChar(255)
+  eventType               String   @map("event_type") @db.VarChar(80)
+  chatTelegramId          BigInt?  @map("chat_telegram_id")
+  telegramMessageThreadId Int?     @map("telegram_message_thread_id")
+  userTelegramId          BigInt?  @map("user_telegram_id")
+  messageTelegramId       Int?     @map("message_telegram_id")
+  targetUserTelegramId    BigInt?  @map("target_user_telegram_id")
+  targetMessageTelegramId Int?     @map("target_message_telegram_id")
+  occurredAt              DateTime @map("occurred_at") @db.Timestamptz()
+  payload                 Json?    @map("payload")
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@index([eventType, occurredAt])
+  @@index([userTelegramId, occurredAt])
+  @@index([chatTelegramId, occurredAt])
+  @@index([telegramMessageThreadId, occurredAt])
+  @@index([targetUserTelegramId, occurredAt])
+  @@index([messageTelegramId])
+  @@index([targetMessageTelegramId, occurredAt])
+  @@map("club_events")
+}
+
+model ClubMedia {
+  id                   Int      @id @default(autoincrement())
+  messageIndexId       Int      @map("message_index_id")
+  chatTelegramId       BigInt   @map("chat_telegram_id")
+  telegramMessageId    Int      @map("telegram_message_id")
+  mediaType            String   @map("media_type") @db.VarChar(50)
+  telegramFileId       String   @map("telegram_file_id") @db.VarChar(255)
+  telegramFileUniqueId String?  @map("telegram_file_unique_id") @db.VarChar(255)
+  durationSeconds      Int?     @map("duration_seconds")
+  fileSize             Int?     @map("file_size")
+  mimeType             String?  @map("mime_type") @db.VarChar(255)
+  title                String?  @db.VarChar(255)
+  performer            String?  @db.VarChar(255)
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@unique([chatTelegramId, telegramMessageId, mediaType])
+  @@index([messageIndexId])
+  @@index([telegramFileUniqueId])
+  @@map("club_media")
+}
+
+model MediaProcessingJob {
+  id                 Int                   @id @default(autoincrement())
+  mediaId            Int                   @unique @map("media_id")
+  status             MediaProcessingStatus @default(PENDING)
+  attempts           Int                   @default(0)
+  lastError          String?               @map("last_error") @db.Text
+  downloadedFilePath String?               @map("downloaded_file_path") @db.Text
+  transcriptRaw      String?               @map("transcript_raw") @db.Text
+  transcriptClean    String?               @map("transcript_clean") @db.Text
+  transcriptLanguage String?               @map("transcript_language") @db.VarChar(32)
+  transcriptSegments Json?                 @map("transcript_segments")
+  publishedMessageId Int?                  @map("published_message_id")
+  publishedAt        DateTime?             @map("published_at") @db.Timestamptz()
+  createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt          DateTime              @updatedAt @map("updated_at") @db.Timestamptz()
+  processedAt        DateTime?             @map("processed_at") @db.Timestamptz()
+
+  @@index([status, createdAt])
+  @@index([mediaId])
+  @@map("media_processing_jobs")
+}
+
+model BotSetting {
+  key       String   @id @db.VarChar(100)
+  value     String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@map("bot_settings")
 }

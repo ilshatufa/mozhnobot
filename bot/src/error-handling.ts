@@ -1,6 +1,7 @@
 import type { Context } from "telegraf";
 import { logger } from "./logger.js";
 import { isBotBlockedError } from "./telegram-errors.js";
+import { eventLoggerService } from "./services/event-logger.service.js";
 
 type TelegramApiError = {
   code?: unknown;
@@ -43,10 +44,13 @@ function buildUpdateMeta(ctx: Context): Record<string, unknown> {
   };
 }
 
-export function handleBotError(error: unknown, ctx: Context): void {
+export async function handleBotError(error: unknown, ctx: Context): Promise<void> {
   const meta = buildUpdateMeta(ctx);
 
   if (isBotBlockedError(error)) {
+    if (ctx.from?.id) {
+      await eventLoggerService.markBotBlocked(BigInt(ctx.from.id));
+    }
     logger.info("User blocked the bot", meta);
     return;
   }

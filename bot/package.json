@@ -7,7 +7,9 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
+    "start:media-worker": "node dist/media-worker.js",
     "dev": "tsx src/index.ts",
+    "dev:media-worker": "tsx src/media-worker.ts",
     "dev:watch": "tsx watch src/index.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
