@@ -1,0 +1,9 @@
+srv1.amneziya.mozhno.org {
+	encode zstd gzip
+
+	header {
+		-Server
+	}
+
+	reverse_proxy 127.0.0.1:8080
+}

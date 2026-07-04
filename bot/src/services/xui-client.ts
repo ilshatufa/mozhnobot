@@ -32,8 +32,8 @@ export class XuiClient {
   private cookie: string | null = null;
   private static readonly CLIENT_FLOW = "xtls-rprx-vision";
 
-  private get trafficLimitBytes(): number {
-    return config.vpnTrafficLimitGb * 1024 * 1024 * 1024;
+  private formatTrafficLimitBytes(trafficLimitBytes: bigint | null): number {
+    return trafficLimitBytes === null ? 0 : Number(trafficLimitBytes);
   }
 
   buildClientEmail(telegramId: bigint, username?: string | null): string {
@@ -152,7 +152,8 @@ export class XuiClient {
   async addClient(
     telegramId: bigint,
     username: string | null,
-    expiryTime: number
+    expiryTime: number,
+    trafficLimitBytes: bigint | null
   ): Promise<{ clientId: string; email: string; subId: string }> {
     const clientId = randomUUID();
     const email = this.buildClientEmail(telegramId, username);
@@ -165,7 +166,7 @@ export class XuiClient {
       flow: XuiClient.CLIENT_FLOW,
       enable: true,
       expiryTime,
-      totalGB: this.trafficLimitBytes,
+      totalGB: this.formatTrafficLimitBytes(trafficLimitBytes),
     };
 
     const res = await this.request(
@@ -196,7 +197,7 @@ export class XuiClient {
 
       if (existing) {
         const resolvedSubId = existing.subId ?? this.generateSubId();
-        await this.updateClientSubscription(existing.id, email, expiryTime, resolvedSubId);
+        await this.updateClientSubscription(existing.id, email, expiryTime, resolvedSubId, trafficLimitBytes);
         logger.warn(`3X-UI addClient conflict resolved by existing client ${existing.id} (${existing.email})`);
         return { clientId: existing.id, email, subId: resolvedSubId };
       }
@@ -211,7 +212,8 @@ export class XuiClient {
     xuiClientId: string,
     email: string,
     expiryTime: number,
-    subId: string
+    subId: string,
+    trafficLimitBytes: bigint | null
   ): Promise<void> {
     const res = await this.request(
       `/panel/api/inbounds/updateClient/${xuiClientId}`,
@@ -228,7 +230,7 @@ export class XuiClient {
                 flow: XuiClient.CLIENT_FLOW,
                 enable: true,
                 expiryTime,
-                totalGB: this.trafficLimitBytes,
+                totalGB: this.formatTrafficLimitBytes(trafficLimitBytes),
               },
             ],
           }),

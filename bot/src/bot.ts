@@ -2,9 +2,10 @@ import { Telegraf } from "telegraf";
 import { config } from "./config.js";
 import { type AuthContext, authMiddleware, adminOnly } from "./middlewares/auth.js";
 import { eventLoggerMiddleware } from "./middlewares/event-logger.js";
+import { logger } from "./logger.js";
 import { startHandler } from "./handlers/start.js";
 import { helpHandler } from "./handlers/help.js";
-import { vpnHandler, statusHandler } from "./handlers/vpn.js";
+import { vpnActionHandlers, vpnHandler, statusHandler } from "./handlers/vpn.js";
 import { statsHandler } from "./handlers/stats.js";
 import {
   transcriptionOffHandler,
@@ -29,6 +30,18 @@ export function createBot(): Telegraf<AuthContext> {
     void handleBotError(err, ctx);
   });
 
+  bot.use(async (ctx, next) => {
+    if (ctx.updateType === "callback_query") {
+      try {
+        await ctx.answerCbQuery();
+      } catch (error) {
+        logger.warn("Failed to answer callback query early", { error });
+      }
+    }
+
+    return next();
+  });
+
   bot.use(eventLoggerMiddleware());
   bot.use(authMiddleware());
 
@@ -36,6 +49,9 @@ export function createBot(): Telegraf<AuthContext> {
   bot.command("help", helpHandler);
   bot.command("vpn", vpnHandler);
   bot.command("status", statusHandler);
+  bot.action(vpnActionHandlers.amneziya.action, vpnActionHandlers.amneziya.handler);
+  bot.action(vpnActionHandlers.amneziyaServer.action, vpnActionHandlers.amneziyaServer.handler);
+  bot.action(vpnActionHandlers.xui.action, vpnActionHandlers.xui.handler);
 
   bot.command("block", adminOnly(), blockHandler);
   bot.command("unblock", adminOnly(), unblockHandler);

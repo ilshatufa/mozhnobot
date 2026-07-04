@@ -3,6 +3,7 @@ import { prisma } from "./database.js";
 import { createBot } from "./bot.js";
 import { config } from "./config.js";
 import { registerProcessErrorHandlers } from "./error-handling.js";
+import { amneziyaTrafficSyncService } from "./services/amneziya-traffic-sync.service.js";
 
 const STARTUP_RETRY_CODES = new Set([
   "EAI_AGAIN",
@@ -103,6 +104,7 @@ async function main(): Promise<void> {
 
   const shutdown = async (signal: string) => {
     logger.info(`${signal} received, shutting down...`);
+    amneziyaTrafficSyncService.stop();
     bot.stop(signal);
     await prisma.$disconnect();
     process.exit(0);
@@ -116,6 +118,7 @@ async function main(): Promise<void> {
     VPN_KEY_DURATION_DAYS: config.vpnKeyDurationDays,
     VPN_TRAFFIC_LIMIT_GB: config.vpnTrafficLimitGb,
   });
+  amneziyaTrafficSyncService.start();
   await launchBotWithRetry(bot);
   logger.info("Bot started");
 }

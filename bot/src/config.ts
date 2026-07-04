@@ -17,6 +17,13 @@ const envSchema = z.object({
   VPN_TRAFFIC_LIMIT_GB: z.coerce.number().int().positive().default(50),
   VPN_SETUP_IMAGE_FILE_ID: z.string().min(1),
   VPN_SETUP_IMAGE_FILE_ID_2: z.string().optional().default(""),
+  VPN_XUI_SERVER_CODE: z.string().min(1).default("xui-main"),
+  VPN_XUI_SERVER_NAME: z.string().min(1).default("3X-UI"),
+  VPN_AMNEZIA_SERVER_CODE: z.string().min(1).default("se"),
+  VPN_AMNEZIA_SERVER_NAME: z.string().min(1).default("Amnezia SE / Stockholm"),
+  VPN_AMNEZIA_API_BASE_URL: z.string().url().default("https://srv1.amneziya.mozhno.org"),
+  VPN_AMNEZIA_API_TOKEN: z.string().min(1).optional().default(""),
+  VPN_AMNEZIA_CONFIG_BASE_URL: z.string().url().default("https://amneziya.mozhno.org"),
 
   MEDIA_PROCESSING_ENABLED: z.coerce.boolean().default(true),
   MEDIA_WORKER_INTERVAL_MS: z.coerce.number().int().positive().default(30000),
@@ -61,6 +68,19 @@ export const config = {
   vpnTrafficLimitGb: parsed.data.VPN_TRAFFIC_LIMIT_GB,
   vpnSetupImageFileId: parsed.data.VPN_SETUP_IMAGE_FILE_ID,
   vpnSetupImageFileId2: parsed.data.VPN_SETUP_IMAGE_FILE_ID_2,
+  vpnServers: {
+    xui: {
+      code: parsed.data.VPN_XUI_SERVER_CODE,
+      name: parsed.data.VPN_XUI_SERVER_NAME,
+    },
+    amneziya: {
+      code: parsed.data.VPN_AMNEZIA_SERVER_CODE,
+      name: parsed.data.VPN_AMNEZIA_SERVER_NAME,
+      apiBaseUrl: parsed.data.VPN_AMNEZIA_API_BASE_URL,
+      apiToken: parsed.data.VPN_AMNEZIA_API_TOKEN,
+      configBaseUrl: parsed.data.VPN_AMNEZIA_CONFIG_BASE_URL,
+    },
+  },
 
   media: {
     processingEnabled: parsed.data.MEDIA_PROCESSING_ENABLED,

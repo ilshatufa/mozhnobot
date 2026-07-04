@@ -1,0 +1,9 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    network_mode: host
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /var/lib/caddy:/data
+      - /var/log/caddy:/var/log/caddy
+    restart: unless-stopped

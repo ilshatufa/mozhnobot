@@ -16,8 +16,13 @@ export function authMiddleware(): MiddlewareFn<AuthContext> {
     const telegramId = ctx.from?.id;
     if (!telegramId) return;
 
-    // Обрабатываем только личные сообщения/команды пользователя.
-    if (ctx.chat?.type !== "private" || ctx.updateType !== "message") return;
+    // Обрабатываем только личные сообщения и callback-и пользователя.
+    if (
+      ctx.chat?.type !== "private" ||
+      (ctx.updateType !== "message" && ctx.updateType !== "callback_query")
+    ) {
+      return;
+    }
 
     const tgId = BigInt(telegramId);
 
