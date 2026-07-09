@@ -5,6 +5,7 @@ import { type AuthContext } from "../middlewares/auth.js";
 import { config } from "../config.js";
 import { vpnKeyRepository } from "../repositories/vpn-key.repository.js";
 import { vpnService } from "../services/vpn.service.js";
+import { createZip } from "../utils/zip.js";
 
 function escapeHtml(value: string): string {
   return value
@@ -14,6 +15,7 @@ function escapeHtml(value: string): string {
 }
 
 const VPN_AMNEZIA_ACTION = "vpn:amneziya";
+const VPN_AMNEZIA_ZIP_ACTION = "vpn:amneziya-zip";
 const VPN_AMNEZIA_SERVER_ACTION = /^vpn:amneziya:([a-z0-9-]+)$/;
 const VPN_XUI_ACTION = "vpn:xui";
 const VPN_XUI_MULTI_ACTION = "vpn:xui:multi";
@@ -64,6 +66,24 @@ function buildAmneziyaSetupInstructions(configFileName: string): string {
     "<i>• Проверь, что импортирован именно файл AmneziaWG</i>",
     "<i>• Попробуй мобильный интернет и Wi‑Fi</i>",
     "<i>• Если приложение попросит VPN-разрешение, разреши</i>",
+  ].join("\n");
+}
+
+function buildAmneziyaZipInstructions(fileName: string): string {
+  return [
+    "VPN «МОЖНО» через AmneziyaWG готов.",
+    "",
+    `<b>1.</b> Установи приложение AmneziyaWG:`,
+    "• <a href=\"https://apps.apple.com/app/amneziawg/id6478942365\">для iOS</a>",
+    "• <a href=\"https://play.google.com/store/apps/details?id=org.amnezia.awg\">для Android</a>",
+    "",
+    `<b>2.</b> Импортируй архив <code>${escapeHtml(fileName)}</code> через <b>Import from file or archive</b>.`,
+    "",
+    "<b>3.</b> Выбери нужный сервер и включи VPN.",
+    "",
+    "<i>Если архив не импортируется</i>",
+    "<i>• Вернись к выбору AmneziyaWG и скачай отдельный .conf для нужного сервера</i>",
+    "<i>• На iOS попробуй открыть архив через «Поделиться» / «Открыть в…»</i>",
   ].join("\n");
 }
 
@@ -258,16 +278,35 @@ export async function amneziyaVpnCallbackHandler(ctx: AuthContext): Promise<void
     }
 
     await ctx.reply(
-      "Выберите сервер Amnezia:",
+      "Выберите сервер AmneziyaWG или скачайте архив со всеми конфигурациями:",
       Markup.inlineKeyboard(
-        servers.map((server) => [
-          Markup.button.callback(server.name, `${VPN_AMNEZIA_ACTION}:${server.code}`),
-        ])
+        [
+          [Markup.button.callback("Все серверы ZIP", VPN_AMNEZIA_ZIP_ACTION)],
+          ...servers.map((server) => [
+            Markup.button.callback(server.name, `${VPN_AMNEZIA_ACTION}:${server.code}`),
+          ]),
+        ]
       )
     );
   } catch (err) {
     logger.error("amneziyaVpnCallbackHandler error:", err);
     await ctx.reply("Не удалось получить список серверов Amnezia, попробуйте позже.");
+  }
+}
+
+export async function amneziyaZipVpnCallbackHandler(ctx: AuthContext): Promise<void> {
+  const user = ctx.dbUser;
+
+  if (user.vpnBlocked) {
+    await ctx.reply("Ваш доступ к VPN заблокирован. Обратитесь к администратору.");
+    return;
+  }
+
+  try {
+    await sendAmneziyaZip(ctx);
+  } catch (err) {
+    logger.error("amneziyaZipVpnCallbackHandler error:", err);
+    await ctx.reply("Не удалось создать архив AmneziyaWG, попробуйте позже.");
   }
 }
 
@@ -290,6 +329,58 @@ export async function amneziyaServerVpnCallbackHandler(ctx: AuthContext): Promis
   } catch (err) {
     logger.error("amneziyaServerVpnCallbackHandler error:", err);
     await ctx.reply("Не удалось создать Amnezia-ключ, попробуйте позже.");
+  }
+}
+
+async function sendAmneziyaZip(ctx: AuthContext): Promise<void> {
+  const user = ctx.dbUser;
+  const lockKey = `${user.id}:zip`;
+
+  if (!acquireAmneziyaSendLock(lockKey)) {
+    await ctx.reply("Архив уже готовится. Подождите несколько секунд.");
+    return;
+  }
+
+  const timings: Record<string, number> = {};
+  const totalStartedAt = Date.now();
+  const zipFileName = "amneziya-mozhno.zip";
+
+  try {
+    await measure("chatAction", timings, () => ctx.replyWithChatAction("upload_document"));
+    await removeInlineKeyboard(ctx);
+
+    const configs = await measure("getOrCreateConfigs", timings, () => vpnService.getOrCreateAllAmneziyaConfigs(user));
+    const zipBuffer = await measure("buildZip", timings, async () => createZip(
+      configs.map((item) => ({
+        name: item.configFileName,
+        data: Buffer.from(item.configText, "utf8"),
+      }))
+    ));
+
+    await measure("instructionReply", timings, () => ctx.reply(buildAmneziyaZipInstructions(zipFileName), {
+      parse_mode: "HTML",
+      link_preview_options: { is_disabled: true },
+    }));
+
+    await measure("zipReplyUpload", timings, () => ctx.replyWithDocument(
+      Input.fromBuffer(zipBuffer, zipFileName),
+      {
+        caption: `Архив AmneziyaWG: ${configs.length} конфигурации.`,
+      }
+    ));
+
+    logger.info("Amnezia ZIP sent", {
+      userId: user.id,
+      telegramId: user.telegramId.toString(),
+      servers: configs.map((item) => item.serverCode),
+      totalMs: Date.now() - totalStartedAt,
+      timings,
+    });
+  } catch (err) {
+    logger.error("sendAmneziyaZip error:", err);
+    throw err;
+  } finally {
+    releaseAmneziyaSendLock(lockKey);
   }
 }
 
@@ -485,6 +576,10 @@ export const vpnActionHandlers = {
   amneziya: {
     action: VPN_AMNEZIA_ACTION,
     handler: amneziyaVpnCallbackHandler,
+  },
+  amneziyaZip: {
+    action: VPN_AMNEZIA_ZIP_ACTION,
+    handler: amneziyaZipVpnCallbackHandler,
   },
   amneziyaServer: {
     action: VPN_AMNEZIA_SERVER_ACTION,

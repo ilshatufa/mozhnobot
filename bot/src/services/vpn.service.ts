@@ -17,6 +17,15 @@ export interface AmneziyaKeyResult extends VpnKeyResult {
   configFileName: string;
 }
 
+export interface AmneziyaConfigFile {
+  serverCode: string;
+  serverName: string;
+  key: VpnKey;
+  alreadyExisted: boolean;
+  configText: string;
+  configFileName: string;
+}
+
 function expiresAtFromNow(user: User): Date {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + user.vpnDurationDays);
@@ -306,6 +315,28 @@ export class VpnService {
       qrPngBase64,
       configFileName: amneziyaClient.buildConfigFileName(server.code),
     };
+  }
+
+  async getOrCreateAllAmneziyaConfigs(user: User): Promise<AmneziyaConfigFile[]> {
+    const servers = await this.listAmneziyaServers();
+    if (servers.length === 0) {
+      throw new Error("No active Amnezia servers are configured");
+    }
+
+    const result: AmneziyaConfigFile[] = [];
+    for (const server of servers) {
+      const item = await this.getOrCreateAmneziyaKey(user, server.code);
+      result.push({
+        serverCode: server.code,
+        serverName: server.name,
+        key: item.key,
+        alreadyExisted: item.alreadyExisted,
+        configText: item.configText,
+        configFileName: item.configFileName,
+      });
+    }
+
+    return result;
   }
 
   async disableKeysForUser(user: User): Promise<void> {
