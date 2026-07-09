@@ -31,7 +31,7 @@ function buildXuiSetupInstructions(subscriptionUrl: string): string {
     "• <a href=\"https://apps.apple.com/us/app/v2box-v2ray-client/id6446814690\">для iOS</a>",
     "• <a href=\"https://play.google.com/store/apps/details?id=dev.hexasoftware.v2box\">для Android</a>",
     "",
-    "<b>2.</b> Эти буквы и цифры — ключ (нажми на него и скопируй):",
+    "<b>2.</b> Эта ссылка — твоя подписка на Xray VPN, скопируй её в приложение как сказано в инструкции:",
     `<pre>${escapeHtml(subscriptionUrl)}</pre>`,
     "",
     "<b>3.</b> Открой приложение:",
