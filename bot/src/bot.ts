@@ -1,4 +1,5 @@
 import { Telegraf } from "telegraf";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import { config } from "./config.js";
 import { type AuthContext, authMiddleware, adminOnly } from "./middlewares/auth.js";
 import { eventLoggerMiddleware } from "./middlewares/event-logger.js";
@@ -24,7 +25,21 @@ import {
 import { handleBotError } from "./error-handling.js";
 
 export function createBot(): Telegraf<AuthContext> {
-  const bot = new Telegraf<AuthContext>(config.botToken);
+  const telegramProxyUrl = process.env.TELEGRAM_HTTPS_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || "";
+  const bot = new Telegraf<AuthContext>(
+    config.botToken,
+    telegramProxyUrl
+      ? {
+          telegram: {
+            agent: new HttpsProxyAgent(telegramProxyUrl),
+          },
+        }
+      : undefined
+  );
+
+  if (telegramProxyUrl) {
+    logger.info("Telegram API proxy enabled");
+  }
 
   bot.catch((err, ctx) => {
     void handleBotError(err, ctx);
