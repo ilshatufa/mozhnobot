@@ -99,8 +99,8 @@ export async function vpnHandler(ctx: AuthContext): Promise<void> {
   await ctx.reply(
     "Выберите VPN-подключение:",
     Markup.inlineKeyboard([
-      [Markup.button.callback("Amnezia", VPN_AMNEZIA_ACTION)],
-      [Markup.button.callback("3X-UI", VPN_XUI_ACTION)],
+      [Markup.button.callback("AmneziyaWG", VPN_AMNEZIA_ACTION)],
+      [Markup.button.callback("Happ/V2Box/INCY", VPN_XUI_ACTION)],
     ])
   );
 }
