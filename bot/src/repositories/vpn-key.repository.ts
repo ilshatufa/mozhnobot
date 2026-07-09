@@ -33,6 +33,21 @@ export class VpnKeyRepository {
     });
   }
 
+  async findLatestByUserAndServer(
+    userId: number,
+    serverId: number,
+    provider?: VpnProvider
+  ): Promise<VpnKey | null> {
+    return prisma.vpnKey.findFirst({
+      where: {
+        userId,
+        serverId,
+        ...(provider ? { provider } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
   async findActiveLegacyXuiByUser(userId: number): Promise<VpnKey | null> {
     return prisma.vpnKey.findFirst({
       where: {

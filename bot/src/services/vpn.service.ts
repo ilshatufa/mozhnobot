@@ -3,7 +3,7 @@ import { config, type XuiServerConfig } from "../config.js";
 import { logger } from "../logger.js";
 import { vpnKeyRepository } from "../repositories/vpn-key.repository.js";
 import { vpnServerRepository } from "../repositories/vpn-server.repository.js";
-import { amneziyaClient } from "./amneziya-client.js";
+import { amneziyaClient, type AmneziyaPeer } from "./amneziya-client.js";
 import { xuiClient } from "./xui-client.js";
 
 export interface VpnKeyResult {
@@ -237,34 +237,37 @@ export class VpnService {
 
   async getOrCreateAmneziyaKey(user: User, serverCode = config.vpnServers.amneziya.code): Promise<AmneziyaKeyResult> {
     const server = await this.requireServer(serverCode, VpnProvider.AMNEZIA);
-    const existing = await vpnKeyRepository.findActiveByUserAndServer(user.id, server.id);
+    const active = await vpnKeyRepository.findActiveByUserAndServer(user.id, server.id);
+    const existing = active
+      ?? await vpnKeyRepository.findLatestByUserAndServer(user.id, server.id, VpnProvider.AMNEZIA);
     const client = amneziyaClient.buildClientId(user.telegramId);
+    const limitBytes = trafficLimitBytes(user);
 
     if (existing) {
-      if (existing.configText && existing.qrPngBase64) {
-        return {
-          key: existing,
-          alreadyExisted: true,
-          configText: existing.configText,
-          qrPngBase64: existing.qrPngBase64,
-          configFileName: amneziyaClient.buildConfigFileName(server.code),
-        };
-      }
+      const now = new Date();
+      const expiresAt = existing.expiresAt > now ? existing.expiresAt : expiresAtFromNow(user);
+      let peer = await amneziyaClient.createPeer(server, {
+        client,
+        expiresAt,
+        trafficLimitBytes: null,
+      });
+      const peerConfig = peer.config;
+      peer = await this.ensureAmneziyaPeerEnabled(server, client, peer);
 
-      const [configText, qrPngBase64, peer] = await Promise.all([
-        amneziyaClient.getConfig(server, client),
-        amneziyaClient.getQrPngBase64(server, client),
-        amneziyaClient.getPeerByClient(server, client),
+      const [configText, qrPngBase64] = await Promise.all([
+        existing.configText ? Promise.resolve(existing.configText) : peerConfig ? Promise.resolve(peerConfig) : amneziyaClient.getConfig(server, client),
+        existing.qrPngBase64 ? Promise.resolve(existing.qrPngBase64) : amneziyaClient.getQrPngBase64(server, client),
       ]);
       const updated = await vpnKeyRepository.updateAmneziyaData(existing.id, {
         providerClientId: client,
         providerPeerId: peer.peerId,
         configText,
         qrPngBase64,
-        trafficLimitBytes: trafficLimitBytes(user),
+        trafficLimitBytes: limitBytes,
         trafficUsedBytes: BigInt(peer.trafficUsedBytes),
         disabledReason: peer.disabledReason,
         isActive: peer.enabled && !peer.deleted,
+        expiresAt: peer.expiresAt ? new Date(peer.expiresAt) : expiresAt,
         lastSyncedAt: new Date(),
       });
 
@@ -278,14 +281,15 @@ export class VpnService {
     }
 
     const expiresAt = expiresAtFromNow(user);
-    const limitBytes = trafficLimitBytes(user);
-    const peer = await amneziyaClient.createPeer(server, {
+    let peer = await amneziyaClient.createPeer(server, {
       client,
       expiresAt,
       trafficLimitBytes: null,
     });
+    const peerConfig = peer.config;
+    peer = await this.ensureAmneziyaPeerEnabled(server, client, peer);
     const [configText, qrPngBase64] = await Promise.all([
-      peer.config ? Promise.resolve(peer.config) : amneziyaClient.getConfig(server, client),
+      peerConfig ? Promise.resolve(peerConfig) : amneziyaClient.getConfig(server, client),
       amneziyaClient.getQrPngBase64(server, client),
     ]);
 
@@ -303,7 +307,7 @@ export class VpnService {
       trafficUsedBytes: BigInt(peer.trafficUsedBytes),
       disabledReason: peer.disabledReason,
       lastSyncedAt: new Date(),
-      expiresAt,
+      expiresAt: peer.expiresAt ? new Date(peer.expiresAt) : expiresAt,
     });
 
     logger.info(`Amnezia key created for user ${user.telegramId}, expires ${expiresAt.toISOString()}`);
@@ -406,6 +410,30 @@ export class VpnService {
       throw new Error(`3X-UI server ${code} is not configured`);
     }
     return server;
+  }
+
+  private async ensureAmneziyaPeerEnabled(
+    server: VpnServer,
+    client: string,
+    peer: AmneziyaPeer
+  ): Promise<AmneziyaPeer> {
+    if (peer.deleted) {
+      throw new Error(`Amnezia peer ${client} on ${server.code} is deleted`);
+    }
+
+    if (peer.enabled) {
+      return peer;
+    }
+
+    if (peer.disabledReason && !["expired_at", "traffic_limit"].includes(peer.disabledReason)) {
+      throw new Error(`Amnezia peer ${client} on ${server.code} is disabled: ${peer.disabledReason}`);
+    }
+
+    const enabled = await amneziyaClient.enablePeer(server, client);
+    logger.info(`Amnezia peer ${client} on ${server.code} re-enabled`, {
+      previousReason: peer.disabledReason,
+    });
+    return enabled;
   }
 
   private filterOwnXuiLinks(server: XuiServerConfig, links: string[]): string[] {

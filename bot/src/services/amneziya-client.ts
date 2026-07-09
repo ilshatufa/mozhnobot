@@ -135,6 +135,13 @@ export class AmneziyaClient {
       body: JSON.stringify({ reason }),
     });
   }
+
+  async enablePeer(target: AmneziyaApiTarget | null | undefined, client: string): Promise<AmneziyaPeer> {
+    return this.request<AmneziyaPeer>(target, `/peers/by-client/${encodeURIComponent(client)}/enable`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  }
 }
 
 export const amneziyaClient = new AmneziyaClient();
