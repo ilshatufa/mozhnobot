@@ -25,7 +25,7 @@ interface XuiApiResponse<T = unknown> {
 }
 
 interface XuiInboundObject {
-  settings?: string;
+  settings?: unknown;
 }
 
 interface XuiInboundClient {
@@ -200,6 +200,40 @@ export class XuiClient {
     );
   }
 
+  private parseInboundSettings(settingsRaw: unknown, server: XuiServerConfig): { clients?: unknown } | null {
+    if (!settingsRaw) {
+      return null;
+    }
+
+    if (typeof settingsRaw === "object") {
+      return settingsRaw as { clients?: unknown };
+    }
+
+    if (typeof settingsRaw !== "string") {
+      throw new Error(`3X-UI ${server.code} inbound settings has unsupported type: ${typeof settingsRaw}`);
+    }
+
+    let parsed: unknown = settingsRaw;
+    for (let attempt = 0; attempt < 2 && typeof parsed === "string"; attempt += 1) {
+      const trimmed = parsed.trim();
+      if (!trimmed) {
+        return null;
+      }
+
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch {
+        throw new Error(`3X-UI ${server.code} inbound settings JSON parse failed`);
+      }
+    }
+
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error(`3X-UI ${server.code} inbound settings JSON has unsupported shape`);
+    }
+
+    return parsed as { clients?: unknown };
+  }
+
   private async listInboundClients(server: XuiServerConfig): Promise<XuiInboundClient[]> {
     const res = await this.request(server, `/panel/api/inbounds/get/${server.inboundId}`);
     if (!res.ok) {
@@ -212,19 +246,9 @@ export class XuiClient {
       throw new Error(`3X-UI ${server.code} getInbound returned success=false: ${data.msg ?? "unknown reason"}`);
     }
 
-    const settingsRaw = data.obj?.settings;
-    if (!settingsRaw) {
-      return [];
-    }
+    const parsed = this.parseInboundSettings(data.obj?.settings, server);
 
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(settingsRaw);
-    } catch {
-      throw new Error(`3X-UI ${server.code} inbound settings JSON parse failed`);
-    }
-
-    const clientsUnknown = (parsed as { clients?: unknown }).clients;
+    const clientsUnknown = parsed?.clients;
     if (!Array.isArray(clientsUnknown)) {
       return [];
     }
