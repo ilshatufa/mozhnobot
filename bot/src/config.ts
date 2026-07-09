@@ -25,7 +25,16 @@ const envSchema = z.object({
   XRAY_SUBSCRIPTION_HOST: z.string().min(1).default("0.0.0.0"),
   XRAY_SUBSCRIPTION_PORT: z.coerce.number().int().positive().default(18081),
   XRAY_SUBSCRIPTION_TITLE: z.string().min(1).default("МОЖНО ВПН"),
+  XRAY_SUBSCRIPTION_SUPPORT_URL: z.string().url().optional().default("https://t.me/MozhnoClub_Bot"),
+  XRAY_SUBSCRIPTION_FILE_NAME: z.string().min(1).default("mozhno-vpn.txt"),
+  XRAY_SUBSCRIPTION_FILE_NAME_UTF8: z.string().min(1).default("МОЖНО ВПН.txt"),
   XRAY_SUBSCRIPTION_UPDATE_INTERVAL_HOURS: z.coerce.number().int().positive().default(12),
+  XRAY_SUBSCRIPTION_JSON_USER_AGENT_PATTERN: z.string().min(1).default("(v2box|incy)"),
+  XRAY_SUBSCRIPTION_JSON_RU_DNS: z.string().min(1).default("77.88.8.8"),
+  XRAY_SUBSCRIPTION_JSON_REMOTE_DNS: z.string().min(1).default("https://1.1.1.1/dns-query"),
+  XRAY_SUBSCRIPTION_JSON_BLOCK_UDP_443: z.coerce.boolean().default(true),
+  XRAY_SUBSCRIPTION_JSON_DIRECT_DOMAINS_JSON: z.string().optional().default(""),
+  XRAY_SUBSCRIPTION_JSON_PRIVATE_IPS_JSON: z.string().optional().default(""),
   VPN_AMNEZIA_SERVER_CODE: z.string().min(1).default("se"),
   VPN_AMNEZIA_SERVER_NAME: z.string().min(1).default("Amnezia SE / Stockholm"),
   VPN_AMNEZIA_API_BASE_URL: z.string().url().default("https://srv1.amneziya.mozhno.org"),
@@ -59,6 +68,68 @@ if (!parsed.success) {
 }
 
 const env = parsed.data;
+
+const defaultXrayDirectDomains = [
+  "regexp:.*\\.ru$",
+  "regexp:.*\\.su$",
+  "regexp:.*\\.xn--p1ai$",
+  "domain:ozon.app",
+  "domain:ozon.ru",
+  "domain:ozonusercontent.com",
+  "domain:wildberries.ru",
+  "domain:wb.ru",
+  "domain:yandex.net",
+  "domain:yastatic.net",
+  "domain:yandex.com",
+  "domain:yandex.ru",
+  "domain:vk.com",
+  "domain:vk-cdn.net",
+  "domain:userapi.com",
+  "domain:vkuservideo.net",
+  "domain:mycdn.me",
+  "domain:mradx.net",
+  "domain:avito.ru",
+  "domain:avito.st",
+  "domain:2gis.com",
+  "domain:2gis.ru",
+  "domain:gismeteo.net",
+  "domain:gismeteo.ru",
+];
+
+const defaultXrayPrivateIps = [
+  "10.0.0.0/8",
+  "172.16.0.0/12",
+  "192.168.0.0/16",
+  "127.0.0.0/8",
+  "100.64.0.0/10",
+  "169.254.0.0/16",
+  "::1/128",
+  "fc00::/7",
+  "fe80::/10",
+];
+
+function parseStringArrayEnv(raw: string, fallback: readonly string[], name: string): string[] {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return [...fallback];
+  }
+
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(trimmed);
+  } catch (err) {
+    console.error(`Invalid ${name}: JSON parse failed`, err);
+    process.exit(1);
+  }
+
+  const result = z.array(z.string().min(1)).safeParse(decoded);
+  if (!result.success) {
+    console.error(`Invalid ${name}:`, result.error.flatten().fieldErrors);
+    process.exit(1);
+  }
+
+  return result.data;
+}
 
 const xuiServerSchema = z.object({
   code: z.string().min(1),
@@ -178,6 +249,23 @@ export const config = {
     host: env.XRAY_SUBSCRIPTION_HOST,
     port: env.XRAY_SUBSCRIPTION_PORT,
     title: env.XRAY_SUBSCRIPTION_TITLE,
+    supportUrl: env.XRAY_SUBSCRIPTION_SUPPORT_URL,
+    fileName: env.XRAY_SUBSCRIPTION_FILE_NAME,
+    fileNameUtf8: env.XRAY_SUBSCRIPTION_FILE_NAME_UTF8,
     updateIntervalHours: env.XRAY_SUBSCRIPTION_UPDATE_INTERVAL_HOURS,
+    jsonUserAgentPattern: env.XRAY_SUBSCRIPTION_JSON_USER_AGENT_PATTERN,
+    jsonRuDns: env.XRAY_SUBSCRIPTION_JSON_RU_DNS,
+    jsonRemoteDns: env.XRAY_SUBSCRIPTION_JSON_REMOTE_DNS,
+    jsonBlockUdp443: env.XRAY_SUBSCRIPTION_JSON_BLOCK_UDP_443,
+    jsonDirectDomains: parseStringArrayEnv(
+      env.XRAY_SUBSCRIPTION_JSON_DIRECT_DOMAINS_JSON,
+      defaultXrayDirectDomains,
+      "XRAY_SUBSCRIPTION_JSON_DIRECT_DOMAINS_JSON"
+    ),
+    jsonPrivateIps: parseStringArrayEnv(
+      env.XRAY_SUBSCRIPTION_JSON_PRIVATE_IPS_JSON,
+      defaultXrayPrivateIps,
+      "XRAY_SUBSCRIPTION_JSON_PRIVATE_IPS_JSON"
+    ),
   },
 } as const;

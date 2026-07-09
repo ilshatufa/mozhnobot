@@ -28,6 +28,7 @@ export interface RenderedSubscription {
     telegramId: string;
     servers: string[];
     links: number;
+    renderMode: "uri" | "json";
   };
 }
 
@@ -86,6 +87,215 @@ function rewriteDisplayName(line: string, name: string): string {
   }
 }
 
+function shouldRenderJson(userAgent: string): boolean {
+  return new RegExp(config.xraySubscription.jsonUserAgentPattern, "i").test(userAgent);
+}
+
+function parsedQuery(link: URL): Record<string, string> {
+  return Object.fromEntries(
+    [...link.searchParams.entries()].map(([key, value]) => [key, value])
+  );
+}
+
+function splitAlpn(value: string): string[] {
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function routingRules(): Array<Record<string, unknown>> {
+  const rules: Array<Record<string, unknown>> = [
+    { type: "field", port: "53", outboundTag: "dns-out" },
+    { type: "field", ip: config.xraySubscription.jsonPrivateIps, outboundTag: "direct" },
+  ];
+
+  if (config.xraySubscription.jsonBlockUdp443) {
+    rules.push({ type: "field", network: "udp", port: "443", outboundTag: "block" });
+  }
+
+  rules.push(
+    { type: "field", domain: config.xraySubscription.jsonDirectDomains, outboundTag: "direct" },
+    { type: "field", port: "0-65535", outboundTag: "proxy" }
+  );
+
+  return rules;
+}
+
+function outboundFromUri(line: string): Record<string, unknown> | null {
+  const parsed = new URL(line);
+  const query = parsedQuery(parsed);
+  const host = parsed.hostname;
+  const port = Number(parsed.port);
+  if (!host || !port) {
+    return null;
+  }
+
+  let outbound: Record<string, unknown>;
+  if (parsed.protocol === "vless:") {
+    const user: Record<string, unknown> = {
+      id: decodeURIComponent(parsed.username),
+      encryption: query.encryption ?? "none",
+    };
+    if (query.flow) {
+      user.flow = query.flow;
+    }
+
+    outbound = {
+      tag: "proxy",
+      protocol: "vless",
+      settings: {
+        vnext: [
+          {
+            address: host,
+            port,
+            users: [user],
+          },
+        ],
+      },
+    };
+  } else if (parsed.protocol === "trojan:") {
+    outbound = {
+      tag: "proxy",
+      protocol: "trojan",
+      settings: {
+        servers: [
+          {
+            address: host,
+            port,
+            password: decodeURIComponent(parsed.username),
+          },
+        ],
+      },
+    };
+  } else {
+    return null;
+  }
+
+  const streamSettings: Record<string, unknown> = {};
+  const network = query.type ?? "tcp";
+  streamSettings.network = network;
+  if (query.security) {
+    streamSettings.security = query.security;
+  }
+
+  if (query.security === "tls") {
+    const tlsSettings: Record<string, unknown> = {};
+    if (query.sni) tlsSettings.serverName = query.sni;
+    if (query.fp) tlsSettings.fingerprint = query.fp;
+    if (query.alpn) tlsSettings.alpn = splitAlpn(query.alpn);
+    if (Object.keys(tlsSettings).length > 0) {
+      streamSettings.tlsSettings = tlsSettings;
+    }
+  } else if (query.security === "reality") {
+    const realitySettings: Record<string, unknown> = {};
+    if (query.sni) realitySettings.serverName = query.sni;
+    if (query.fp) realitySettings.fingerprint = query.fp;
+    if (query.pbk) realitySettings.publicKey = query.pbk;
+    if (query.sid) realitySettings.shortId = query.sid;
+    if (query.spx) realitySettings.spiderX = query.spx;
+    if (Object.keys(realitySettings).length > 0) {
+      streamSettings.realitySettings = realitySettings;
+    }
+  }
+
+  if (network === "xhttp") {
+    const headers: Record<string, string> = { Pragma: "no-cache" };
+    if (query.host) {
+      headers.Host = query.host;
+    }
+    streamSettings.xhttpSettings = {
+      path: query.path ?? "/",
+      mode: query.mode ?? "auto",
+      headers,
+    };
+  } else if (network === "tcp") {
+    streamSettings.tcpSettings = { header: { type: "none" } };
+  }
+
+  outbound.streamSettings = streamSettings;
+  return outbound;
+}
+
+function remarksFromUri(line: string): string {
+  try {
+    const parsed = new URL(line);
+    return parsed.hash ? decodeURIComponent(parsed.hash.slice(1)) : "MOZHNO VPN";
+  } catch {
+    return "MOZHNO VPN";
+  }
+}
+
+function v2rayJsonConfig(line: string): Record<string, unknown> | null {
+  const proxy = outboundFromUri(line);
+  if (!proxy) {
+    return null;
+  }
+
+  return {
+    log: { access: "", error: "", loglevel: "warning" },
+    inbounds: [
+      {
+        tag: "socks",
+        port: 10808,
+        listen: "127.0.0.1",
+        protocol: "socks",
+        settings: { udp: true },
+      },
+      {
+        tag: "http",
+        port: 10809,
+        listen: "127.0.0.1",
+        protocol: "http",
+        settings: {},
+      },
+    ],
+    outbounds: [
+      proxy,
+      { tag: "direct", protocol: "freedom", settings: {} },
+      { tag: "block", protocol: "blackhole", settings: {} },
+      { tag: "dns-out", protocol: "dns", settings: {} },
+    ],
+    dns: {
+      queryStrategy: "UseIPv4",
+      servers: [
+        {
+          address: config.xraySubscription.jsonRuDns,
+          domains: config.xraySubscription.jsonDirectDomains,
+        },
+        {
+          address: config.xraySubscription.jsonRemoteDns,
+          detour: "proxy",
+        },
+      ],
+    },
+    routing: {
+      domainStrategy: "IPIfNonMatch",
+      rules: routingRules(),
+    },
+    remarks: remarksFromUri(line),
+  };
+}
+
+function renderV2rayJson(links: string[]): Buffer {
+  const configs: Array<Record<string, unknown>> = [];
+  const seen = new Set<string>();
+
+  for (const link of links) {
+    if (seen.has(link)) continue;
+    seen.add(link);
+
+    const item = v2rayJsonConfig(link);
+    if (item) {
+      configs.push(item);
+    }
+  }
+
+  return Buffer.from(JSON.stringify(configs), "utf8");
+}
+
+function renderUriSubscription(links: string[]): Buffer {
+  const text = `${links.join("\n")}\n`;
+  return Buffer.from(Buffer.from(text, "utf8").toString("base64"), "utf8");
+}
+
 function unixSeconds(date: Date): number {
   return Math.floor(date.getTime() / 1000);
 }
@@ -102,6 +312,13 @@ function publicSubscriptionUrl(subId: string): string {
   return `${baseUrl.replace(/\/+$/, "")}/sub/${subId}`;
 }
 
+function contentDispositionHeader(): string {
+  return [
+    `attachment; filename="${config.xraySubscription.fileName}"`,
+    `filename*=UTF-8''${encodeURIComponent(config.xraySubscription.fileNameUtf8)}`,
+  ].join("; ");
+}
+
 export class XraySubscriptionService {
   async render(subId: string, userAgent: string, remoteAddress: string): Promise<RenderedSubscription | null> {
     const entryPoint = await this.findEntryPointKey(subId);
@@ -115,8 +332,8 @@ export class XraySubscriptionService {
       return null;
     }
 
-    const text = `${links.join("\n")}\n`;
-    const body = Buffer.from(Buffer.from(text, "utf8").toString("base64"), "utf8");
+    const renderMode = shouldRenderJson(userAgent) ? "json" : "uri";
+    const body = renderMode === "json" ? renderV2rayJson(links) : renderUriSubscription(links);
     const expiresAt = keys.reduce<Date>((min, key) => key.expiresAt < min ? key.expiresAt : min, entryPoint.expiresAt);
     const usedBytes = keys.reduce<bigint>((sum, key) => sum + (key.trafficUsedBytes ?? 0n), 0n);
     const limitBytes = entryPoint.user.vpnTrafficLimitBytes;
@@ -126,6 +343,7 @@ export class XraySubscriptionService {
       telegramId: entryPoint.user.telegramId.toString(),
       remoteAddress,
       userAgent,
+      renderMode,
       links: links.length,
       servers: keys.map((key) => key.server?.code ?? "unknown"),
     });
@@ -133,15 +351,17 @@ export class XraySubscriptionService {
     return {
       body,
       headers: {
-        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Type": renderMode === "json" ? "application/json" : "text/plain; charset=utf-8",
         "Profile-Title": profileTitleHeader(),
         "Profile-Update-Interval": String(config.xraySubscription.updateIntervalHours),
+        ...(config.xraySubscription.supportUrl ? { "Support-Url": config.xraySubscription.supportUrl } : {}),
         "Subscription-Userinfo": [
           `upload=0`,
           `download=${usedBytes.toString()}`,
           `total=${limitBytes?.toString() ?? "0"}`,
           `expire=${unixSeconds(expiresAt)}`,
         ].join("; "),
+        "Content-Disposition": contentDispositionHeader(),
         "Cache-Control": "no-store",
       },
       meta: {
@@ -149,6 +369,7 @@ export class XraySubscriptionService {
         telegramId: entryPoint.user.telegramId.toString(),
         servers: keys.map((key) => key.server?.code ?? "unknown"),
         links: links.length,
+        renderMode,
       },
     };
   }
