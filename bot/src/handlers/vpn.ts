@@ -16,6 +16,8 @@ function escapeHtml(value: string): string {
 const VPN_AMNEZIA_ACTION = "vpn:amneziya";
 const VPN_AMNEZIA_SERVER_ACTION = /^vpn:amneziya:([a-z0-9-]+)$/;
 const VPN_XUI_ACTION = "vpn:xui";
+const VPN_XUI_MULTI_ACTION = "vpn:xui:multi";
+const VPN_XUI_SERVER_ACTION = /^vpn:xui:([a-z0-9-]+)$/;
 const AMNEZIYA_SEND_LOCK_TTL_MS = 60_000;
 const amneziyaSendLocks = new Map<string, number>();
 
@@ -112,8 +114,58 @@ export async function xuiVpnCallbackHandler(ctx: AuthContext): Promise<void> {
   }
 
   try {
+    await sendXuiMultiKey(ctx);
+  } catch (err) {
+    logger.error("xuiVpnCallbackHandler error:", err);
+    await ctx.reply("Не удалось создать общую VPN-ссылку, попробуйте позже.");
+  }
+}
+
+export async function xuiServerVpnCallbackHandler(ctx: AuthContext): Promise<void> {
+  const user = ctx.dbUser;
+
+  if (user.vpnBlocked) {
+    await ctx.reply("Ваш доступ к VPN заблокирован. Обратитесь к администратору.");
+    return;
+  }
+
+  const serverCode = getXuiServerCode(ctx);
+  if (!serverCode) {
+    await ctx.reply("Не удалось определить сервер 3X-UI.");
+    return;
+  }
+
+  try {
+    await sendXuiKey(ctx, serverCode);
+  } catch (err) {
+    logger.error("xuiServerVpnCallbackHandler error:", err);
+    await ctx.reply("Не удалось создать VPN-ключ, попробуйте позже.");
+  }
+}
+
+export async function xuiMultiVpnCallbackHandler(ctx: AuthContext): Promise<void> {
+  const user = ctx.dbUser;
+
+  if (user.vpnBlocked) {
+    await ctx.reply("Ваш доступ к VPN заблокирован. Обратитесь к администратору.");
+    return;
+  }
+
+  try {
+    await sendXuiMultiKey(ctx);
+  } catch (err) {
+    logger.error("xuiMultiVpnCallbackHandler error:", err);
+    await ctx.reply("Не удалось создать общую VPN-ссылку, попробуйте позже.");
+  }
+}
+
+async function sendXuiKey(ctx: AuthContext, serverCode: string): Promise<void> {
+  const user = ctx.dbUser;
+
+  try {
     await ctx.replyWithChatAction("upload_document");
-    const result = await vpnService.getOrCreateXuiKey(user);
+    await removeInlineKeyboard(ctx);
+    const result = await vpnService.getOrCreateXuiKey(user, serverCode);
     const { key } = result;
     const text = buildXuiSetupInstructions(key.subscriptionUrl);
 
@@ -141,8 +193,46 @@ export async function xuiVpnCallbackHandler(ctx: AuthContext): Promise<void> {
       show_caption_above_media: true,
     } as any);
   } catch (err) {
-    logger.error("xuiVpnCallbackHandler error:", err);
-    await ctx.reply("Не удалось создать VPN-ключ, попробуйте позже.");
+    logger.error("sendXuiKey error:", err);
+    throw err;
+  }
+}
+
+async function sendXuiMultiKey(ctx: AuthContext): Promise<void> {
+  const user = ctx.dbUser;
+
+  try {
+    await ctx.replyWithChatAction("upload_document");
+    await removeInlineKeyboard(ctx);
+    const result = await vpnService.getOrCreateMultiXuiKey(user);
+    const text = buildXuiSetupInstructions(result.key.subscriptionUrl);
+
+    if (config.vpnSetupImageFileId2) {
+      await ctx.replyWithMediaGroup([
+        {
+          type: "photo",
+          media: config.vpnSetupImageFileId,
+          caption: text,
+          parse_mode: "HTML",
+          show_caption_above_media: true,
+        },
+        {
+          type: "photo",
+          media: config.vpnSetupImageFileId2,
+          show_caption_above_media: true,
+        },
+      ] as any);
+      return;
+    }
+
+    await ctx.replyWithPhoto(config.vpnSetupImageFileId, {
+      caption: text,
+      parse_mode: "HTML",
+      show_caption_above_media: true,
+    } as any);
+  } catch (err) {
+    logger.error("sendXuiMultiKey error:", err);
+    throw err;
   }
 }
 
@@ -404,12 +494,27 @@ export const vpnActionHandlers = {
     action: VPN_XUI_ACTION,
     handler: xuiVpnCallbackHandler,
   },
+  xuiMulti: {
+    action: VPN_XUI_MULTI_ACTION,
+    handler: xuiMultiVpnCallbackHandler,
+  },
+  xuiServer: {
+    action: VPN_XUI_SERVER_ACTION,
+    handler: xuiServerVpnCallbackHandler,
+  },
 };
 
 function getAmneziyaServerCode(ctx: AuthContext): string | null {
   const callbackQuery = ctx.callbackQuery;
   const data = callbackQuery && "data" in callbackQuery ? callbackQuery.data : "";
   const match = data.match(VPN_AMNEZIA_SERVER_ACTION);
+  return match?.[1] ?? null;
+}
+
+function getXuiServerCode(ctx: AuthContext): string | null {
+  const callbackQuery = ctx.callbackQuery;
+  const data = callbackQuery && "data" in callbackQuery ? callbackQuery.data : "";
+  const match = data.match(VPN_XUI_SERVER_ACTION);
   return match?.[1] ?? null;
 }
 

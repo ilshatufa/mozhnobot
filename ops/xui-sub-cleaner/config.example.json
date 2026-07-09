@@ -1,0 +1,41 @@
+{
+  "listen": {
+    "host": "127.0.0.1",
+    "port": 18080
+  },
+  "upstream": {
+    "url": "https://127.0.0.1:2096",
+    "hostHeader": "xui.mozhno.org"
+  },
+  "public": {
+    "host": "xui.mozhno.org",
+    "profileTitle": "МОЖНО ВПН",
+    "supportUrl": "https://t.me/MozhnoClub_Bot",
+    "profileUpdateInterval": "12",
+    "fileName": "mozhno-vpn.txt",
+    "fileNameUtf8": "МОЖНО ВПН.txt"
+  },
+  "json": {
+    "userAgentPattern": "(v2box|incy)",
+    "ruDns": "77.88.8.8",
+    "remoteDns": "https://1.1.1.1/dns-query",
+    "blockUdp443": true
+  },
+  "nodes": [
+    {
+      "name": "MOZHNO RU",
+      "hosts": ["xui.mozhno.org"],
+      "hostports": ["xui.mozhno.org:33854"]
+    },
+    {
+      "name": "MOZHNO DE",
+      "hosts": ["srv2.xui.mozhno.org"],
+      "hostports": ["srv2.xui.mozhno.org:443"]
+    },
+    {
+      "name": "MOZHNO LV",
+      "hosts": ["srv3.xui.mozhno.org"],
+      "hostports": ["srv3.xui.mozhno.org:443"]
+    }
+  ]
+}

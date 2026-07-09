@@ -130,6 +130,23 @@ export class VpnKeyRepository {
     });
   }
 
+  async updateXuiSubscription(
+    id: number,
+    data: {
+      xuiClientId?: string;
+      providerClientId: string;
+      providerPeerId?: string | null;
+      subId: string;
+      subscriptionUrl: string;
+      trafficLimitBytes?: bigint | null;
+    }
+  ): Promise<VpnKey> {
+    return prisma.vpnKey.update({
+      where: { id },
+      data,
+    });
+  }
+
   async attachServer(id: number, data: { serverId: number; provider: VpnProvider }): Promise<VpnKey> {
     return prisma.vpnKey.update({
       where: { id },

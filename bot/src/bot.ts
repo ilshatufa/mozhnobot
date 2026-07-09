@@ -52,6 +52,8 @@ export function createBot(): Telegraf<AuthContext> {
   bot.action(vpnActionHandlers.amneziya.action, vpnActionHandlers.amneziya.handler);
   bot.action(vpnActionHandlers.amneziyaServer.action, vpnActionHandlers.amneziyaServer.handler);
   bot.action(vpnActionHandlers.xui.action, vpnActionHandlers.xui.handler);
+  bot.action(vpnActionHandlers.xuiMulti.action, vpnActionHandlers.xuiMulti.handler);
+  bot.action(vpnActionHandlers.xuiServer.action, vpnActionHandlers.xuiServer.handler);
 
   bot.command("block", adminOnly(), blockHandler);
   bot.command("unblock", adminOnly(), unblockHandler);

@@ -4,21 +4,23 @@ import { prisma } from "../database.js";
 
 export class VpnServerRepository {
   async ensureConfiguredServers(): Promise<void> {
-    await prisma.vpnServer.upsert({
-      where: { code: config.vpnServers.xui.code },
-      create: {
-        provider: VpnProvider.XUI,
-        code: config.vpnServers.xui.code,
-        name: config.vpnServers.xui.name,
-        apiBaseUrl: config.xui.baseUrl,
-      },
-      update: {
-        provider: VpnProvider.XUI,
-        name: config.vpnServers.xui.name,
-        apiBaseUrl: config.xui.baseUrl,
-        isActive: true,
-      },
-    });
+    for (const server of config.vpnServers.xui.servers) {
+      await prisma.vpnServer.upsert({
+        where: { code: server.code },
+        create: {
+          provider: VpnProvider.XUI,
+          code: server.code,
+          name: server.name,
+          apiBaseUrl: server.apiBaseUrl,
+        },
+        update: {
+          provider: VpnProvider.XUI,
+          name: server.name,
+          apiBaseUrl: server.apiBaseUrl,
+          isActive: true,
+        },
+      });
+    }
 
     await prisma.vpnServer.upsert({
       where: { code: config.vpnServers.amneziya.code },

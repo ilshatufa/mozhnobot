@@ -1,0 +1,15 @@
+[Unit]
+Description=XUI subscription name cleaner
+After=network-online.target x-ui.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=XUI_SUB_CLEANER_CONFIG=/etc/xui-sub-cleaner/config.json
+ExecStart=/usr/bin/python3 /opt/xui-sub-cleaner/server.py
+Restart=always
+RestartSec=2
+User=root
+
+[Install]
+WantedBy=multi-user.target

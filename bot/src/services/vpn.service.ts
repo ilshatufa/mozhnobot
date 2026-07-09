@@ -1,5 +1,5 @@
 import { VpnProvider, type User, type VpnKey, type VpnServer } from "@prisma/client";
-import { config } from "../config.js";
+import { config, type XuiServerConfig } from "../config.js";
 import { logger } from "../logger.js";
 import { vpnKeyRepository } from "../repositories/vpn-key.repository.js";
 import { vpnServerRepository } from "../repositories/vpn-server.repository.js";
@@ -27,6 +27,10 @@ function trafficLimitBytes(user: User): bigint | null {
   return user.vpnTrafficLimitBytes;
 }
 
+function isXuiRecordNotFoundError(err: unknown): boolean {
+  return err instanceof Error && err.message.includes("record not found");
+}
+
 export class VpnService {
   async getOrCreateKey(user: User): Promise<VpnKeyResult> {
     return this.getOrCreateXuiKey(user);
@@ -36,10 +40,17 @@ export class VpnService {
     return vpnServerRepository.findActiveManyByProvider(VpnProvider.AMNEZIA);
   }
 
-  async getOrCreateXuiKey(user: User): Promise<VpnKeyResult> {
-    const server = await this.requireServer(config.vpnServers.xui.code, VpnProvider.XUI);
+  async listXuiServers(): Promise<VpnServer[]> {
+    return vpnServerRepository.findActiveManyByProvider(VpnProvider.XUI);
+  }
+
+  async getOrCreateXuiKey(user: User, serverCode = config.vpnServers.xui.code): Promise<VpnKeyResult> {
+    const serverConfig = this.requireXuiServerConfig(serverCode);
+    const server = await this.requireServer(serverConfig.code, VpnProvider.XUI);
     const existingForServer = await vpnKeyRepository.findActiveByUserAndServer(user.id, server.id);
-    const existingLegacy = existingForServer ? null : await vpnKeyRepository.findActiveLegacyXuiByUser(user.id);
+    const existingLegacy = existingForServer || serverConfig.code !== config.vpnServers.xui.code
+      ? null
+      : await vpnKeyRepository.findActiveLegacyXuiByUser(user.id);
     const existing = existingForServer ?? existingLegacy;
     const xuiEmail = xuiClient.buildClientEmail(user.telegramId, user.username);
 
@@ -48,32 +59,60 @@ export class VpnService {
         ? existing
         : await vpnKeyRepository.attachServer(existing.id, { serverId: server.id, provider: VpnProvider.XUI });
       let subId = existing.subId ?? "";
+      let xuiClientId = existing.xuiClientId;
+      let providerPeerId = existing.providerPeerId ?? existing.xuiClientId;
+      const limitBytes = trafficLimitBytes(user);
 
-      // Backfill legacy keys without random subId by rotating to a new random one.
-      if (!subId) {
-        subId = xuiClient.generateSubId();
+      try {
+        // Backfill legacy keys without random subId by rotating to a new random one.
+        if (!subId) {
+          subId = xuiClient.generateSubId();
+        }
+
+        // Keep XUI client email aligned with current username format.
         await xuiClient.updateClientSubscription(
-          existing.xuiClientId,
+          serverConfig,
+          xuiClientId,
+          existing.providerClientId ?? xuiEmail,
           xuiEmail,
           existing.expiresAt.getTime(),
           subId,
-          trafficLimitBytes(user)
+          limitBytes
         );
+      } catch (err) {
+        if (!isXuiRecordNotFoundError(err)) throw err;
+
+        const created = await xuiClient.addClient(
+          serverConfig,
+          user.telegramId,
+          user.username,
+          existing.expiresAt.getTime(),
+          limitBytes
+        );
+        xuiClientId = created.clientId;
+        providerPeerId = created.clientId;
+        subId = created.subId;
+        logger.warn(`3X-UI ${serverConfig.code} client ${existing.xuiClientId} was missing, recreated as ${xuiClientId}`);
       }
 
-      // Keep XUI client email aligned with current username format.
-      await xuiClient.updateClientSubscription(
-        existing.xuiClientId,
-        xuiEmail,
-        existing.expiresAt.getTime(),
-        subId,
-        trafficLimitBytes(user)
-      );
+      const actualSubscriptionUrl = xuiClient.getSubscriptionUrl(serverConfig, subId);
 
-      const actualSubscriptionUrl = await xuiClient.getSubscriptionUrl(subId);
-
-      if (existing.subscriptionUrl !== actualSubscriptionUrl || existing.subId !== subId) {
-        const updated = await vpnKeyRepository.updateSubscription(attached.id, subId, actualSubscriptionUrl);
+      if (
+        existing.xuiClientId !== xuiClientId ||
+        existing.subscriptionUrl !== actualSubscriptionUrl ||
+        existing.subId !== subId ||
+        existing.providerClientId !== xuiEmail ||
+        existing.providerPeerId !== providerPeerId ||
+        existing.trafficLimitBytes !== limitBytes
+      ) {
+        const updated = await vpnKeyRepository.updateXuiSubscription(attached.id, {
+          xuiClientId,
+          providerClientId: xuiEmail,
+          providerPeerId,
+          subId,
+          subscriptionUrl: actualSubscriptionUrl,
+          trafficLimitBytes: limitBytes,
+        });
         return { key: updated, alreadyExisted: true };
       }
 
@@ -84,8 +123,14 @@ export class VpnService {
     const expiryTime = expiresAt.getTime();
     const limitBytes = trafficLimitBytes(user);
 
-    const { clientId, subId } = await xuiClient.addClient(user.telegramId, user.username, expiryTime, limitBytes);
-    const subscriptionUrl = await xuiClient.getSubscriptionUrl(subId);
+    const { clientId, subId } = await xuiClient.addClient(
+      serverConfig,
+      user.telegramId,
+      user.username,
+      expiryTime,
+      limitBytes
+    );
+    const subscriptionUrl = xuiClient.getSubscriptionUrl(serverConfig, subId);
 
     const key = await vpnKeyRepository.create({
       userId: user.id,
@@ -103,6 +148,82 @@ export class VpnService {
     logger.info(`VPN key created for user ${user.telegramId}, expires ${expiresAt.toISOString()}`);
 
     return { key, alreadyExisted: false };
+  }
+
+  async getOrCreateMultiXuiKey(user: User): Promise<VpnKeyResult> {
+    const activeServers = await this.listXuiServers();
+    const activeConfigs = activeServers
+      .map((server) => config.vpnServers.xui.servers.find((item) => item.code === server.code))
+      .filter((server): server is XuiServerConfig => Boolean(server));
+
+    if (activeConfigs.length === 0) {
+      throw new Error("No active 3X-UI servers are configured");
+    }
+
+    if (activeConfigs.length === 1) {
+      return this.getOrCreateXuiKey(user, activeConfigs[0].code);
+    }
+
+    const aggregator = config.vpnServers.xui.multiServerCode
+      ? activeConfigs.find((server) => server.code === config.vpnServers.xui.multiServerCode)
+      : activeConfigs.find((server) => server.clientApiMode === "clients");
+    if (!aggregator) {
+      throw new Error("No 3X-UI server with clients API is configured for multi-server subscription");
+    }
+    if (aggregator.clientApiMode !== "clients") {
+      throw new Error(`3X-UI aggregator ${aggregator.code} does not support clients API`);
+    }
+
+    const results = [];
+    for (const server of activeConfigs) {
+      results.push({
+        server,
+        result: await this.getOrCreateXuiKey(user, server.code),
+      });
+    }
+
+    const aggregatorResult = results.find((item) => item.server.code === aggregator.code);
+    if (!aggregatorResult) {
+      throw new Error(`3X-UI aggregator ${aggregator.code} key was not created`);
+    }
+
+    const externalLinks: string[] = [];
+    for (const item of results) {
+      if (item.server.code === aggregator.code) continue;
+      const links = await xuiClient.fetchSubscriptionLinks(item.result.key.subscriptionUrl);
+      externalLinks.push(...this.filterOwnXuiLinks(item.server, links));
+    }
+
+    const aggregatorEmail = aggregatorResult.result.key.providerClientId
+      ?? xuiClient.buildClientEmail(user.telegramId, user.username);
+    await xuiClient.updateExternalLinks(aggregator, aggregatorEmail, externalLinks);
+
+    let subscriptionKey = aggregatorResult.result.key;
+    const publicMultiSubBaseUrl = config.vpnServers.xui.multiSubBaseUrl;
+    if (publicMultiSubBaseUrl && subscriptionKey.subId) {
+      const publicSubscriptionUrl = `${publicMultiSubBaseUrl.replace(/\/+$/, "")}/sub/${subscriptionKey.subId}`;
+      if (subscriptionKey.subscriptionUrl !== publicSubscriptionUrl) {
+        subscriptionKey = await vpnKeyRepository.updateXuiSubscription(subscriptionKey.id, {
+          xuiClientId: subscriptionKey.xuiClientId,
+          providerClientId: subscriptionKey.providerClientId ?? aggregatorEmail,
+          providerPeerId: subscriptionKey.providerPeerId,
+          subId: subscriptionKey.subId,
+          subscriptionUrl: publicSubscriptionUrl,
+          trafficLimitBytes: subscriptionKey.trafficLimitBytes,
+        });
+      }
+    }
+
+    logger.info(`Multi-server 3X-UI subscription updated for user ${user.telegramId}`, {
+      aggregator: aggregator.code,
+      servers: activeConfigs.map((server) => server.code),
+      externalLinks: externalLinks.length,
+    });
+
+    return {
+      key: subscriptionKey,
+      alreadyExisted: results.every((item) => item.result.alreadyExisted),
+    };
   }
 
   async getOrCreateAmneziyaKey(user: User, serverCode = config.vpnServers.amneziya.code): Promise<AmneziyaKeyResult> {
@@ -195,8 +316,9 @@ export class VpnService {
         if (activeKey.provider === VpnProvider.AMNEZIA && activeKey.providerClientId) {
           await amneziyaClient.disablePeer(activeKey.server, activeKey.providerClientId, "blocked");
         } else {
+          const serverConfig = this.requireXuiServerConfig(activeKey.server?.code ?? config.vpnServers.xui.code);
           const xuiEmail = activeKey.providerClientId ?? xuiClient.buildClientEmail(user.telegramId, user.username);
-          await xuiClient.disableClient(activeKey.xuiClientId, xuiEmail);
+          await xuiClient.disableClient(serverConfig, activeKey.xuiClientId, xuiEmail);
         }
       } catch (err) {
         logger.warn(`Failed to disable VPN key ${activeKey.id} for user ${user.telegramId}:`, err);
@@ -245,6 +367,29 @@ export class VpnService {
       throw new Error(`VPN server ${code} is not configured`);
     }
     return server;
+  }
+
+  private requireXuiServerConfig(code: string): XuiServerConfig {
+    const server = config.vpnServers.xui.servers.find((item) => item.code === code);
+    if (!server) {
+      throw new Error(`3X-UI server ${code} is not configured`);
+    }
+    return server;
+  }
+
+  private filterOwnXuiLinks(server: XuiServerConfig, links: string[]): string[] {
+    const expectedHosts = new Set([
+      new URL(server.subBaseUrl).hostname,
+      new URL(server.apiBaseUrl).hostname,
+    ]);
+
+    return links.filter((link) => {
+      try {
+        return expectedHosts.has(new URL(link).hostname);
+      } catch {
+        return false;
+      }
+    });
   }
 }
 
