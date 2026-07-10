@@ -1,14 +1,6 @@
-import type { User, VpnKey, VpnServer } from "@prisma/client";
 import { logger } from "../logger.js";
 import { vpnKeyRepository } from "../repositories/vpn-key.repository.js";
 import { amneziyaClient } from "./amneziya-client.js";
-
-const GLOBAL_TRAFFIC_LIMIT_REASON = "global_traffic_limit";
-
-type ActiveAmneziyaKey = VpnKey & {
-  server: VpnServer | null;
-  user?: Pick<User, "vpnTrafficLimitBytes">;
-};
 
 export class AmneziyaTrafficSyncService {
   private timer: NodeJS.Timeout | null = null;
@@ -38,15 +30,12 @@ export class AmneziyaTrafficSyncService {
 
     try {
       const keys = await vpnKeyRepository.findActiveAmneziyaKeysForSync();
-      const affectedUserIds = new Set<number>();
 
       for (const key of keys) {
         if (!key.server || !key.providerClientId) continue;
 
         try {
           const peer = await amneziyaClient.getPeerByClient(key.server, key.providerClientId);
-          affectedUserIds.add(key.userId);
-
           await vpnKeyRepository.updateAmneziyaData(key.id, {
             providerPeerId: peer.peerId,
             trafficUsedBytes: BigInt(peer.trafficUsedBytes),
@@ -63,50 +52,9 @@ export class AmneziyaTrafficSyncService {
           });
         }
       }
-
-      for (const userId of affectedUserIds) {
-        await this.enforceUserLimit(userId);
-      }
     } finally {
       this.running = false;
     }
-  }
-
-  private async enforceUserLimit(userId: number): Promise<void> {
-    const keys = await vpnKeyRepository.findActiveAmneziyaKeysByUserId(userId);
-    if (keys.length === 0) return;
-
-    const limit = keys[0].user.vpnTrafficLimitBytes;
-    if (limit === null) return;
-
-    const used = keys.reduce((sum, key) => sum + (key.trafficUsedBytes ?? 0n), 0n);
-    if (used < limit) return;
-
-    await this.disableKeys(keys);
-    await vpnKeyRepository.deactivateActiveAmneziyaByUserId(userId, GLOBAL_TRAFFIC_LIMIT_REASON);
-
-    logger.info("Amnezia global traffic limit reached", {
-      userId,
-      used: used.toString(),
-      limit: limit.toString(),
-    });
-  }
-
-  private async disableKeys(keys: ActiveAmneziyaKey[]): Promise<void> {
-    await Promise.all(keys.map(async (key) => {
-      if (!key.server || !key.providerClientId) return;
-
-      try {
-        await amneziyaClient.disablePeer(key.server, key.providerClientId, GLOBAL_TRAFFIC_LIMIT_REASON);
-      } catch (error) {
-        logger.warn("Failed to disable Amnezia peer after global traffic limit", {
-          keyId: key.id,
-          serverCode: key.server.code,
-          client: key.providerClientId,
-          error,
-        });
-      }
-    }));
   }
 }
 

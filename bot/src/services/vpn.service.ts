@@ -26,14 +26,18 @@ export interface AmneziyaConfigFile {
   configFileName: string;
 }
 
-function expiresAtFromNow(user: User): Date {
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + user.vpnDurationDays);
-  return expiresAt;
+const NO_EXPIRY_DB_DATE_ISO = "2099-12-31T23:59:59.000Z";
+
+function dbExpiresAtNoLimit(): Date {
+  return new Date(NO_EXPIRY_DB_DATE_ISO);
 }
 
-function trafficLimitBytes(user: User): bigint | null {
-  return user.vpnTrafficLimitBytes;
+function xuiNoExpiryTime(): number {
+  return 0;
+}
+
+function trafficLimitBytes(_user: User): bigint | null {
+  return null;
 }
 
 function isXuiRecordNotFoundError(err: unknown): boolean {
@@ -71,6 +75,7 @@ export class VpnService {
       let xuiClientId = existing.xuiClientId;
       let providerPeerId = existing.providerPeerId ?? existing.xuiClientId;
       const limitBytes = trafficLimitBytes(user);
+      const expiresAt = dbExpiresAtNoLimit();
 
       try {
         // Backfill legacy keys without random subId by rotating to a new random one.
@@ -84,7 +89,7 @@ export class VpnService {
           xuiClientId,
           existing.providerClientId ?? xuiEmail,
           xuiEmail,
-          existing.expiresAt.getTime(),
+          xuiNoExpiryTime(),
           subId,
           limitBytes
         );
@@ -95,7 +100,7 @@ export class VpnService {
           serverConfig,
           user.telegramId,
           user.username,
-          existing.expiresAt.getTime(),
+          xuiNoExpiryTime(),
           limitBytes
         );
         xuiClientId = created.clientId;
@@ -112,7 +117,8 @@ export class VpnService {
         existing.subId !== subId ||
         existing.providerClientId !== xuiEmail ||
         existing.providerPeerId !== providerPeerId ||
-        existing.trafficLimitBytes !== limitBytes
+        existing.trafficLimitBytes !== limitBytes ||
+        existing.expiresAt.getTime() !== expiresAt.getTime()
       ) {
         const updated = await vpnKeyRepository.updateXuiSubscription(attached.id, {
           xuiClientId,
@@ -121,6 +127,7 @@ export class VpnService {
           subId,
           subscriptionUrl: actualSubscriptionUrl,
           trafficLimitBytes: limitBytes,
+          expiresAt,
         });
         return { key: updated, alreadyExisted: true };
       }
@@ -128,8 +135,8 @@ export class VpnService {
       return { key: attached, alreadyExisted: true };
     }
 
-    const expiresAt = expiresAtFromNow(user);
-    const expiryTime = expiresAt.getTime();
+    const expiresAt = dbExpiresAtNoLimit();
+    const expiryTime = xuiNoExpiryTime();
     const limitBytes = trafficLimitBytes(user);
 
     const { clientId, subId } = await xuiClient.addClient(
@@ -219,6 +226,7 @@ export class VpnService {
           subId: subscriptionKey.subId,
           subscriptionUrl: publicSubscriptionUrl,
           trafficLimitBytes: subscriptionKey.trafficLimitBytes,
+          expiresAt: dbExpiresAtNoLimit(),
         });
       }
     }
@@ -244,11 +252,10 @@ export class VpnService {
     const limitBytes = trafficLimitBytes(user);
 
     if (existing) {
-      const now = new Date();
-      const expiresAt = existing.expiresAt > now ? existing.expiresAt : expiresAtFromNow(user);
+      const expiresAt = dbExpiresAtNoLimit();
       let peer = await amneziyaClient.createPeer(server, {
         client,
-        expiresAt,
+        expiresAt: null,
         trafficLimitBytes: null,
       });
       const peerConfig = peer.config;
@@ -280,10 +287,10 @@ export class VpnService {
       };
     }
 
-    const expiresAt = expiresAtFromNow(user);
+    const expiresAt = dbExpiresAtNoLimit();
     let peer = await amneziyaClient.createPeer(server, {
       client,
-      expiresAt,
+      expiresAt: null,
       trafficLimitBytes: null,
     });
     const peerConfig = peer.config;
@@ -425,7 +432,7 @@ export class VpnService {
       return peer;
     }
 
-    if (peer.disabledReason && !["expired_at", "traffic_limit"].includes(peer.disabledReason)) {
+    if (peer.disabledReason && !["expired_at", "traffic_limit", "global_traffic_limit"].includes(peer.disabledReason)) {
       throw new Error(`Amnezia peer ${client} on ${server.code} is disabled: ${peer.disabledReason}`);
     }
 

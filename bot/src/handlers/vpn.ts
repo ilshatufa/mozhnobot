@@ -104,6 +104,10 @@ function remainingTime(expiresAt: Date): string {
   return `${remainHours} ч.`;
 }
 
+function isUnlimitedExpiry(expiresAt: Date): boolean {
+  return expiresAt.getUTCFullYear() >= 2099;
+}
+
 export async function vpnHandler(ctx: AuthContext): Promise<void> {
   const user = ctx.dbUser;
 
@@ -535,14 +539,11 @@ export async function statusHandler(ctx: AuthContext): Promise<void> {
     case "active":
       const amneziyaKeys = keys.filter((key) => key.provider === VpnProvider.AMNEZIA);
       const amneziyaUsed = amneziyaKeys.reduce((sum, key) => sum + (key.trafficUsedBytes ?? 0n), 0n);
-      const amneziyaLimit = user.vpnTrafficLimitBytes;
       const amneziyaSummary = amneziyaKeys.length === 0
         ? []
         : [
             "<b>Общий лимит Amnezia</b>",
-            amneziyaLimit === null
-              ? `Использовано: ${formatBytes(amneziyaUsed)}, без лимита по объёму`
-              : `Использовано: ${formatBytes(amneziyaUsed)} из ${formatBytes(amneziyaLimit)}`,
+            `Использовано: ${formatBytes(amneziyaUsed)}, без лимита по объёму`,
             "",
           ];
 
@@ -554,10 +555,16 @@ export async function statusHandler(ctx: AuthContext): Promise<void> {
           const serverName = key.server?.name ?? key.provider;
           const traffic = key.trafficUsedBytes === null ? "" : `\nТрафик: ${formatBytes(key.trafficUsedBytes)}`;
           const limit = key.trafficLimitBytes === null ? "" : ` из ${formatBytes(key.trafficLimitBytes)}`;
+          const expiry = isUnlimitedExpiry(key.expiresAt)
+            ? "Срок действия: без ограничения"
+            : `Срок действия до: ${formatDate(key.expiresAt)}`;
+          const remaining = isUnlimitedExpiry(key.expiresAt)
+            ? "Осталось: без ограничения"
+            : `Осталось: ${remainingTime(key.expiresAt)}`;
           return [
             `<b>${escapeHtml(serverName)}</b>`,
-            `Срок действия до: ${formatDate(key.expiresAt)}`,
-            `Осталось: ${remainingTime(key.expiresAt)}${traffic}${limit}`,
+            expiry,
+            `${remaining}${traffic}${limit}`,
           ].join("\n");
         }),
       ].join("\n\n"), { parse_mode: "HTML" });

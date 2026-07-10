@@ -296,10 +296,6 @@ function renderUriSubscription(links: string[]): Buffer {
   return Buffer.from(Buffer.from(text, "utf8").toString("base64"), "utf8");
 }
 
-function unixSeconds(date: Date): number {
-  return Math.floor(date.getTime() / 1000);
-}
-
 function profileTitleHeader(): string {
   return `base64:${Buffer.from(config.xraySubscription.title, "utf8").toString("base64")}`;
 }
@@ -334,9 +330,7 @@ export class XraySubscriptionService {
 
     const renderMode = shouldRenderJson(userAgent) ? "json" : "uri";
     const body = renderMode === "json" ? renderV2rayJson(links) : renderUriSubscription(links);
-    const expiresAt = keys.reduce<Date>((min, key) => key.expiresAt < min ? key.expiresAt : min, entryPoint.expiresAt);
     const usedBytes = keys.reduce<bigint>((sum, key) => sum + (key.trafficUsedBytes ?? 0n), 0n);
-    const limitBytes = entryPoint.user.vpnTrafficLimitBytes;
 
     logger.info("Xray subscription rendered", {
       userId: entryPoint.userId,
@@ -358,8 +352,8 @@ export class XraySubscriptionService {
         "Subscription-Userinfo": [
           `upload=0`,
           `download=${usedBytes.toString()}`,
-          `total=${limitBytes?.toString() ?? "0"}`,
-          `expire=${unixSeconds(expiresAt)}`,
+          `total=0`,
+          `expire=0`,
         ].join("; "),
         "Content-Disposition": contentDispositionHeader(),
         "Cache-Control": "no-store",

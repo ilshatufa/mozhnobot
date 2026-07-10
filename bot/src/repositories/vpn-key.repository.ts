@@ -154,6 +154,7 @@ export class VpnKeyRepository {
       subId: string;
       subscriptionUrl: string;
       trafficLimitBytes?: bigint | null;
+      expiresAt?: Date;
     }
   ): Promise<VpnKey> {
     return prisma.vpnKey.update({

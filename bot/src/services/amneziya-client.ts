@@ -89,14 +89,14 @@ export class AmneziyaClient {
 
   async createPeer(target: AmneziyaApiTarget, data: {
     client: string;
-    expiresAt: Date;
+    expiresAt: Date | null;
     trafficLimitBytes: bigint | null;
   }): Promise<AmneziyaPeer> {
     return this.request<AmneziyaPeer>(target, "/peers", {
       method: "POST",
       body: JSON.stringify({
         client: data.client,
-        expiresAt: data.expiresAt.toISOString(),
+        expiresAt: data.expiresAt?.toISOString() ?? null,
         trafficLimitBytes: data.trafficLimitBytes === null ? null : Number(data.trafficLimitBytes),
       }),
     });
