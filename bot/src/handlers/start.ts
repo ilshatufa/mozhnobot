@@ -8,7 +8,7 @@ export async function startHandler(ctx: AuthContext): Promise<void> {
   if (!ctx.isClubMember) {
     await clubInterestRepository.recordOpened(ctx.dbUser.id);
     await ctx.reply(
-      "Сейчас клуб закрыт для вступления.\nМожно записаться в лист ожидания.",
+      "Двери клуба пока закрыты 😏\n\nНо в лист ожидания записаться можно. Нажимай кнопку — будем знать, что ты уже рядом.",
       Markup.inlineKeyboard([
         Markup.button.callback("Записаться в лист ожидания", CLUB_WAITLIST_ACTION),
       ]),
