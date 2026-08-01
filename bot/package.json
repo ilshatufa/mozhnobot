@@ -1,6 +1,6 @@
 {
   "name": "club-bot",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Клубный Telegram-бот с VPN-доступом через 3X-UI",
   "type": "module",
   "main": "dist/index.js",

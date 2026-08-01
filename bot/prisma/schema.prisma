@@ -67,12 +67,24 @@ model User {
   createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt    DateTime             @updatedAt @map("updated_at") @db.Timestamptz()
 
-  vpnKeys VpnKey[]
+  vpnKeys      VpnKey[]
+  clubInterest ClubInterest?
 
   @@index([clubStatus])
   @@index([botStatus])
   @@index([lastSeenAt])
   @@map("users")
+}
+
+model ClubInterest {
+  id           Int       @id @default(autoincrement())
+  userId       Int       @unique @map("user_id")
+  openedAt     DateTime  @default(now()) @map("opened_at") @db.Timestamptz()
+  waitlistedAt DateTime? @map("waitlisted_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("club_interest")
 }
 
 model VpnKey {

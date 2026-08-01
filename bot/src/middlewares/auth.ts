@@ -7,17 +7,34 @@ import { isBotBlockedError } from "../telegram-errors.js";
 
 export interface AuthContext extends Context {
   dbUser: User;
+  isClubMember: boolean;
 }
 
 const ALLOWED_STATUSES = new Set(["member", "administrator", "creator"]);
+const CLUB_WAITLIST_ACTION = "club_waitlist_join";
+
+function isStartCommand(ctx: Context): boolean {
+  const message = ctx.message;
+  return Boolean(message && "text" in message && /^\/start(?:@\w+)?(?:\s|$)/i.test(message.text));
+}
+
+function isWaitlistAction(ctx: Context): boolean {
+  const callbackQuery = ctx.callbackQuery;
+  return Boolean(callbackQuery && "data" in callbackQuery && callbackQuery.data === CLUB_WAITLIST_ACTION);
+}
 
 export function authMiddleware(): MiddlewareFn<AuthContext> {
   return async (ctx, next) => {
     const telegramId = ctx.from?.id;
     if (!telegramId) return;
 
-    // Обрабатываем только личные сообщения/команды пользователя.
-    if (ctx.chat?.type !== "private" || ctx.updateType !== "message") return;
+    // Обрабатываем только личные сообщения и callback-и пользователя.
+    if (
+      ctx.chat?.type !== "private" ||
+      (ctx.updateType !== "message" && ctx.updateType !== "callback_query")
+    ) {
+      return;
+    }
 
     const tgId = BigInt(telegramId);
 
@@ -34,6 +51,7 @@ export function authMiddleware(): MiddlewareFn<AuthContext> {
         ctx.from?.username,
         ctx.from?.first_name,
       );
+      ctx.isClubMember = true;
       return next();
     }
 
@@ -46,6 +64,7 @@ export function authMiddleware(): MiddlewareFn<AuthContext> {
           ctx.from?.first_name,
         );
         ctx.dbUser = await userRepository.setRole(tgId, Role.ADMIN);
+        ctx.isClubMember = true;
         logger.info(`Seed admin assigned: ${tgId}`);
         return next();
       }
@@ -53,7 +72,23 @@ export function authMiddleware(): MiddlewareFn<AuthContext> {
 
     try {
       const member = await ctx.telegram.getChatMember(config.clubGroupId, telegramId);
-      if (!ALLOWED_STATUSES.has(member.status)) {
+      const isClubMember =
+        ALLOWED_STATUSES.has(member.status) ||
+        (member.status === "restricted" && member.is_member);
+
+      if (!isClubMember) {
+        dbUser = await userRepository.upsert(
+          tgId,
+          ctx.from?.username,
+          ctx.from?.first_name,
+        );
+        ctx.dbUser = dbUser;
+        ctx.isClubMember = false;
+
+        if (isStartCommand(ctx) || isWaitlistAction(ctx)) {
+          return next();
+        }
+
         await ctx.reply("Вы не являетесь участником клуба.");
         return;
       }
@@ -74,6 +109,7 @@ export function authMiddleware(): MiddlewareFn<AuthContext> {
     );
 
     ctx.dbUser = dbUser;
+    ctx.isClubMember = true;
     return next();
   };
 }
