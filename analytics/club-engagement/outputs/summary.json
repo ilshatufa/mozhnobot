@@ -1,0 +1,65 @@
+{
+  "as_of": "2026-08-01T13:27:39+00:00",
+  "message_period_start": "2026-01-11T06:17:14+00:00",
+  "message_period_end": "2026-08-01T13:08:59+00:00",
+  "messages_total": 25718,
+  "known_people": 166,
+  "telegram_member_count_including_bots": 107,
+  "confirmed_current_humans": 103,
+  "confirmed_left_humans": 12,
+  "unconfirmed_status_humans": 51,
+  "active_people": {
+    "7d": 56,
+    "30d": 76,
+    "90d": 103,
+    "all": 151
+  },
+  "messages": {
+    "7d": 812,
+    "30d": 4260,
+    "90d": 10324,
+    "all": 25349
+  },
+  "visits": {
+    "7d": 0,
+    "30d": 0,
+    "90d": 0,
+    "all": 0
+  },
+  "top_10_percent_message_share": 0.6284,
+  "message_gini": 0.7664,
+  "active_people_trend_last_4_full_weeks_pct": -12.7,
+  "messages_trend_last_4_full_weeks_pct": 53.3,
+  "factor_comparisons": [
+    {
+      "factor": "Первый ответ получен не позднее 24 часов",
+      "with_factor_n": 59,
+      "with_factor_return_rate": 0.7288135593220338,
+      "without_factor_n": 57,
+      "without_factor_return_rate": 0.5614035087719298,
+      "difference_pp": 16.741005055010405,
+      "fisher_p_value": 0.08030240233952146
+    },
+    {
+      "factor": "Не менее двух собеседников за первые 30 дней",
+      "with_factor_n": 100,
+      "with_factor_return_rate": 0.73,
+      "without_factor_n": 16,
+      "without_factor_return_rate": 0.125,
+      "difference_pp": 60.5,
+      "fisher_p_value": 5.9073480911818065e-06
+    },
+    {
+      "factor": "Активность минимум в двух темах за первые 30 дней",
+      "with_factor_n": 96,
+      "with_factor_return_rate": 0.75,
+      "without_factor_n": 20,
+      "without_factor_return_rate": 0.15,
+      "difference_pp": 60.0,
+      "fisher_p_value": 7.690117807795716e-07
+    }
+  ],
+  "attendance_available": false,
+  "subscription_cancellations_available": false,
+  "subscription_cancellations_count": 0
+}
