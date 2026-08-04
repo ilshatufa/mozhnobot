@@ -10,6 +10,7 @@ ANALYSIS_ROOT = Path(__file__).resolve().parents[1]
 SNAPSHOT_PATH = ANALYSIS_ROOT / "data" / "raw" / "member_lists_snapshot.json"
 OUTPUT_DIR = ANALYSIS_ROOT / "outputs" / "private"
 LOCAL_TZ = ZoneInfo("Asia/Yekaterinburg")
+EMPTY_CELL = "&#8203;"
 CURRENT_STATUSES = {"member", "administrator", "creator"}
 ACTIVITY_LABELS = {
     "message_created": "сообщение",
@@ -28,14 +29,15 @@ def parse_datetime(value: str | None) -> datetime | None:
 def format_datetime(value: str | None) -> str:
     parsed = parse_datetime(value)
     if not parsed:
-        return ""
+        return EMPTY_CELL
     return parsed.astimezone(LOCAL_TZ).strftime("%d.%m.%Y %H:%M")
 
 
 def escape_markdown(value: object | None) -> str:
     if value is None:
-        return ""
-    return str(value).replace("|", "\\|").replace("\n", " ").strip()
+        return EMPTY_CELL
+    escaped = str(value).replace("|", "&#124;").replace("\n", " ").strip()
+    return escaped or EMPTY_CELL
 
 
 def display_name(user: dict) -> str:
@@ -75,7 +77,7 @@ def render_current_members(snapshot: dict, users: list[dict]) -> str:
     for index, user in enumerate(current, start=1):
         username = f"@{user['username']}" if user.get("username") else ""
         activity = format_datetime(user.get("last_activity_at"))
-        activity_type = ACTIVITY_LABELS.get(user.get("last_activity_type"), "")
+        activity_type = ACTIVITY_LABELS.get(user.get("last_activity_type"), EMPTY_CELL)
         lines.append(
             "| {index} | {name} | {username} | {telegram_id} | {activity} | {activity_type} |".format(
                 index=index,
