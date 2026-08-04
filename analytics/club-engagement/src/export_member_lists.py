@@ -10,7 +10,7 @@ ANALYSIS_ROOT = Path(__file__).resolve().parents[1]
 SNAPSHOT_PATH = ANALYSIS_ROOT / "data" / "raw" / "member_lists_snapshot.json"
 OUTPUT_DIR = ANALYSIS_ROOT / "outputs" / "private"
 LOCAL_TZ = ZoneInfo("Asia/Yekaterinburg")
-EMPTY_CELL = "&#8203;"
+EMPTY_CELL = "\N{NO-BREAK SPACE}"
 CURRENT_STATUSES = {"member", "administrator", "creator"}
 ACTIVITY_LABELS = {
     "message_created": "сообщение",
