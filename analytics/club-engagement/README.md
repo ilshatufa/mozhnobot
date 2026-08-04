@@ -65,6 +65,20 @@ docker compose -f analytics/club-engagement/docker-compose.yml up notebook
 
 После запуска он доступен только локально: `http://127.0.0.1:8888`.
 
+Сформировать приватные списки текущих и ушедших участников из свежего
+production-snapshot:
+
+```bash
+docker compose -f analytics/club-engagement/docker-compose.yml run --rm analysis \
+  python src/export_member_lists.py
+```
+
+Результаты сохраняются в `outputs/private/`, не попадают в Git и содержат
+имена, username и Telegram ID. Для действующих участников используется дата
+последнего зафиксированного действия в клубной группе; пассивное чтение
+Telegram определить нельзя. Ушедшие самостоятельно отделены от удалённых
+администратором, а записи без сохранённой даты выхода вынесены в отдельный блок.
+
 ## Результаты
 
 - `notebooks/club_engagement_analysis.ipynb` — основной выполненный ноутбук;
