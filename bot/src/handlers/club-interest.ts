@@ -12,5 +12,7 @@ export async function waitlistHandler(ctx: AuthContext): Promise<void> {
   }
 
   await clubInterestRepository.recordWaitlisted(ctx.dbUser.id);
-  await ctx.editMessageText("Готово, ты в листе ожидания 🙌");
+  await ctx.editMessageText(
+    "Ура, готово ✅ Ты в листе ожидания, и до клуба остался всего один шаг!\n\nНе отключай уведомления, чтобы не пропустить окошко и увидимся в клубе😉",
+  );
 }
