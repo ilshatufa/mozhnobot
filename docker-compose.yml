@@ -63,16 +63,6 @@ services:
     init: true
     restart: unless-stopped
 
-  cloudflared:
-    image: cloudflare/cloudflared:2026.8.1
-    command: tunnel --no-autoupdate --protocol http2 run --token ${CLOUDFLARED_TUNNEL_TOKEN:-}
-    depends_on:
-      - xray-subscription
-    network_mode: host
-    restart: unless-stopped
-    profiles:
-      - tunnel
-
   postgres:
     build:
       context: ./postgres
