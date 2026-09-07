@@ -52,6 +52,9 @@ const envSchema = z.object({
   OPENAI_TRANSCRIPTION_TIMEOUT_MS: z.coerce.number().int().positive().default(120000),
   OPENAI_TRANSCRIPT_CLEANUP_MODEL: z.string().min(1).default("gpt-4o-mini"),
   OPENAI_TRANSCRIPT_CLEANUP_TIMEOUT_MS: z.coerce.number().int().positive().default(60000),
+  AI_SEARCH_MODEL: z.string().min(1).default("gpt-4o-mini"),
+  AI_SEARCH_TIMEOUT_MS: z.coerce.number().int().positive().default(60000),
+  AI_SEARCH_MAX_RESULTS: z.coerce.number().int().min(5).max(50).default(30),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -185,6 +188,13 @@ export const config = {
     openaiTranscriptionTimeoutMs: env.OPENAI_TRANSCRIPTION_TIMEOUT_MS,
     openaiTranscriptCleanupModel: env.OPENAI_TRANSCRIPT_CLEANUP_MODEL,
     openaiTranscriptCleanupTimeoutMs: env.OPENAI_TRANSCRIPT_CLEANUP_TIMEOUT_MS,
+  },
+
+  aiSearch: {
+    openaiApiKey: env.OPENAI_API_KEY,
+    model: env.AI_SEARCH_MODEL,
+    timeoutMs: env.AI_SEARCH_TIMEOUT_MS,
+    maxResults: env.AI_SEARCH_MAX_RESULTS,
   },
 
   xraySubscription: {

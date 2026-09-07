@@ -6,6 +6,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
+    "test": "tsx --test src/**/*.test.ts",
     "start": "node dist/index.js",
     "start:media-worker": "node dist/media-worker.js",
     "start:subscription": "node dist/subscription-server.js",

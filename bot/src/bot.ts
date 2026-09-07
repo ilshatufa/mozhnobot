@@ -5,6 +5,7 @@ import { eventLoggerMiddleware } from "./middlewares/event-logger.js";
 import { startHandler } from "./handlers/start.js";
 import { CLUB_WAITLIST_ACTION, waitlistHandler } from "./handlers/club-interest.js";
 import { helpHandler } from "./handlers/help.js";
+import { askHandler } from "./handlers/ask.js";
 import { vpnHandler, statusHandler } from "./handlers/vpn.js";
 import { statsHandler } from "./handlers/stats.js";
 import {
@@ -36,6 +37,7 @@ export function createBot(): Telegraf<AuthContext> {
   bot.command("start", startHandler);
   bot.action(CLUB_WAITLIST_ACTION, waitlistHandler);
   bot.command("help", helpHandler);
+  bot.command("ask", askHandler);
   bot.command("vpn", vpnHandler);
   bot.command("status", statusHandler);
 

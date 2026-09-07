@@ -7,6 +7,7 @@ function buildHelpText(role: Role): string {
   let text = "Команды бота\n\n";
   text += "Основные:\n";
   text += "/help — показать список команд\n";
+  text += "/ask <вопрос> — найти опыт участников в истории клуба\n";
   text += "/vpn — получить VPN-ключ\n";
   text += "/status — проверить статус VPN-ключа\n";
 
