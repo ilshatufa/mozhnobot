@@ -7,6 +7,7 @@ import { registerProcessErrorHandlers } from "./error-handling.js";
 import { xraySubscriptionService } from "./services/xray-subscription.service.js";
 
 const SUB_PATH_RE = /^\/sub\/([A-Za-z0-9._~-]+)$/;
+const SUB_ASSET_PATH_RE = /^\/sub\/([A-Za-z0-9._~-]+)\/([A-Za-z0-9._~-]+)$/;
 
 function sendText(res: http.ServerResponse, status: number, text: string): void {
   const body = Buffer.from(text, "utf8");
@@ -35,6 +36,21 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
   if (url.pathname === "/health") {
     sendText(res, 200, "ok\n");
+    return;
+  }
+
+  const assetMatch = url.pathname.match(SUB_ASSET_PATH_RE);
+  if (assetMatch) {
+    const renderedAsset = await xraySubscriptionService.renderAsset(assetMatch[1], assetMatch[2]);
+    if (!renderedAsset) {
+      sendText(res, 404, "subscription not found\n");
+      return;
+    }
+    res.writeHead(200, {
+      ...renderedAsset.headers,
+      "Content-Length": String(renderedAsset.body.length),
+    });
+    res.end(renderedAsset.body);
     return;
   }
 

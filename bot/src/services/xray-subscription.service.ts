@@ -34,6 +34,11 @@ export interface RenderedSubscription {
   };
 }
 
+export interface RenderedSubscriptionAsset {
+  body: Buffer;
+  headers: Record<string, string>;
+}
+
 function decodeSubscriptionBody(body: string): string {
   const trimmed = body.trim();
   if (SUBSCRIPTION_PROTOCOLS.some((protocol) => trimmed.includes(protocol))) {
@@ -418,6 +423,34 @@ export class XraySubscriptionService {
     return publicSubscriptionUrl(subId);
   }
 
+  async renderAsset(subId: string, assetName: string): Promise<RenderedSubscriptionAsset | null> {
+    const entryPoint = await this.findEntryPointKey(subId);
+    if (!entryPoint || !this.isUserAllowed(entryPoint.user)) {
+      return null;
+    }
+
+    const aggregator = this.subscriptionAggregator();
+    const publicUrl = new URL(aggregator.subBaseUrl);
+    const res = await fetch(`${subscriptionUrl(aggregator, subId)}/${encodeURIComponent(assetName)}`, {
+      headers: {
+        Host: publicUrl.host,
+        "User-Agent": "xray-subscription-service/1.0",
+      },
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`3X-UI subscription asset ${assetName} failed: ${res.status} ${body}`);
+    }
+
+    return {
+      body: Buffer.from(await res.arrayBuffer()),
+      headers: {
+        "Content-Type": res.headers.get("content-type") ?? "application/octet-stream",
+        "Cache-Control": "no-store",
+      },
+    };
+  }
+
   async syncAllTraffic(): Promise<void> {
     const keys = await prisma.vpnKey.findMany({
       where: {
@@ -542,15 +575,7 @@ export class XraySubscriptionService {
   }
 
   private async fetchNativeHtml(subId: string, userAgent: string, acceptHeader: string): Promise<Buffer> {
-    const aggregator = config.vpnServers.xui.multiServerCode
-      ? config.vpnServers.xui.servers.find(
-          (server) => server.code === config.vpnServers.xui.multiServerCode
-        )
-      : config.vpnServers.xui.servers[0];
-    if (!aggregator) {
-      throw new Error("Xray subscription aggregator is not configured");
-    }
-
+    const aggregator = this.subscriptionAggregator();
     const publicUrl = new URL(aggregator.subBaseUrl);
     const res = await fetch(subscriptionUrl(aggregator, subId), {
       headers: {
@@ -571,6 +596,18 @@ export class XraySubscriptionService {
     }
 
     return Buffer.from(await res.arrayBuffer());
+  }
+
+  private subscriptionAggregator(): XuiServerConfig {
+    const aggregator = config.vpnServers.xui.multiServerCode
+      ? config.vpnServers.xui.servers.find(
+          (server) => server.code === config.vpnServers.xui.multiServerCode
+        )
+      : config.vpnServers.xui.servers[0];
+    if (!aggregator) {
+      throw new Error("Xray subscription aggregator is not configured");
+    }
+    return aggregator;
   }
 }
 
