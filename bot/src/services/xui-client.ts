@@ -30,6 +30,7 @@ interface XuiInboundClient {
 
 export class XuiClient {
   private cookie: string | null = null;
+  private csrfToken: string | null = null;
   private static readonly CLIENT_FLOW = "xtls-rprx-vision";
 
   private get trafficLimitBytes(): number {
@@ -53,18 +54,21 @@ export class XuiClient {
       headers: {
         "Content-Type": "application/json",
         Cookie: this.cookie!,
+        ...(this.csrfToken ? { "X-CSRF-Token": this.csrfToken } : {}),
         ...init?.headers,
       },
     });
 
-    if (res.status === 401) {
+    if (res.status === 401 || res.status === 403) {
       this.cookie = null;
+      this.csrfToken = null;
       await this.ensureAuthenticated();
       return fetch(`${this.baseUrl}${path}`, {
         ...init,
         headers: {
           "Content-Type": "application/json",
           Cookie: this.cookie!,
+          ...(this.csrfToken ? { "X-CSRF-Token": this.csrfToken } : {}),
           ...init?.headers,
         },
       });
@@ -76,9 +80,17 @@ export class XuiClient {
   private async ensureAuthenticated(): Promise<void> {
     if (this.cookie) return;
 
+    const page = await fetch(`${this.baseUrl}/`);
+    const pageText = await page.text();
+    const csrfToken = pageText.match(/name="csrf-token"\s+content="([^"]+)"/)?.[1] ?? null;
+    const pageCookie = page.headers.get("set-cookie")?.split(";")[0] ?? null;
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
+    if (pageCookie) headers.Cookie = pageCookie;
+
     const res = await fetch(`${this.baseUrl}/login`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         username: config.xui.username,
         password: config.xui.password,
@@ -89,12 +101,13 @@ export class XuiClient {
       throw new Error(`3X-UI login failed: ${res.status}`);
     }
 
-    const setCookie = res.headers.get("set-cookie");
-    if (!setCookie) {
+    const cookie = res.headers.get("set-cookie")?.split(";")[0] ?? pageCookie;
+    if (!cookie) {
       throw new Error("3X-UI login: no session cookie returned");
     }
 
-    this.cookie = setCookie.split(";")[0];
+    this.cookie = cookie;
+    this.csrfToken = csrfToken;
     logger.info("3X-UI authenticated");
   }
 
