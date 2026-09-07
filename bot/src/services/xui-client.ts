@@ -19,7 +19,7 @@ interface XuiApiResponse<T = unknown> {
 }
 
 interface XuiInboundObject {
-  settings?: string;
+  settings?: string | { clients?: unknown };
 }
 
 interface XuiInboundClient {
@@ -132,11 +132,13 @@ export class XuiClient {
       return [];
     }
 
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(settingsRaw);
-    } catch {
-      throw new Error("3X-UI inbound settings JSON parse failed");
+    let parsed: unknown = settingsRaw;
+    if (typeof settingsRaw === "string") {
+      try {
+        parsed = JSON.parse(settingsRaw);
+      } catch {
+        throw new Error("3X-UI inbound settings JSON parse failed");
+      }
     }
 
     const clientsUnknown = (parsed as { clients?: unknown }).clients;
