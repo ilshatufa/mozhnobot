@@ -4,7 +4,7 @@ import { vpnService } from "../services/vpn.service.js";
 
 const INCY_SETUP_GUIDE_URL = "https://telegra.ph/Kak-podklyuchit-MOZHNO-VPN-v-INCY-09-07";
 const HAPP_DOWNLOAD_URL = "https://happ.info/";
-const HAPP_SETUP_GUIDE_URL = "https://www.happ.su/main/ru/faq/adding-configuration-subscription";
+const HAPP_SETUP_GUIDE_URL = "https://telegra.ph/Kak-podklyuchit-MOZHNO-VPN-v-HAPP-09-07";
 
 function escapeHtml(value: string): string {
   return value
