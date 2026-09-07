@@ -423,15 +423,11 @@ export class XraySubscriptionService {
     return publicSubscriptionUrl(subId);
   }
 
-  async renderAsset(subId: string, assetName: string): Promise<RenderedSubscriptionAsset | null> {
-    const entryPoint = await this.findEntryPointKey(subId);
-    if (!entryPoint || !this.isUserAllowed(entryPoint.user)) {
-      return null;
-    }
-
+  async renderAsset(assetName: string): Promise<RenderedSubscriptionAsset> {
     const aggregator = this.subscriptionAggregator();
     const publicUrl = new URL(aggregator.subBaseUrl);
-    const res = await fetch(`${subscriptionUrl(aggregator, subId)}/${encodeURIComponent(assetName)}`, {
+    const assetUrl = new URL(`/sub/assets/${encodeURIComponent(assetName)}`, rawSubBaseUrl(aggregator));
+    const res = await fetch(assetUrl, {
       headers: {
         Host: publicUrl.host,
         "User-Agent": "xray-subscription-service/1.0",

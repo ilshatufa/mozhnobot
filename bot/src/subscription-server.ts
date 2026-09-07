@@ -7,7 +7,7 @@ import { registerProcessErrorHandlers } from "./error-handling.js";
 import { xraySubscriptionService } from "./services/xray-subscription.service.js";
 
 const SUB_PATH_RE = /^\/sub\/([A-Za-z0-9._~-]+)$/;
-const SUB_ASSET_PATH_RE = /^\/sub\/([A-Za-z0-9._~-]+)\/([A-Za-z0-9._~-]+)$/;
+const SUB_ASSET_PATH_RE = /^\/sub\/assets\/([A-Za-z0-9._~-]+)$/;
 
 function sendText(res: http.ServerResponse, status: number, text: string): void {
   const body = Buffer.from(text, "utf8");
@@ -38,14 +38,15 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     sendText(res, 200, "ok\n");
     return;
   }
+  if (url.pathname === "/favicon.ico") {
+    res.writeHead(204, { "Cache-Control": "public, max-age=86400" });
+    res.end();
+    return;
+  }
 
   const assetMatch = url.pathname.match(SUB_ASSET_PATH_RE);
   if (assetMatch) {
-    const renderedAsset = await xraySubscriptionService.renderAsset(assetMatch[1], assetMatch[2]);
-    if (!renderedAsset) {
-      sendText(res, 404, "subscription not found\n");
-      return;
-    }
+    const renderedAsset = await xraySubscriptionService.renderAsset(assetMatch[1]);
     res.writeHead(200, {
       ...renderedAsset.headers,
       "Content-Length": String(renderedAsset.body.length),
