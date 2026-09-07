@@ -1,4 +1,3 @@
-import { Markup } from "telegraf";
 import { logger } from "../logger.js";
 import { type AuthContext } from "../middlewares/auth.js";
 import { vpnService } from "../services/vpn.service.js";
@@ -16,12 +15,17 @@ function buildSetupInstructions(subscriptionUrl: string): string {
   return [
     "🔐 <b>МОЖНО VPN</b>",
     "",
-    "Твой ключ готов. Скопируй ссылку и добавь её в INCY:",
+    "Твой ключ готов. Эти загадочные буквы и цифры — не шифр от сейфа, а личная ссылка для подключения 😁",
+    "",
+    "Нажми на неё, скопируй и добавь в INCY:",
     `<pre>${escapeHtml(subscriptionUrl)}</pre>`,
     "",
-    "Пошаговая инструкция — по кнопке ниже.",
+    "Подробно, с картинками и красными кружочками:",
+    `<a href="${VPN_SETUP_GUIDE_URL}">Как подключить МОЖНО VPN в INCY</a>`,
     "",
-    "⠀",
+    "После добавления появятся три страны: Нидерланды, Германия и Латвия. Выбирай любую. Если одна сегодня решила показать характер — переключайся на другую)",
+    "",
+    "Ключ личный, поэтому никому его не пересылай. Всё, финальный вжух — и можно спокойно идти по своим делам 👌",
   ].join("\n");
 }
 
@@ -38,12 +42,7 @@ export async function vpnHandler(ctx: AuthContext): Promise<void> {
     const { key } = result;
     const text = buildSetupInstructions(key.subscriptionUrl);
 
-    await ctx.reply(text, {
-      parse_mode: "HTML",
-      ...Markup.inlineKeyboard([
-        Markup.button.url("Открыть инструкцию", VPN_SETUP_GUIDE_URL),
-      ]),
-    });
+    await ctx.reply(text, { parse_mode: "HTML" });
   } catch (err) {
     logger.error("vpnHandler error:", err);
     await ctx.reply("Не удалось создать VPN-ключ, попробуйте позже.");
