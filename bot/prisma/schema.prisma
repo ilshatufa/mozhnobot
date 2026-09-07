@@ -94,7 +94,7 @@ model VpnKey {
   subId           String?  @map("sub_id") @db.VarChar(128)
   subscriptionUrl String   @map("subscription_url")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
-  expiresAt       DateTime @map("expires_at") @db.Timestamptz()
+  expiresAt       DateTime? @map("expires_at") @db.Timestamptz()
   isActive        Boolean  @default(true) @map("is_active")
 
   user User @relation(fields: [userId], references: [id])

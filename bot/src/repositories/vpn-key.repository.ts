@@ -7,7 +7,6 @@ export class VpnKeyRepository {
       where: {
         userId,
         isActive: true,
-        expiresAt: { gt: new Date() },
       },
     });
   }
@@ -17,7 +16,6 @@ export class VpnKeyRepository {
     xuiClientId: string;
     subId: string;
     subscriptionUrl: string;
-    expiresAt: Date;
   }): Promise<VpnKey> {
     return prisma.vpnKey.create({ data });
   }

@@ -35,27 +35,6 @@ function buildSetupInstructions(subscriptionUrl: string): string {
   ].join("\n");
 }
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Europe/Moscow",
-  });
-}
-
-function remainingTime(expiresAt: Date): string {
-  const diff = expiresAt.getTime() - Date.now();
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const days = Math.floor(hours / 24);
-  const remainHours = hours % 24;
-
-  if (days > 0) return `${days} дн. ${remainHours} ч.`;
-  return `${remainHours} ч.`;
-}
-
 export async function vpnHandler(ctx: AuthContext): Promise<void> {
   const user = ctx.dbUser;
 
@@ -108,14 +87,7 @@ export async function statusHandler(ctx: AuthContext): Promise<void> {
       await ctx.reply("Ваш доступ к VPN заблокирован.");
       break;
     case "active":
-      await ctx.reply(
-        `VPN-ключ активен.\n\nСрок действия до: ${formatDate(key!.expiresAt)}\nОсталось: ${remainingTime(key!.expiresAt)}`
-      );
-      break;
-    case "expired":
-      await ctx.reply(
-        `Ваш VPN-ключ истёк ${formatDate(key!.expiresAt)}.\nИспользуйте /vpn для получения нового.`
-      );
+      await ctx.reply("VPN-ключ активен.");
       break;
     case "none":
       await ctx.reply("У вас нет VPN-ключа. Используйте /vpn для получения.");

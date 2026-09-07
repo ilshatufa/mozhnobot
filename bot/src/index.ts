@@ -113,8 +113,7 @@ async function main(): Promise<void> {
 
   logger.info("Launching bot", {
     CLUB_GROUP_ID: config.clubGroupId,
-    VPN_KEY_DURATION_DAYS: config.vpnKeyDurationDays,
-    VPN_TRAFFIC_LIMIT_GB: config.vpnTrafficLimitGb,
+    VPN_ACCESS: "unlimited",
   });
   await launchBotWithRetry(bot);
   logger.info("Bot started");

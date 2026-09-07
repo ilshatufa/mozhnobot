@@ -168,11 +168,11 @@ export class UserRepository {
     return count > 0;
   }
 
-  async findAllWithKeys(): Promise<(User & { vpnKeys: { isActive: boolean; expiresAt: Date }[] })[]> {
+  async findAllWithKeys(): Promise<(User & { vpnKeys: { isActive: boolean }[] })[]> {
     return prisma.user.findMany({
       include: {
         vpnKeys: {
-          select: { isActive: true, expiresAt: true },
+          select: { isActive: true },
           orderBy: { createdAt: "desc" },
           take: 1,
         },

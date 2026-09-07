@@ -13,8 +13,6 @@ const envSchema = z.object({
 
   DATABASE_URL: z.string().min(1),
 
-  VPN_KEY_DURATION_DAYS: z.coerce.number().int().positive().default(7),
-  VPN_TRAFFIC_LIMIT_GB: z.coerce.number().int().positive().default(50),
   VPN_SETUP_IMAGE_FILE_ID: z.string().min(1),
   VPN_SETUP_IMAGE_FILE_ID_2: z.string().optional().default(""),
 
@@ -57,8 +55,6 @@ export const config = {
     inboundId: parsed.data.XUI_INBOUND_ID,
   },
 
-  vpnKeyDurationDays: parsed.data.VPN_KEY_DURATION_DAYS,
-  vpnTrafficLimitGb: parsed.data.VPN_TRAFFIC_LIMIT_GB,
   vpnSetupImageFileId: parsed.data.VPN_SETUP_IMAGE_FILE_ID,
   vpnSetupImageFileId2: parsed.data.VPN_SETUP_IMAGE_FILE_ID_2,
 

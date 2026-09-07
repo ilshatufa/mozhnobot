@@ -1,5 +1,4 @@
 import type { User, VpnKey } from "@prisma/client";
-import { config } from "../config.js";
 import { logger } from "../logger.js";
 import { vpnKeyRepository } from "../repositories/vpn-key.repository.js";
 import { xuiClient } from "./xui-client.js";
@@ -23,7 +22,6 @@ export class VpnService {
         await xuiClient.updateClientSubscription(
           existing.xuiClientId,
           xuiEmail,
-          existing.expiresAt.getTime(),
           subId
         );
       }
@@ -32,7 +30,6 @@ export class VpnService {
       await xuiClient.updateClientSubscription(
         existing.xuiClientId,
         xuiEmail,
-        existing.expiresAt.getTime(),
         subId
       );
 
@@ -48,11 +45,7 @@ export class VpnService {
 
     await vpnKeyRepository.deactivateAllForUser(user.id);
 
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + config.vpnKeyDurationDays);
-    const expiryTime = expiresAt.getTime();
-
-    const { clientId, subId } = await xuiClient.addClient(user.telegramId, user.username, expiryTime);
+    const { clientId, subId } = await xuiClient.addClient(user.telegramId, user.username);
     const subscriptionUrl = await xuiClient.getSubscriptionUrl(subId);
 
     const key = await vpnKeyRepository.create({
@@ -60,10 +53,9 @@ export class VpnService {
       xuiClientId: clientId,
       subId,
       subscriptionUrl,
-      expiresAt,
     });
 
-    logger.info(`VPN key created for user ${user.telegramId}, expires ${expiresAt.toISOString()}`);
+    logger.info(`Unlimited VPN key created for user ${user.telegramId}`);
 
     return { key, alreadyExisted: false };
   }
@@ -82,7 +74,7 @@ export class VpnService {
     }
   }
 
-  async getStatus(user: User): Promise<{ status: "active" | "expired" | "none" | "blocked"; key?: VpnKey }> {
+  async getStatus(user: User): Promise<{ status: "active" | "none" | "blocked"; key?: VpnKey }> {
     if (user.vpnBlocked) {
       return { status: "blocked" };
     }
@@ -90,11 +82,6 @@ export class VpnService {
     const activeKey = await vpnKeyRepository.findActiveByUserId(user.id);
     if (activeKey) {
       return { status: "active", key: activeKey };
-    }
-
-    const latestKey = await vpnKeyRepository.findLatestByUserId(user.id);
-    if (latestKey) {
-      return { status: "expired", key: latestKey };
     }
 
     return { status: "none" };

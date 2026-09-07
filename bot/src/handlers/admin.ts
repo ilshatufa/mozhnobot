@@ -162,10 +162,10 @@ export async function usersHandler(ctx: AuthContext): Promise<void> {
     let keyStatus = "нет ключа";
     if (u.vpnKeys.length > 0) {
       const key = u.vpnKeys[0];
-      if (key.isActive && key.expiresAt > new Date()) {
-        keyStatus = `активен до ${key.expiresAt.toLocaleDateString("ru-RU")}`;
+      if (key.isActive) {
+        keyStatus = "активен";
       } else {
-        keyStatus = "истёк";
+        keyStatus = "неактивен";
       }
     }
 

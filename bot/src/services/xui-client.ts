@@ -46,10 +46,6 @@ export class XuiClient {
   private csrfToken: string | null = null;
   private static readonly CLIENT_FLOW = "xtls-rprx-vision";
 
-  private get trafficLimitBytes(): number {
-    return config.vpnTrafficLimitGb * 1024 * 1024 * 1024;
-  }
-
   buildClientEmail(telegramId: bigint, username?: string | null): string {
     const normalized = (username ?? "").replace(/^@/, "").toLowerCase().replace(/[^a-z0-9_]/g, "_");
     return normalized ? `tg_${telegramId}_${normalized}` : `tg_${telegramId}`;
@@ -230,8 +226,7 @@ export class XuiClient {
 
   async addClient(
     telegramId: bigint,
-    username: string | null,
-    expiryTime: number
+    username: string | null
   ): Promise<{ clientId: string; email: string; subId: string }> {
     const clientId = randomUUID();
     const email = this.buildClientEmail(telegramId, username);
@@ -243,8 +238,8 @@ export class XuiClient {
       subId,
       flow: XuiClient.CLIENT_FLOW,
       enable: true,
-      expiryTime,
-      totalGB: this.trafficLimitBytes,
+      expiryTime: 0,
+      totalGB: 0,
     };
 
     let res = await this.request(
@@ -288,7 +283,7 @@ export class XuiClient {
 
       if (existing) {
         const resolvedSubId = existing.subId ?? this.generateSubId();
-        await this.updateClientSubscription(existing.id, email, expiryTime, resolvedSubId);
+        await this.updateClientSubscription(existing.id, email, resolvedSubId);
         logger.warn(`3X-UI addClient conflict resolved by existing client ${existing.id} (${existing.email})`);
         return { clientId: existing.id, email, subId: resolvedSubId };
       }
@@ -302,7 +297,6 @@ export class XuiClient {
   async updateClientSubscription(
     xuiClientId: string,
     email: string,
-    expiryTime: number,
     subId: string
   ): Promise<void> {
     let res = await this.updateClientViaModernApi(xuiClientId, email, {
@@ -310,8 +304,8 @@ export class XuiClient {
       subId,
       flow: XuiClient.CLIENT_FLOW,
       enable: true,
-      expiryTime,
-      totalGB: this.trafficLimitBytes,
+      expiryTime: 0,
+      totalGB: 0,
     });
 
     if (!res) {
@@ -329,8 +323,8 @@ export class XuiClient {
                   subId,
                   flow: XuiClient.CLIENT_FLOW,
                   enable: true,
-                  expiryTime,
-                  totalGB: this.trafficLimitBytes,
+                  expiryTime: 0,
+                  totalGB: 0,
                 },
               ],
             }),
