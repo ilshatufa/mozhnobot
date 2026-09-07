@@ -28,6 +28,19 @@ interface XuiInboundClient {
   subId: string | null;
 }
 
+interface XuiClientDetail {
+  client?: Record<string, unknown>;
+}
+
+interface XuiClientUpdate {
+  email: string;
+  subId?: string;
+  flow?: string;
+  enable: boolean;
+  expiryTime?: number;
+  totalGB?: number;
+}
+
 export class XuiClient {
   private cookie: string | null = null;
   private csrfToken: string | null = null;
@@ -166,6 +179,55 @@ export class XuiClient {
       .filter((client): client is XuiInboundClient => client !== null);
   }
 
+  private async updateClientViaModernApi(
+    xuiClientId: string,
+    fallbackEmail: string,
+    update: XuiClientUpdate
+  ): Promise<Response | null> {
+    const inboundClients = await this.listInboundClients();
+    const currentEmail = inboundClients.find((client) => client.id === xuiClientId)?.email ?? fallbackEmail;
+    const detailRes = await this.request(`/panel/api/clients/get/${encodeURIComponent(currentEmail)}`);
+
+    // 3X-UI versions before the global clients API use the legacy inbound routes.
+    if (detailRes.status === 404) return null;
+    if (!detailRes.ok) {
+      const body = await detailRes.text();
+      throw new Error(`3X-UI getClient failed: ${detailRes.status} ${body}`);
+    }
+
+    const detail = await detailRes.json() as XuiApiResponse<XuiClientDetail>;
+    const current = detail.obj?.client;
+    if (!detail.success || !current) {
+      throw new Error(`3X-UI getClient returned success=false: ${detail.msg ?? "unknown reason"}`);
+    }
+
+    const currentUuid = typeof current.uuid === "string" ? current.uuid : xuiClientId;
+    const client = {
+      id: currentUuid,
+      email: update.email,
+      subId: update.subId ?? current.subId ?? "",
+      flow: update.flow ?? current.flow ?? XuiClient.CLIENT_FLOW,
+      security: current.security ?? "",
+      limitIp: current.limitIp ?? 0,
+      totalGB: update.totalGB ?? current.totalGB ?? 0,
+      expiryTime: update.expiryTime ?? current.expiryTime ?? 0,
+      enable: update.enable,
+      tgId: current.tgId ?? 0,
+      group: current.group ?? "",
+      comment: current.comment ?? "",
+      reset: current.reset ?? 0,
+      resetDay: current.resetDay ?? 0,
+      resetMax: current.resetMax ?? 0,
+      trafficReset: current.trafficReset ?? "never",
+      trafficResetDay: current.trafficResetDay ?? 1,
+    };
+
+    return this.request(
+      `/panel/api/clients/update/${encodeURIComponent(currentEmail)}?inboundIds=${config.xui.inboundId}`,
+      { method: "POST", body: JSON.stringify(client) }
+    );
+  }
+
   async addClient(
     telegramId: bigint,
     username: string | null,
@@ -185,16 +247,29 @@ export class XuiClient {
       totalGB: this.trafficLimitBytes,
     };
 
-    const res = await this.request(
-      "/panel/api/inbounds/addClient",
+    let res = await this.request(
+      "/panel/api/clients/add",
       {
         method: "POST",
         body: JSON.stringify({
-          id: config.xui.inboundId,
-          settings: JSON.stringify({ clients: [clientSettings] }),
+          client: { ...clientSettings, tgId: Number(telegramId) },
+          inboundIds: [config.xui.inboundId],
         }),
       }
     );
+
+    if (res.status === 404) {
+      res = await this.request(
+        "/panel/api/inbounds/addClient",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            id: config.xui.inboundId,
+            settings: JSON.stringify({ clients: [clientSettings] }),
+          }),
+        }
+      );
+    }
 
     if (!res.ok) {
       const body = await res.text();
@@ -230,28 +305,39 @@ export class XuiClient {
     expiryTime: number,
     subId: string
   ): Promise<void> {
-    const res = await this.request(
-      `/panel/api/inbounds/updateClient/${xuiClientId}`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          id: config.xui.inboundId,
-          settings: JSON.stringify({
-            clients: [
-              {
-                id: xuiClientId,
-                email,
-                subId,
-                flow: XuiClient.CLIENT_FLOW,
-                enable: true,
-                expiryTime,
-                totalGB: this.trafficLimitBytes,
-              },
-            ],
+    let res = await this.updateClientViaModernApi(xuiClientId, email, {
+      email,
+      subId,
+      flow: XuiClient.CLIENT_FLOW,
+      enable: true,
+      expiryTime,
+      totalGB: this.trafficLimitBytes,
+    });
+
+    if (!res) {
+      res = await this.request(
+        `/panel/api/inbounds/updateClient/${xuiClientId}`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            id: config.xui.inboundId,
+            settings: JSON.stringify({
+              clients: [
+                {
+                  id: xuiClientId,
+                  email,
+                  subId,
+                  flow: XuiClient.CLIENT_FLOW,
+                  enable: true,
+                  expiryTime,
+                  totalGB: this.trafficLimitBytes,
+                },
+              ],
+            }),
           }),
-        }),
-      }
-    );
+        }
+      );
+    }
 
     if (!res.ok) {
       const body = await res.text();
@@ -265,18 +351,26 @@ export class XuiClient {
   }
 
   async disableClient(xuiClientId: string, email: string): Promise<void> {
-    const res = await this.request(
-      `/panel/api/inbounds/updateClient/${xuiClientId}`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          id: config.xui.inboundId,
-          settings: JSON.stringify({
-            clients: [{ id: xuiClientId, email, flow: XuiClient.CLIENT_FLOW, enable: false }],
+    let res = await this.updateClientViaModernApi(xuiClientId, email, {
+      email,
+      flow: XuiClient.CLIENT_FLOW,
+      enable: false,
+    });
+
+    if (!res) {
+      res = await this.request(
+        `/panel/api/inbounds/updateClient/${xuiClientId}`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            id: config.xui.inboundId,
+            settings: JSON.stringify({
+              clients: [{ id: xuiClientId, email, flow: XuiClient.CLIENT_FLOW, enable: false }],
+            }),
           }),
-        }),
-      }
-    );
+        }
+      );
+    }
 
     if (!res.ok) {
       const body = await res.text();
