@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { config } from "../config.js";
+import { type XuiServerConfig } from "../config.js";
 import { logger } from "../logger.js";
 
 interface XuiClientSettings {
@@ -10,6 +10,12 @@ interface XuiClientSettings {
   enable: boolean;
   expiryTime: number;
   totalGB: number;
+  security?: string;
+  reset?: number;
+  limitIp?: number;
+  tgId?: number;
+  group?: string;
+  comment?: string;
 }
 
 interface XuiApiResponse<T = unknown> {
@@ -19,7 +25,7 @@ interface XuiApiResponse<T = unknown> {
 }
 
 interface XuiInboundObject {
-  settings?: string | { clients?: unknown };
+  settings?: unknown;
 }
 
 interface XuiInboundClient {
@@ -28,131 +34,226 @@ interface XuiInboundClient {
   subId: string | null;
 }
 
-interface XuiClientDetail {
-  client?: Record<string, unknown>;
+interface XuiClientTraffic {
+  up?: unknown;
+  down?: unknown;
 }
 
-interface XuiClientUpdate {
-  email: string;
-  subId?: string;
-  flow?: string;
-  enable: boolean;
-  expiryTime?: number;
-  totalGB?: number;
+interface XuiSession {
+  cookie: string;
+  csrfToken: string | null;
 }
 
 export class XuiClient {
-  private cookie: string | null = null;
-  private csrfToken: string | null = null;
-  private static readonly CLIENT_FLOW = "xtls-rprx-vision";
+  private sessions = new Map<string, XuiSession>();
+  private static readonly SUBSCRIPTION_PROTOCOLS = [
+    "vless://",
+    "vmess://",
+    "trojan://",
+    "ss://",
+    "hysteria://",
+    "hysteria2://",
+  ];
+
+  private formatTrafficLimitBytes(trafficLimitBytes: bigint | null): number {
+    return trafficLimitBytes === null ? 0 : Number(trafficLimitBytes);
+  }
 
   buildClientEmail(telegramId: bigint, username?: string | null): string {
     const normalized = (username ?? "").replace(/^@/, "").toLowerCase().replace(/[^a-z0-9_]/g, "_");
     return normalized ? `tg_${telegramId}_${normalized}` : `tg_${telegramId}`;
   }
 
-  private get baseUrl(): string {
-    return config.xui.baseUrl;
+  generateSubId(): string {
+    return randomBytes(16).toString("hex");
   }
 
-  private buildRequestHeaders(init?: RequestInit): Headers {
-    const headers = new Headers(init?.headers);
-    if (!headers.has("Content-Type")) {
-      headers.set("Content-Type", "application/json");
-    }
-    headers.set("Cookie", this.cookie!);
-    if (this.csrfToken) {
-      headers.set("X-CSRF-Token", this.csrfToken);
-    }
-    return headers;
+  private baseUrl(server: XuiServerConfig): string {
+    return server.apiBaseUrl.replace(/\/+$/, "");
   }
 
-  private async request(path: string, init?: RequestInit): Promise<Response> {
-    await this.ensureAuthenticated();
+  private isClientsApi(server: XuiServerConfig): boolean {
+    return server.clientApiMode === "clients";
+  }
 
-    const res = await fetch(`${this.baseUrl}${path}`, {
+  private buildClientSettings(
+    clientId: string,
+    email: string,
+    subId: string,
+    server: XuiServerConfig,
+    expiryTime: number,
+    trafficLimitBytes: bigint | null,
+    enable: boolean
+  ): XuiClientSettings {
+    return {
+      id: clientId,
+      email,
+      subId,
+      flow: server.clientFlow ?? "",
+      enable,
+      expiryTime,
+      totalGB: this.formatTrafficLimitBytes(trafficLimitBytes),
+      security: "auto",
+      reset: 0,
+      limitIp: 0,
+      tgId: 0,
+      group: "",
+      comment: "",
+    };
+  }
+
+  private async request(server: XuiServerConfig, path: string, init?: RequestInit): Promise<Response> {
+    const baseUrl = this.baseUrl(server);
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...this.headersToRecord(init?.headers),
+    };
+
+    if (server.apiToken) {
+      headers.Authorization = `Bearer ${server.apiToken}`;
+    } else {
+      const session = await this.ensureAuthenticated(server);
+      headers.Cookie = session.cookie;
+      if (session.csrfToken) {
+        headers["X-CSRF-Token"] = session.csrfToken;
+      }
+    }
+
+    const res = await fetch(`${baseUrl}${path}`, {
       ...init,
-      headers: this.buildRequestHeaders(init),
+      headers,
     });
 
-    if (res.status === 401 || res.status === 403) {
-      this.cookie = null;
-      this.csrfToken = null;
-      await this.ensureAuthenticated();
-      return fetch(`${this.baseUrl}${path}`, {
+    if ((res.status === 401 || res.status === 403) && !server.apiToken) {
+      this.sessions.delete(server.code);
+      const session = await this.ensureAuthenticated(server);
+      return fetch(`${baseUrl}${path}`, {
         ...init,
-        headers: this.buildRequestHeaders(init),
+        headers: {
+          ...headers,
+          Cookie: session.cookie,
+          ...(session.csrfToken ? { "X-CSRF-Token": session.csrfToken } : {}),
+        },
       });
     }
 
     return res;
   }
 
-  private async ensureAuthenticated(): Promise<void> {
-    if (this.cookie) return;
+  private async ensureAuthenticated(server: XuiServerConfig): Promise<XuiSession> {
+    const existing = this.sessions.get(server.code);
+    if (existing) return existing;
+    if (!server.username || !server.password) {
+      throw new Error(`3X-UI ${server.code}: username/password are not configured`);
+    }
 
-    const page = await fetch(`${this.baseUrl}/`);
+    const baseUrl = this.baseUrl(server);
+    const page = await fetch(`${baseUrl}/`);
     const pageText = await page.text();
-    const csrfToken = pageText.match(/name="csrf-token"\s+content="([^"]+)"/)?.[1] ?? null;
-    const pageCookie = page.headers.get("set-cookie")?.split(";")[0] ?? null;
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
-    if (pageCookie) headers.Cookie = pageCookie;
+    const csrfToken = this.extractCsrfToken(pageText);
+    const pageCookie = this.extractSessionCookie(page.headers.get("set-cookie"));
 
-    const res = await fetch(`${this.baseUrl}/login`, {
+    const loginHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (csrfToken) loginHeaders["X-CSRF-Token"] = csrfToken;
+    if (pageCookie) loginHeaders.Cookie = pageCookie;
+
+    const res = await fetch(`${baseUrl}/login`, {
       method: "POST",
-      headers,
+      headers: loginHeaders,
       body: JSON.stringify({
-        username: config.xui.username,
-        password: config.xui.password,
+        username: server.username,
+        password: server.password,
       }),
     });
 
     if (!res.ok) {
-      throw new Error(`3X-UI login failed: ${res.status}`);
+      const body = await res.text();
+      throw new Error(`3X-UI ${server.code} login failed: ${res.status} ${body}`);
     }
 
-    const cookie = res.headers.get("set-cookie")?.split(";")[0] ?? pageCookie;
+    const cookie = this.extractSessionCookie(res.headers.get("set-cookie")) ?? pageCookie;
     if (!cookie) {
-      throw new Error("3X-UI login: no session cookie returned");
+      throw new Error(`3X-UI ${server.code} login: no session cookie returned`);
     }
 
-    this.cookie = cookie;
-    this.csrfToken = csrfToken;
-    logger.info("3X-UI authenticated");
+    const session = { cookie, csrfToken };
+    this.sessions.set(server.code, session);
+    logger.info(`3X-UI ${server.code} authenticated`);
+    return session;
   }
 
-  generateSubId(): string {
-    return randomBytes(16).toString("hex");
+  private extractCsrfToken(html: string): string | null {
+    return html.match(/name="csrf-token"\s+content="([^"]+)"/)?.[1] ?? null;
   }
 
-  private async listInboundClients(): Promise<XuiInboundClient[]> {
-    const res = await this.request(`/panel/api/inbounds/get/${config.xui.inboundId}`);
+  private extractSessionCookie(setCookie: string | null): string | null {
+    if (!setCookie) return null;
+    return setCookie.split(";")[0] || null;
+  }
+
+  private headersToRecord(headers: RequestInit["headers"] | undefined): Record<string, string> {
+    if (!headers) return {};
+    if (headers instanceof Headers) return Object.fromEntries(headers.entries());
+    if (Array.isArray(headers)) return Object.fromEntries(headers);
+    return Object.fromEntries(
+      Object.entries(headers).map(([key, value]) => [
+        key,
+        typeof value === "string" ? value : value.join(", "),
+      ])
+    );
+  }
+
+  private parseInboundSettings(settingsRaw: unknown, server: XuiServerConfig): { clients?: unknown } | null {
+    if (!settingsRaw) {
+      return null;
+    }
+
+    if (typeof settingsRaw === "object") {
+      return settingsRaw as { clients?: unknown };
+    }
+
+    if (typeof settingsRaw !== "string") {
+      throw new Error(`3X-UI ${server.code} inbound settings has unsupported type: ${typeof settingsRaw}`);
+    }
+
+    let parsed: unknown = settingsRaw;
+    for (let attempt = 0; attempt < 2 && typeof parsed === "string"; attempt += 1) {
+      const trimmed = parsed.trim();
+      if (!trimmed) {
+        return null;
+      }
+
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch {
+        throw new Error(`3X-UI ${server.code} inbound settings JSON parse failed`);
+      }
+    }
+
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error(`3X-UI ${server.code} inbound settings JSON has unsupported shape`);
+    }
+
+    return parsed as { clients?: unknown };
+  }
+
+  private async listInboundClients(server: XuiServerConfig): Promise<XuiInboundClient[]> {
+    const res = await this.request(server, `/panel/api/inbounds/get/${server.inboundId}`);
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`3X-UI getInbound failed: ${res.status} ${body}`);
+      throw new Error(`3X-UI ${server.code} getInbound failed: ${res.status} ${body}`);
     }
 
     const data = await res.json() as XuiApiResponse<XuiInboundObject>;
     if (!data.success) {
-      throw new Error(`3X-UI getInbound returned success=false: ${data.msg ?? "unknown reason"}`);
+      throw new Error(`3X-UI ${server.code} getInbound returned success=false: ${data.msg ?? "unknown reason"}`);
     }
 
-    const settingsRaw = data.obj?.settings;
-    if (!settingsRaw) {
-      return [];
-    }
+    const parsed = this.parseInboundSettings(data.obj?.settings, server);
 
-    let parsed: unknown = settingsRaw;
-    if (typeof settingsRaw === "string") {
-      try {
-        parsed = JSON.parse(settingsRaw);
-      } catch {
-        throw new Error("3X-UI inbound settings JSON parse failed");
-      }
-    }
-
-    const clientsUnknown = (parsed as { clients?: unknown }).clients;
+    const clientsUnknown = parsed?.clients;
     if (!Array.isArray(clientsUnknown)) {
       return [];
     }
@@ -175,105 +276,50 @@ export class XuiClient {
       .filter((client): client is XuiInboundClient => client !== null);
   }
 
-  private async updateClientViaModernApi(
-    xuiClientId: string,
-    fallbackEmail: string,
-    update: XuiClientUpdate
-  ): Promise<Response | null> {
-    const inboundClients = await this.listInboundClients();
-    const currentEmail = inboundClients.find((client) => client.id === xuiClientId)?.email ?? fallbackEmail;
-    const detailRes = await this.request(`/panel/api/clients/get/${encodeURIComponent(currentEmail)}`);
-
-    // 3X-UI versions before the global clients API use the legacy inbound routes.
-    if (detailRes.status === 404) return null;
-    if (!detailRes.ok) {
-      const body = await detailRes.text();
-      throw new Error(`3X-UI getClient failed: ${detailRes.status} ${body}`);
-    }
-
-    const detail = await detailRes.json() as XuiApiResponse<XuiClientDetail>;
-    const current = detail.obj?.client;
-    if (!detail.success || !current) {
-      throw new Error(`3X-UI getClient returned success=false: ${detail.msg ?? "unknown reason"}`);
-    }
-
-    const currentUuid = typeof current.uuid === "string" ? current.uuid : xuiClientId;
-    const client = {
-      id: currentUuid,
-      email: update.email,
-      subId: update.subId ?? current.subId ?? "",
-      flow: update.flow ?? current.flow ?? XuiClient.CLIENT_FLOW,
-      security: current.security ?? "",
-      limitIp: current.limitIp ?? 0,
-      totalGB: update.totalGB ?? current.totalGB ?? 0,
-      expiryTime: update.expiryTime ?? current.expiryTime ?? 0,
-      enable: update.enable,
-      tgId: current.tgId ?? 0,
-      group: current.group ?? "",
-      comment: current.comment ?? "",
-      reset: current.reset ?? 0,
-      resetDay: current.resetDay ?? 0,
-      resetMax: current.resetMax ?? 0,
-      trafficReset: current.trafficReset ?? "never",
-      trafficResetDay: current.trafficResetDay ?? 1,
-    };
-
-    return this.request(
-      `/panel/api/clients/update/${encodeURIComponent(currentEmail)}?inboundIds=${config.xui.inboundId}`,
-      { method: "POST", body: JSON.stringify(client) }
-    );
-  }
-
   async addClient(
+    server: XuiServerConfig,
     telegramId: bigint,
-    username: string | null
+    username: string | null,
+    expiryTime: number,
+    trafficLimitBytes: bigint | null
   ): Promise<{ clientId: string; email: string; subId: string }> {
     const clientId = randomUUID();
     const email = this.buildClientEmail(telegramId, username);
     const subId = this.generateSubId();
-
-    const clientSettings: XuiClientSettings = {
-      id: clientId,
+    const clientSettings = this.buildClientSettings(
+      clientId,
       email,
       subId,
-      flow: XuiClient.CLIENT_FLOW,
-      enable: true,
-      expiryTime: 0,
-      totalGB: 0,
-    };
-
-    let res = await this.request(
-      "/panel/api/clients/add",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          client: { ...clientSettings, tgId: Number(telegramId) },
-          inboundIds: [config.xui.inboundId],
-        }),
-      }
+      server,
+      expiryTime,
+      trafficLimitBytes,
+      true
     );
 
-    if (res.status === 404) {
-      res = await this.request(
-        "/panel/api/inbounds/addClient",
-        {
+    const res = this.isClientsApi(server)
+      ? await this.request(server, "/panel/api/clients/add", {
           method: "POST",
           body: JSON.stringify({
-            id: config.xui.inboundId,
+            client: clientSettings,
+            inboundIds: [server.inboundId],
+          }),
+        })
+      : await this.request(server, "/panel/api/inbounds/addClient", {
+          method: "POST",
+          body: JSON.stringify({
+            id: server.inboundId,
             settings: JSON.stringify({ clients: [clientSettings] }),
           }),
-        }
-      );
-    }
+        });
 
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`3X-UI addClient failed: ${res.status} ${body}`);
+      throw new Error(`3X-UI ${server.code} addClient failed: ${res.status} ${body}`);
     }
 
     const data = await res.json() as XuiApiResponse;
     if (!data.success) {
-      const existingClients = await this.listInboundClients();
+      const existingClients = await this.listInboundClients(server);
       const byEmail = existingClients.find((client) => client.email === email);
       const prefix = `tg_${telegramId}`;
       const byTelegramId = existingClients.find(
@@ -283,102 +329,201 @@ export class XuiClient {
 
       if (existing) {
         const resolvedSubId = existing.subId ?? this.generateSubId();
-        await this.updateClientSubscription(existing.id, email, resolvedSubId);
-        logger.warn(`3X-UI addClient conflict resolved by existing client ${existing.id} (${existing.email})`);
+        await this.updateClientSubscription(
+          server,
+          existing.id,
+          existing.email,
+          email,
+          expiryTime,
+          resolvedSubId,
+          trafficLimitBytes
+        );
+        logger.warn(`3X-UI ${server.code} addClient conflict resolved by existing client ${existing.id} (${existing.email})`);
         return { clientId: existing.id, email, subId: resolvedSubId };
       }
 
-      throw new Error(`3X-UI addClient returned success=false: ${data.msg ?? "unknown reason"}`);
+      throw new Error(`3X-UI ${server.code} addClient returned success=false: ${data.msg ?? "unknown reason"}`);
     }
 
     return { clientId, email, subId };
   }
 
   async updateClientSubscription(
+    server: XuiServerConfig,
     xuiClientId: string,
+    currentEmail: string,
     email: string,
-    subId: string
+    expiryTime: number,
+    subId: string,
+    trafficLimitBytes: bigint | null
   ): Promise<void> {
-    let res = await this.updateClientViaModernApi(xuiClientId, email, {
+    const clientSettings = this.buildClientSettings(
+      xuiClientId,
       email,
       subId,
-      flow: XuiClient.CLIENT_FLOW,
-      enable: true,
-      expiryTime: 0,
-      totalGB: 0,
-    });
+      server,
+      expiryTime,
+      trafficLimitBytes,
+      true
+    );
 
-    if (!res) {
-      res = await this.request(
-        `/panel/api/inbounds/updateClient/${xuiClientId}`,
-        {
+    const res = this.isClientsApi(server)
+      ? await this.request(server, `/panel/api/clients/update/${encodeURIComponent(currentEmail)}`, {
+          method: "POST",
+          body: JSON.stringify(clientSettings),
+        })
+      : await this.request(server, `/panel/api/inbounds/updateClient/${xuiClientId}`, {
           method: "POST",
           body: JSON.stringify({
-            id: config.xui.inboundId,
-            settings: JSON.stringify({
-              clients: [
-                {
-                  id: xuiClientId,
-                  email,
-                  subId,
-                  flow: XuiClient.CLIENT_FLOW,
-                  enable: true,
-                  expiryTime: 0,
-                  totalGB: 0,
-                },
-              ],
-            }),
+            id: server.inboundId,
+            settings: JSON.stringify({ clients: [clientSettings] }),
           }),
-        }
-      );
-    }
+        });
 
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`3X-UI updateClientSubscription failed: ${res.status} ${body}`);
+      throw new Error(`3X-UI ${server.code} updateClientSubscription failed: ${res.status} ${body}`);
     }
 
     const data = await res.json() as XuiApiResponse;
     if (!data.success) {
-      throw new Error(`3X-UI updateClientSubscription returned success=false: ${data.msg ?? "unknown reason"}`);
+      throw new Error(`3X-UI ${server.code} updateClientSubscription returned success=false: ${data.msg ?? "unknown reason"}`);
     }
   }
 
-  async disableClient(xuiClientId: string, email: string): Promise<void> {
-    let res = await this.updateClientViaModernApi(xuiClientId, email, {
-      email,
-      flow: XuiClient.CLIENT_FLOW,
-      enable: false,
-    });
-
-    if (!res) {
-      res = await this.request(
-        `/panel/api/inbounds/updateClient/${xuiClientId}`,
-        {
+  async disableClient(server: XuiServerConfig, xuiClientId: string, email: string): Promise<void> {
+    const res = this.isClientsApi(server)
+      ? await this.request(server, `/panel/api/clients/update/${encodeURIComponent(email)}`, {
           method: "POST",
           body: JSON.stringify({
-            id: config.xui.inboundId,
+            id: xuiClientId,
+            email,
+            flow: server.clientFlow ?? "",
+            enable: false,
+          }),
+        })
+      : await this.request(server, `/panel/api/inbounds/updateClient/${xuiClientId}`, {
+          method: "POST",
+          body: JSON.stringify({
+            id: server.inboundId,
             settings: JSON.stringify({
-              clients: [{ id: xuiClientId, email, flow: XuiClient.CLIENT_FLOW, enable: false }],
+              clients: [{ id: xuiClientId, email, flow: server.clientFlow ?? "", enable: false }],
             }),
           }),
-        }
-      );
-    }
+        });
 
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`3X-UI disableClient failed: ${res.status} ${body}`);
+      throw new Error(`3X-UI ${server.code} disableClient failed: ${res.status} ${body}`);
     }
 
     const data = await res.json() as XuiApiResponse;
     if (!data.success) {
-      throw new Error(`3X-UI disableClient returned success=false: ${data.msg ?? "unknown reason"}`);
+      throw new Error(`3X-UI ${server.code} disableClient returned success=false: ${data.msg ?? "unknown reason"}`);
     }
   }
 
-  async getSubscriptionUrl(subId: string): Promise<string> {
-    return `${config.xui.subBaseUrl}/sub/${subId}`;
+  async updateExternalLinks(server: XuiServerConfig, email: string, links: string[]): Promise<void> {
+    if (!this.isClientsApi(server)) {
+      throw new Error(`3X-UI ${server.code} does not support clients externalLinks API`);
+    }
+
+    const externalLinks = [...new Set(links)]
+      .filter((link) => this.isSubscriptionLink(link))
+      .map((value) => ({ kind: "link", value, remark: "" }));
+
+    const res = await this.request(server, `/panel/api/clients/${encodeURIComponent(email)}/externalLinks`, {
+      method: "POST",
+      body: JSON.stringify({ externalLinks }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`3X-UI ${server.code} updateExternalLinks failed: ${res.status} ${body}`);
+    }
+
+    const data = await res.json() as XuiApiResponse;
+    if (!data.success) {
+      throw new Error(`3X-UI ${server.code} updateExternalLinks returned success=false: ${data.msg ?? "unknown reason"}`);
+    }
+  }
+
+  async getClientTraffic(server: XuiServerConfig, email: string): Promise<bigint> {
+    const paths = this.isClientsApi(server)
+      ? [
+          `/panel/api/clients/traffic/${encodeURIComponent(email)}`,
+          `/panel/api/inbounds/getClientTraffics/${encodeURIComponent(email)}`,
+        ]
+      : [`/panel/api/inbounds/getClientTraffics/${encodeURIComponent(email)}`];
+
+    let lastError = "unknown error";
+    for (const path of paths) {
+      const res = await this.request(server, path);
+      if (!res.ok) {
+        lastError = `${res.status} ${await res.text()}`;
+        continue;
+      }
+
+      const data = await res.json() as XuiApiResponse<XuiClientTraffic | null>;
+      if (!data.success) {
+        lastError = data.msg ?? "success=false";
+        continue;
+      }
+
+      const up = this.nonNegativeBigInt(data.obj?.up);
+      const down = this.nonNegativeBigInt(data.obj?.down);
+      return up + down;
+    }
+
+    throw new Error(`3X-UI ${server.code} traffic lookup failed: ${lastError}`);
+  }
+
+  async fetchSubscriptionLinks(subscriptionUrl: string): Promise<string[]> {
+    const res = await fetch(subscriptionUrl);
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`3X-UI subscription fetch failed: ${res.status} ${body}`);
+    }
+
+    const body = await res.text();
+    const decoded = this.decodeSubscriptionBody(body);
+    return decoded
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => this.isSubscriptionLink(line));
+  }
+
+  private decodeSubscriptionBody(body: string): string {
+    const trimmed = body.trim();
+    if (this.containsSubscriptionLink(trimmed)) {
+      return trimmed;
+    }
+
+    const normalized = trimmed.replace(/\s+/g, "");
+    const padding = normalized.length % 4 === 0 ? "" : "=".repeat(4 - (normalized.length % 4));
+    const decoded = Buffer.from(`${normalized}${padding}`, "base64").toString("utf8");
+    return this.containsSubscriptionLink(decoded) ? decoded : trimmed;
+  }
+
+  private containsSubscriptionLink(value: string): boolean {
+    return XuiClient.SUBSCRIPTION_PROTOCOLS.some((protocol) => value.includes(protocol));
+  }
+
+  private isSubscriptionLink(value: string): boolean {
+    return XuiClient.SUBSCRIPTION_PROTOCOLS.some((protocol) => value.startsWith(protocol));
+  }
+
+  private nonNegativeBigInt(value: unknown): bigint {
+    if (typeof value === "bigint") return value >= 0n ? value : 0n;
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return BigInt(Math.max(0, Math.trunc(value)));
+    }
+    if (typeof value === "string" && /^\d+$/.test(value)) return BigInt(value);
+    return 0n;
+  }
+
+  getSubscriptionUrl(server: XuiServerConfig, subId: string): string {
+    return `${server.subBaseUrl.replace(/\/+$/, "")}/sub/${subId}`;
   }
 }
 

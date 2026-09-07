@@ -45,6 +45,10 @@ enum MediaProcessingStatus {
   DISABLED
 }
 
+enum VpnProvider {
+  XUI
+}
+
 model User {
   id           Int                  @id @default(autoincrement())
   telegramId   BigInt               @unique @map("telegram_id")
@@ -87,19 +91,43 @@ model ClubInterest {
   @@map("club_interest")
 }
 
+model VpnServer {
+  id         Int         @id @default(autoincrement())
+  provider   VpnProvider @default(XUI)
+  code       String      @unique @db.VarChar(80)
+  name       String      @db.VarChar(255)
+  apiBaseUrl String      @map("api_base_url") @db.Text
+  isActive   Boolean     @default(true) @map("is_active")
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt  DateTime    @updatedAt @map("updated_at") @db.Timestamptz()
+
+  vpnKeys VpnKey[]
+
+  @@index([provider, isActive])
+  @@map("vpn_servers")
+}
+
 model VpnKey {
-  id              Int      @id @default(autoincrement())
-  userId          Int      @map("user_id")
-  xuiClientId     String   @map("xui_client_id") @db.VarChar(255)
-  subId           String?  @map("sub_id") @db.VarChar(128)
-  subscriptionUrl String   @map("subscription_url")
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
-  expiresAt       DateTime? @map("expires_at") @db.Timestamptz()
-  isActive        Boolean  @default(true) @map("is_active")
+  id               Int          @id @default(autoincrement())
+  userId           Int          @map("user_id")
+  serverId         Int?         @map("server_id")
+  provider         VpnProvider  @default(XUI)
+  xuiClientId      String       @map("xui_client_id") @db.VarChar(255)
+  providerClientId String?      @map("provider_client_id") @db.VarChar(255)
+  providerPeerId   String?      @map("provider_peer_id") @db.VarChar(255)
+  subId            String?      @map("sub_id") @db.VarChar(128)
+  subscriptionUrl  String       @map("subscription_url")
+  trafficUsedBytes BigInt?      @map("traffic_used_bytes")
+  lastSyncedAt     DateTime?    @map("last_synced_at") @db.Timestamptz()
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  expiresAt        DateTime?    @map("expires_at") @db.Timestamptz()
+  isActive         Boolean      @default(true) @map("is_active")
 
-  user User @relation(fields: [userId], references: [id])
+  user   User       @relation(fields: [userId], references: [id])
+  server VpnServer? @relation(fields: [serverId], references: [id])
 
-  @@index([userId, isActive])
+  @@index([userId, serverId, isActive])
+  @@index([provider, isActive])
   @@index([subId])
   @@index([expiresAt])
   @@map("vpn_keys")
