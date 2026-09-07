@@ -46,10 +46,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
   const subId = match[1];
   const userAgent = req.headers["user-agent"] ?? "";
+  const acceptHeader = req.headers.accept ?? "";
   const rendered = await xraySubscriptionService.render(
     subId,
     Array.isArray(userAgent) ? userAgent.join(" ") : userAgent,
-    clientAddress(req)
+    clientAddress(req),
+    Array.isArray(acceptHeader) ? acceptHeader.join(",") : acceptHeader
   );
 
   if (!rendered) {

@@ -30,7 +30,7 @@ export interface RenderedSubscription {
     telegramId: string;
     servers: string[];
     links: number;
-    renderMode: "uri" | "json";
+    renderMode: "uri" | "json" | "html";
   };
 }
 
@@ -87,6 +87,10 @@ function rewriteDisplayName(line: string, name: string): string {
 
 function shouldRenderJson(userAgent: string): boolean {
   return new RegExp(config.xraySubscription.jsonUserAgentPattern, "i").test(userAgent);
+}
+
+function shouldRenderHtml(userAgent: string, acceptHeader: string): boolean {
+  return /mozilla/i.test(userAgent) && /(?:^|,)\s*text\/html(?:\s*;|\s*,|$)/i.test(acceptHeader);
 }
 
 function parsedQuery(link: URL): Record<string, string> {
@@ -314,13 +318,56 @@ function contentDispositionHeader(): string {
 }
 
 export class XraySubscriptionService {
-  async render(subId: string, userAgent: string, remoteAddress: string): Promise<RenderedSubscription | null> {
+  async render(
+    subId: string,
+    userAgent: string,
+    remoteAddress: string,
+    acceptHeader = ""
+  ): Promise<RenderedSubscription | null> {
     const entryPoint = await this.findEntryPointKey(subId);
     if (!entryPoint || !this.isUserAllowed(entryPoint.user)) {
       return null;
     }
 
     const keys = await this.findUserXuiKeys(entryPoint.userId);
+    const renderMode = shouldRenderJson(userAgent)
+      ? "json"
+      : shouldRenderHtml(userAgent, acceptHeader)
+        ? "html"
+        : "uri";
+
+    if (renderMode === "html") {
+      const [body] = await Promise.all([
+        this.fetchNativeHtml(subId, userAgent, acceptHeader),
+        this.syncTraffic(keys),
+      ]);
+
+      logger.info("Xray subscription rendered", {
+        userId: entryPoint.userId,
+        telegramId: entryPoint.user.telegramId.toString(),
+        remoteAddress,
+        userAgent,
+        renderMode,
+        links: keys.length,
+        servers: keys.map((key) => key.server?.code ?? "unknown"),
+      });
+
+      return {
+        body,
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store",
+        },
+        meta: {
+          userId: entryPoint.userId,
+          telegramId: entryPoint.user.telegramId.toString(),
+          servers: keys.map((key) => key.server?.code ?? "unknown"),
+          links: keys.length,
+          renderMode,
+        },
+      };
+    }
+
     const [links, usedBytes] = await Promise.all([
       this.collectLinks(keys),
       this.syncTraffic(keys),
@@ -329,7 +376,6 @@ export class XraySubscriptionService {
       return null;
     }
 
-    const renderMode = shouldRenderJson(userAgent) ? "json" : "uri";
     const body = renderMode === "json" ? renderV2rayJson(links) : renderUriSubscription(links);
 
     logger.info("Xray subscription rendered", {
@@ -493,6 +539,38 @@ export class XraySubscriptionService {
       .map((line) => line.trim())
       .filter((line) => isSubscriptionLink(line))
       .filter((line) => linkHost(line) === host);
+  }
+
+  private async fetchNativeHtml(subId: string, userAgent: string, acceptHeader: string): Promise<Buffer> {
+    const aggregator = config.vpnServers.xui.multiServerCode
+      ? config.vpnServers.xui.servers.find(
+          (server) => server.code === config.vpnServers.xui.multiServerCode
+        )
+      : config.vpnServers.xui.servers[0];
+    if (!aggregator) {
+      throw new Error("Xray subscription aggregator is not configured");
+    }
+
+    const publicUrl = new URL(aggregator.subBaseUrl);
+    const res = await fetch(subscriptionUrl(aggregator, subId), {
+      headers: {
+        Accept: acceptHeader || "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        Host: publicUrl.host,
+        "Sec-Fetch-Mode": "navigate",
+        "User-Agent": userAgent,
+      },
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`3X-UI HTML subscription ${aggregator.code} failed: ${res.status} ${body}`);
+    }
+
+    const contentType = res.headers.get("content-type") ?? "";
+    if (!contentType.toLowerCase().startsWith("text/html")) {
+      throw new Error(`3X-UI HTML subscription ${aggregator.code} returned ${contentType || "unknown content type"}`);
+    }
+
+    return Buffer.from(await res.arrayBuffer());
   }
 }
 
