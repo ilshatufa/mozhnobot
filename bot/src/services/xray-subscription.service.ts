@@ -90,6 +90,47 @@ function rewriteDisplayName(line: string, name: string): string {
   }
 }
 
+function rewriteNativeHtml(body: Buffer, subId: string): Buffer {
+  let html = body.toString("utf8");
+  html = html.replace("<head>", '<head><link rel="icon" href="data:," />');
+
+  const marker = "window.__SUB_PAGE_DATA__=";
+  const dataStart = html.indexOf(marker);
+  const dataEnd = dataStart >= 0 ? html.indexOf(";</script>", dataStart + marker.length) : -1;
+  if (dataStart < 0 || dataEnd < 0) {
+    return Buffer.from(html, "utf8");
+  }
+
+  try {
+    const pageData = JSON.parse(html.slice(dataStart + marker.length, dataEnd)) as {
+      links?: unknown;
+      subUrl?: unknown;
+    };
+    const publicUrl = publicSubscriptionUrl(subId);
+    if (publicUrl) {
+      pageData.subUrl = publicUrl;
+    }
+    if (Array.isArray(pageData.links)) {
+      pageData.links = pageData.links.map((value) => {
+        if (typeof value !== "string") return value;
+        const host = linkHost(value);
+        const server = config.vpnServers.xui.servers.find((candidate) => {
+          const publicHost = new URL(candidate.subBaseUrl).hostname.toLowerCase();
+          return host === expectedHost(candidate) || host === publicHost;
+        });
+        return server ? rewriteDisplayName(value, displayName(server)) : value;
+      });
+    }
+
+    const serialized = JSON.stringify(pageData).replace(/</g, "\\u003c");
+    html = `${html.slice(0, dataStart + marker.length)}${serialized}${html.slice(dataEnd)}`;
+  } catch (err) {
+    logger.warn("Unable to personalize native 3X-UI subscription page", err);
+  }
+
+  return Buffer.from(html, "utf8");
+}
+
 function shouldRenderJson(userAgent: string): boolean {
   return new RegExp(config.xraySubscription.jsonUserAgentPattern, "i").test(userAgent);
 }
@@ -591,7 +632,7 @@ export class XraySubscriptionService {
       throw new Error(`3X-UI HTML subscription ${aggregator.code} returned ${contentType || "unknown content type"}`);
     }
 
-    return Buffer.from(await res.arrayBuffer());
+    return rewriteNativeHtml(Buffer.from(await res.arrayBuffer()), subId);
   }
 
   private subscriptionAggregator(): XuiServerConfig {
