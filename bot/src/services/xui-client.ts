@@ -46,17 +46,24 @@ export class XuiClient {
     return config.xui.baseUrl;
   }
 
+  private buildRequestHeaders(init?: RequestInit): Headers {
+    const headers = new Headers(init?.headers);
+    if (!headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+    headers.set("Cookie", this.cookie!);
+    if (this.csrfToken) {
+      headers.set("X-CSRF-Token", this.csrfToken);
+    }
+    return headers;
+  }
+
   private async request(path: string, init?: RequestInit): Promise<Response> {
     await this.ensureAuthenticated();
 
     const res = await fetch(`${this.baseUrl}${path}`, {
       ...init,
-      headers: {
-        "Content-Type": "application/json",
-        Cookie: this.cookie!,
-        ...(this.csrfToken ? { "X-CSRF-Token": this.csrfToken } : {}),
-        ...init?.headers,
-      },
+      headers: this.buildRequestHeaders(init),
     });
 
     if (res.status === 401 || res.status === 403) {
@@ -65,12 +72,7 @@ export class XuiClient {
       await this.ensureAuthenticated();
       return fetch(`${this.baseUrl}${path}`, {
         ...init,
-        headers: {
-          "Content-Type": "application/json",
-          Cookie: this.cookie!,
-          ...(this.csrfToken ? { "X-CSRF-Token": this.csrfToken } : {}),
-          ...init?.headers,
-        },
+        headers: this.buildRequestHeaders(init),
       });
     }
 
