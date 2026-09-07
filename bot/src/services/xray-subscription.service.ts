@@ -372,6 +372,23 @@ export class XraySubscriptionService {
     return publicSubscriptionUrl(subId);
   }
 
+  async syncAllTraffic(): Promise<void> {
+    const keys = await prisma.vpnKey.findMany({
+      where: {
+        provider: VpnProvider.XUI,
+        isActive: true,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        serverId: { not: null },
+        providerClientId: { not: null },
+      },
+      include: { server: true },
+      orderBy: { id: "asc" },
+    });
+
+    await this.syncTraffic(keys);
+    logger.info("Periodic Xray traffic synchronization complete", { keys: keys.length });
+  }
+
   private async findEntryPointKey(subId: string): Promise<EntryPointKey | null> {
     return prisma.vpnKey.findFirst({
       where: {
@@ -435,19 +452,23 @@ export class XraySubscriptionService {
   }
 
   private async syncTraffic(keys: XuiKeyWithServer[]): Promise<bigint> {
-    const totals = await Promise.all(keys.map(async (key): Promise<bigint> => {
+    const totals: bigint[] = [];
+    for (const key of keys) {
       const serverConfig = config.vpnServers.xui.servers.find((server) => server.code === key.server?.code);
-      if (!serverConfig || !key.providerClientId) return key.trafficUsedBytes ?? 0n;
+      if (!serverConfig || !key.providerClientId) {
+        totals.push(key.trafficUsedBytes ?? 0n);
+        continue;
+      }
 
       try {
         const usedBytes = await xuiClient.getClientTraffic(serverConfig, key.providerClientId);
         await vpnKeyRepository.updateTraffic(key.id, usedBytes);
-        return usedBytes;
+        totals.push(usedBytes);
       } catch (err) {
         logger.warn(`Unable to sync Xray traffic for key ${key.id} on ${serverConfig.code}`, err);
-        return key.trafficUsedBytes ?? 0n;
+        totals.push(key.trafficUsedBytes ?? 0n);
       }
-    }));
+    }
 
     return totals.reduce((sum, value) => sum + value, 0n);
   }

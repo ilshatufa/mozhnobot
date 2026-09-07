@@ -66,6 +66,22 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
 async function main(): Promise<void> {
   await prisma.$connect();
+  let shuttingDown = false;
+  let trafficSyncTimer: NodeJS.Timeout | null = null;
+
+  const scheduleTrafficSync = (delayMs: number) => {
+    trafficSyncTimer = setTimeout(async () => {
+      try {
+        await xraySubscriptionService.syncAllTraffic();
+      } catch (err) {
+        logger.error("Periodic Xray traffic synchronization failed", err);
+      } finally {
+        if (!shuttingDown) {
+          scheduleTrafficSync(config.xraySubscription.trafficSyncIntervalMs);
+        }
+      }
+    }, delayMs);
+  };
 
   const server = http.createServer((req, res) => {
     handleRequest(req, res).catch((err) => {
@@ -79,6 +95,8 @@ async function main(): Promise<void> {
   });
 
   const shutdown = async (signal: string) => {
+    shuttingDown = true;
+    if (trafficSyncTimer) clearTimeout(trafficSyncTimer);
     logger.info(`${signal} received, shutting down xray subscription server...`);
     server.close(async () => {
       await prisma.$disconnect();
@@ -96,6 +114,7 @@ async function main(): Promise<void> {
       title: config.xraySubscription.title,
       publicBaseUrl: config.vpnServers.xui.multiSubBaseUrl || null,
     });
+    scheduleTrafficSync(1000);
   });
 }
 
