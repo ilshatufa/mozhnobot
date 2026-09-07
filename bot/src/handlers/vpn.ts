@@ -2,7 +2,9 @@ import { logger } from "../logger.js";
 import { type AuthContext } from "../middlewares/auth.js";
 import { vpnService } from "../services/vpn.service.js";
 
-const VPN_SETUP_GUIDE_URL = "https://telegra.ph/Kak-podklyuchit-MOZHNO-VPN-v-INCY-09-07";
+const INCY_SETUP_GUIDE_URL = "https://telegra.ph/Kak-podklyuchit-MOZHNO-VPN-v-INCY-09-07";
+const HAPP_DOWNLOAD_URL = "https://happ.info/";
+const HAPP_SETUP_GUIDE_URL = "https://www.happ.su/main/ru/faq/adding-configuration-subscription";
 
 function escapeHtml(value: string): string {
   return value
@@ -17,15 +19,18 @@ function buildSetupInstructions(subscriptionUrl: string): string {
     "",
     "Твой ключ готов. Эти загадочные буквы и цифры — не шифр от сейфа, а личная ссылка для подключения 😁",
     "",
-    "Нажми на неё, скопируй и добавь в INCY:",
+    "Выбирай, что удобнее: INCY или HAPP. Оба приложения работают с одним ключом.",
+    "",
+    "Скопируй ссылку и добавь её в приложение:",
     `<pre>${escapeHtml(subscriptionUrl)}</pre>`,
     "",
-    "Подробно, с картинками и красными кружочками:",
-    `<a href="${VPN_SETUP_GUIDE_URL}">Как подключить МОЖНО VPN в INCY</a>`,
+    "Если хочется по шагам:",
+    `<a href="${INCY_SETUP_GUIDE_URL}">INCY — инструкция с картинками</a>`,
+    `<a href="${HAPP_DOWNLOAD_URL}">HAPP — скачать приложение</a> · <a href="${HAPP_SETUP_GUIDE_URL}">как добавить подписку</a>`,
     "",
     "После добавления появится список доступных серверов. Выбирай любой. Если один сегодня решил покапризничать — просто переключись на другой)",
     "",
-    "Ссылку достаточно добавить один раз — дальше INCY сам будет обновлять список серверов. Вот и вся магия 😁",
+    "Ссылку достаточно добавить один раз — дальше приложение само будет обновлять список серверов. Вот и вся магия 😁",
   ].join("\n");
 }
 
