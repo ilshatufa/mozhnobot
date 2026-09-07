@@ -42,7 +42,10 @@ export async function vpnHandler(ctx: AuthContext): Promise<void> {
     const { key } = result;
     const text = buildSetupInstructions(key.subscriptionUrl);
 
-    await ctx.reply(text, { parse_mode: "HTML" });
+    await ctx.reply(text, {
+      parse_mode: "HTML",
+      link_preview_options: { is_disabled: true },
+    });
   } catch (err) {
     logger.error("vpnHandler error:", err);
     await ctx.reply("Не удалось создать VPN-ключ, попробуйте позже.");
