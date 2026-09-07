@@ -10,3 +10,5 @@ postgres/db_data/*
 postgres/backups/*
 !postgres/backups/.gitkeep
 media/
+tools/telegram-topic-export/data/exports/
+tools/telegram-topic-export/data/session/

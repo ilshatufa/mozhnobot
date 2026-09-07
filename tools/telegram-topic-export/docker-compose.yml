@@ -1,0 +1,33 @@
+name: mozno-telegram-topic-export
+
+services:
+  telegram-topic-export:
+    build:
+      context: .
+    env_file:
+      - ${TELEGRAM_EXPORT_ENV_FILE:-../../../_utils/tgCHat/.env}
+    environment:
+      TELEGRAM_CHAT_ID: ${TELEGRAM_EXPORT_CHAT_ID:--1003393970920}
+      TELEGRAM_TOPIC_ID: ${TELEGRAM_EXPORT_TOPIC_ID:-91}
+      TELEGRAM_SESSION_PATH: /session-source/telegram.session
+      TELEGRAM_EXPORT_ROOT: /output
+      TELEGRAM_DOWNLOAD_MEDIA: ${TELEGRAM_DOWNLOAD_MEDIA:-images}
+    volumes:
+      - ${TELEGRAM_EXPORT_SESSION_DIR:-./data/session}:/session-source:ro
+      - ${TELEGRAM_EXPORT_OUTPUT_DIR:-./data/exports}:/output
+    init: true
+    restart: "no"
+
+  telegram-session-auth:
+    build:
+      context: .
+    env_file:
+      - ${TELEGRAM_EXPORT_ENV_FILE:-../../../_utils/tgCHat/.env}
+    environment:
+      TELEGRAM_AUTH_SESSION_PATH: /session/telegram
+      TELEGRAM_AUTH_QR_PATH: /session/telegram-login-qr.png
+    volumes:
+      - ${TELEGRAM_EXPORT_SESSION_DIR:-./data/session}:/session
+    entrypoint: ["python", "/app/auth_session.py"]
+    init: true
+    restart: "no"
