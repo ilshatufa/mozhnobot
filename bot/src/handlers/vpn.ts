@@ -1,7 +1,9 @@
+import { Markup } from "telegraf";
 import { logger } from "../logger.js";
 import { type AuthContext } from "../middlewares/auth.js";
-import { config } from "../config.js";
 import { vpnService } from "../services/vpn.service.js";
+
+const VPN_SETUP_GUIDE_URL = "https://telegra.ph/Kak-podklyuchit-MOZHNO-VPN-v-INCY-09-07";
 
 function escapeHtml(value: string): string {
   return value
@@ -12,26 +14,14 @@ function escapeHtml(value: string): string {
 
 function buildSetupInstructions(subscriptionUrl: string): string {
   return [
-    "Привет! Чтобы установить на свой телефон наш клубный VPN «МОЖНО», просто пройди по шагам:",
+    "🔐 <b>МОЖНО VPN</b>",
     "",
-    "<b>1.</b> Сначала установи приложение V2Box:",
-    "• <a href=\"https://apps.apple.com/us/app/v2box-v2ray-client/id6446814690\">для iOS</a>",
-    "• <a href=\"https://play.google.com/store/apps/details?id=dev.hexasoftware.v2box\">для Android</a>",
-    "",
-    "<b>2.</b> Эти буквы и цифры — ключ (нажми на него и скопируй):",
+    "Твой ключ готов. Скопируй ссылку и добавь её в INCY:",
     `<pre>${escapeHtml(subscriptionUrl)}</pre>`,
     "",
-    "<b>3.</b> Открой приложение:",
-    "• Внизу нажми <b>Конфигурации</b> (если непонятно, см. картинку под этим текстом)",
-    "• Сверху нажми кнопку <b>➕</b>",
-    "• Выбери <b>Импортировать v2ray URI из буфера обмена</b>",
+    "Пошаговая инструкция — по кнопке ниже.",
     "",
-    "<b>4.</b> Подключайся — нажми <b>Connect</b>",
-    "",
-    "<i>Если не подключается</i>",
-    "<i>• Обнови подписку в приложении</i>",
-    "<i>• Проверь автонастройку даты и времени на устройстве</i>",
-    "<i>• Попробуй другую сеть (Wi-Fi/мобильный интернет)</i>",
+    "⠀",
   ].join("\n");
 }
 
@@ -48,29 +38,12 @@ export async function vpnHandler(ctx: AuthContext): Promise<void> {
     const { key } = result;
     const text = buildSetupInstructions(key.subscriptionUrl);
 
-    if (config.vpnSetupImageFileId2) {
-      await ctx.replyWithMediaGroup([
-        {
-          type: "photo",
-          media: config.vpnSetupImageFileId,
-          caption: text,
-          parse_mode: "HTML",
-          show_caption_above_media: true,
-        },
-        {
-          type: "photo",
-          media: config.vpnSetupImageFileId2,
-          show_caption_above_media: true,
-        },
-      ] as any);
-      return;
-    }
-
-    await ctx.replyWithPhoto(config.vpnSetupImageFileId, {
-      caption: text,
+    await ctx.reply(text, {
       parse_mode: "HTML",
-      show_caption_above_media: true,
-    } as any);
+      ...Markup.inlineKeyboard([
+        Markup.button.url("Открыть инструкцию", VPN_SETUP_GUIDE_URL),
+      ]),
+    });
   } catch (err) {
     logger.error("vpnHandler error:", err);
     await ctx.reply("Не удалось создать VPN-ключ, попробуйте позже.");
