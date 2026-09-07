@@ -3,7 +3,6 @@ import { type AuthContext } from "../middlewares/auth.js";
 import { vpnService } from "../services/vpn.service.js";
 
 const INCY_SETUP_GUIDE_URL = "https://telegra.ph/Kak-podklyuchit-MOZHNO-VPN-v-INCY-09-07";
-const HAPP_DOWNLOAD_URL = "https://happ.info/";
 const HAPP_SETUP_GUIDE_URL = "https://telegra.ph/Kak-podklyuchit-MOZHNO-VPN-v-HAPP-09-07";
 
 function escapeHtml(value: string): string {
@@ -28,7 +27,7 @@ function buildSetupInstructions(subscriptionUrl: string): string {
     "",
     "Если хочется по шагам:",
     `• <a href="${INCY_SETUP_GUIDE_URL}">INCY — инструкция с картинками</a>`,
-    `• HAPP: <a href="${HAPP_DOWNLOAD_URL}">скачать приложение</a> · <a href="${HAPP_SETUP_GUIDE_URL}">инструкция с картинками</a>`,
+    `• <a href="${HAPP_SETUP_GUIDE_URL}">HAPP — инструкция с картинками</a>`,
     "",
     "<b>3. Подключись</b>",
     "После добавления появится список доступных серверов. Выбирай любой. Если один сегодня решил покапризничать — просто переключись на другой)",
