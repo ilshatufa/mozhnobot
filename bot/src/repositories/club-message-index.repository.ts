@@ -14,6 +14,8 @@ export type ClubMessageIndexInput = {
   editedAt?: Date;
 };
 
+export type ClubMessagePreview = Pick<ClubMessageIndex, "telegramMessageId" | "text" | "caption">;
+
 export class ClubMessageIndexRepository {
   async upsert(input: ClubMessageIndexInput): Promise<ClubMessageIndex> {
     const text = input.text ?? null;
@@ -70,6 +72,24 @@ export class ClubMessageIndexRepository {
 
   async findById(id: number): Promise<ClubMessageIndex | null> {
     return prisma.clubMessageIndex.findUnique({ where: { id } });
+  }
+
+  async findPreviewsByTelegramMessageIds(
+    chatTelegramId: bigint,
+    telegramMessageIds: number[],
+  ): Promise<ClubMessagePreview[]> {
+    if (telegramMessageIds.length === 0) return [];
+    return prisma.clubMessageIndex.findMany({
+      where: {
+        chatTelegramId,
+        telegramMessageId: { in: telegramMessageIds },
+      },
+      select: {
+        telegramMessageId: true,
+        text: true,
+        caption: true,
+      },
+    });
   }
 }
 

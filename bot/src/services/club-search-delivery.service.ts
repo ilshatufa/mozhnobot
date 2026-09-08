@@ -1,39 +1,13 @@
 import { type Telegram } from "telegraf";
-import { ClubSearchRequestStatus, type ClubSearchRequest } from "@prisma/client";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
+import { clubMessageIndexRepository } from "../repositories/club-message-index.repository.js";
 import { clubSearchRequestRepository } from "../repositories/club-search-request.repository.js";
 import { isBotBlockedError, isMessageNotModifiedError } from "../telegram-errors.js";
 import { eventLoggerService } from "./event-logger.service.js";
+import { buildSearchResultText } from "./club-search-result.js";
 
 const DELIVERY_INTERVAL_MS = 2_000;
-const MAX_TELEGRAM_TEXT_LENGTH = 4_096;
-
-function sourceLink(messageId: number): string {
-  const internalChatId = config.clubGroupId.replace(/^-100/, "");
-  return `https://t.me/c/${internalChatId}/${messageId}`;
-}
-
-export function buildSearchResultText(request: ClubSearchRequest): string {
-  if (request.status === ClubSearchRequestStatus.FAILED) {
-    return "Сейчас поиск недоступен. Попробуйте ещё раз позже.";
-  }
-
-  const answer = request.answer?.trim();
-  if (!answer) {
-    return "По истории клуба не нашлось достаточно данных для ответа. Попробуйте добавить тему, имя или конкретный пример.";
-  }
-
-  const uniqueSourceIds = [...new Set(request.sourceMessageIds)].slice(0, 8);
-  if (uniqueSourceIds.length === 0) {
-    return answer.slice(0, MAX_TELEGRAM_TEXT_LENGTH);
-  }
-
-  const sources = uniqueSourceIds.map((messageId, index) => `${index + 1}. ${sourceLink(messageId)}`);
-  const suffix = `\n\nИсточники:\n${sources.join("\n")}`;
-  const answerLimit = MAX_TELEGRAM_TEXT_LENGTH - suffix.length;
-  return `${answer.slice(0, Math.max(0, answerLimit))}${suffix}`;
-}
 
 export class ClubSearchDeliveryService {
   private timer: NodeJS.Timeout | null = null;
@@ -91,12 +65,19 @@ export class ClubSearchDeliveryService {
     const requests = await clubSearchRequestRepository.findReadyForDelivery();
     for (const request of requests) {
       try {
+        const sourceMessages = await clubMessageIndexRepository.findPreviewsByTelegramMessageIds(
+          BigInt(config.clubGroupId),
+          request.sourceMessageIds,
+        );
         await telegram.editMessageText(
           request.telegramChatId.toString(),
           request.progressMessageId,
           undefined,
-          buildSearchResultText(request),
-          { link_preview_options: { is_disabled: true } },
+          buildSearchResultText(request, sourceMessages, config.clubGroupId),
+          {
+            parse_mode: "HTML",
+            link_preview_options: { is_disabled: true },
+          },
         );
         await clubSearchRequestRepository.markDelivered(request.id);
       } catch (error) {

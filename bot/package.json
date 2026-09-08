@@ -19,7 +19,8 @@
     "sync:xray-users": "tsx src/scripts/sync-xray-users.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy"
+    "db:deploy": "prisma migrate deploy",
+    "test": "npm run build && node --test dist/**/*.test.js"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",
