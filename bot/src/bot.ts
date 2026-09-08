@@ -22,6 +22,7 @@ import {
   usersHandler,
 } from "./handlers/admin.js";
 import { handleBotError } from "./error-handling.js";
+import { clubSearchHandler } from "./handlers/club-search.js";
 
 export function createBot(): Telegraf<AuthContext> {
   const bot = new Telegraf<AuthContext>(config.botToken);
@@ -38,6 +39,7 @@ export function createBot(): Telegraf<AuthContext> {
   bot.command("help", helpHandler);
   bot.command("vpn", vpnHandler);
   bot.command("status", statusHandler);
+  bot.command("ask", clubSearchHandler);
 
   bot.command("block", adminOnly(), blockHandler);
   bot.command("unblock", adminOnly(), unblockHandler);

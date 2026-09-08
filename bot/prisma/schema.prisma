@@ -49,6 +49,13 @@ enum VpnProvider {
   XUI
 }
 
+enum ClubSearchRequestStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 model User {
   id           Int                  @id @default(autoincrement())
   telegramId   BigInt               @unique @map("telegram_id")
@@ -249,4 +256,29 @@ model BotSetting {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
   @@map("bot_settings")
+}
+
+model ClubSearchRequest {
+  id                    String                  @id @default(uuid()) @db.Uuid
+  requesterTelegramId   BigInt                  @map("requester_telegram_id")
+  telegramChatId        BigInt                  @map("telegram_chat_id")
+  progressMessageId     Int                     @map("progress_message_id")
+  question              String                  @db.Text
+  status                ClubSearchRequestStatus @default(PENDING)
+  activeKey             String?                 @unique @map("active_key") @db.VarChar(32)
+  progressStage         Int                     @default(0) @map("progress_stage")
+  answer                String?                 @db.Text
+  sourceMessageIds      Int[]                   @default([]) @map("source_message_ids")
+  errorCode             String?                 @map("error_code") @db.VarChar(64)
+  attempts              Int                     @default(0)
+  startedAt             DateTime?               @map("started_at") @db.Timestamptz()
+  completedAt           DateTime?               @map("completed_at") @db.Timestamptz()
+  deliveredAt           DateTime?               @map("delivered_at") @db.Timestamptz()
+  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt             DateTime                @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@index([status, createdAt])
+  @@index([requesterTelegramId, createdAt])
+  @@index([status, deliveredAt])
+  @@map("club_search_requests")
 }

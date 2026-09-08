@@ -28,3 +28,19 @@ export function isBotBlockedError(error: unknown): boolean {
 
   return errorCode === 403 && description.toLowerCase().includes("bot was blocked by the user");
 }
+
+export function isMessageNotModifiedError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const telegramError = error as TelegramApiError;
+  const description =
+    typeof telegramError.response?.description === "string"
+      ? telegramError.response.description
+      : typeof telegramError.description === "string"
+        ? telegramError.description
+        : "";
+
+  return description.toLowerCase().includes("message is not modified");
+}
