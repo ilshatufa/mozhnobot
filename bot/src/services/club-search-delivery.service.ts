@@ -5,7 +5,7 @@ import { clubMessageIndexRepository } from "../repositories/club-message-index.r
 import { clubSearchRequestRepository } from "../repositories/club-search-request.repository.js";
 import { isBotBlockedError, isMessageNotModifiedError } from "../telegram-errors.js";
 import { eventLoggerService } from "./event-logger.service.js";
-import { buildSearchResultText } from "./club-search-result.js";
+import { buildSearchResultRichMarkdown } from "./club-search-result.js";
 
 const DELIVERY_INTERVAL_MS = 2_000;
 
@@ -48,7 +48,7 @@ export class ClubSearchDeliveryService {
           request.telegramChatId.toString(),
           request.progressMessageId,
           undefined,
-          "Просматриваю подходящие обсуждения и сверяю контекст…",
+          "Сверяю найденные сообщения и их контекст…",
         );
         await clubSearchRequestRepository.markProgressUpdated(request.id);
       } catch (error) {
@@ -69,16 +69,14 @@ export class ClubSearchDeliveryService {
           BigInt(config.clubGroupId),
           request.sourceMessageIds,
         );
-        await telegram.editMessageText(
-          request.telegramChatId.toString(),
-          request.progressMessageId,
-          undefined,
-          buildSearchResultText(request, sourceMessages, config.clubGroupId),
-          {
-            parse_mode: "HTML",
-            link_preview_options: { is_disabled: true },
+        await telegram.callApi("editMessageText", {
+          chat_id: request.telegramChatId.toString(),
+          message_id: request.progressMessageId,
+          rich_message: {
+            markdown: buildSearchResultRichMarkdown(request, sourceMessages, config.clubGroupId),
           },
-        );
+          link_preview_options: { is_disabled: true },
+        } as never);
         await clubSearchRequestRepository.markDelivered(request.id);
       } catch (error) {
         if (isMessageNotModifiedError(error)) {

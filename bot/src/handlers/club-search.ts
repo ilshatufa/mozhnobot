@@ -36,7 +36,7 @@ export async function clubSearchHandler(ctx: AuthContext): Promise<void> {
   }
 
   const progressMessage = await ctx.reply(
-    "Ищу по истории клуба. Обычно это занимает до минуты.",
+    `Ищу в истории клуба.\n\n«${question}»\n\nОбычно это занимает до минуты.`,
   ) as Message.TextMessage;
 
   try {
