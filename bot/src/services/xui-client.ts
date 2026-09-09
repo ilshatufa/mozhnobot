@@ -44,6 +44,10 @@ interface XuiSession {
   csrfToken: string | null;
 }
 
+export function xuiInboundIdsForNewClient(server: XuiServerConfig): number[] {
+  return [...new Set([server.inboundId, ...server.additionalInboundIds])];
+}
+
 export class XuiClient {
   private sessions = new Map<string, XuiSession>();
   private static readonly SUBSCRIPTION_PROTOCOLS = [
@@ -301,7 +305,7 @@ export class XuiClient {
           method: "POST",
           body: JSON.stringify({
             client: clientSettings,
-            inboundIds: [server.inboundId],
+            inboundIds: xuiInboundIdsForNewClient(server),
           }),
         })
       : await this.request(server, "/panel/api/inbounds/addClient", {

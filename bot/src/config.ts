@@ -99,6 +99,7 @@ const xuiServerSchema = z.object({
   subBaseUrl: z.string().url(),
   rawSubBaseUrl: z.string().url().optional(),
   inboundId: z.coerce.number().int().positive(),
+  additionalInboundIds: z.array(z.coerce.number().int().positive()).optional().default([]),
   username: z.string().min(1).optional(),
   password: z.string().min(1).optional(),
   apiToken: z.string().min(1).optional(),
