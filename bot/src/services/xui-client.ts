@@ -39,6 +39,10 @@ interface XuiClientTraffic {
   down?: unknown;
 }
 
+interface XuiBulkSetEnableResult {
+  skipped?: Array<{ email?: unknown; reason?: unknown }>;
+}
+
 interface XuiSession {
   cookie: string;
   csrfToken: string | null;
@@ -424,6 +428,98 @@ export class XuiClient {
     const data = await res.json() as XuiApiResponse;
     if (!data.success) {
       throw new Error(`3X-UI ${server.code} disableClient returned success=false: ${data.msg ?? "unknown reason"}`);
+    }
+  }
+
+  async getClientInboundIds(server: XuiServerConfig, email: string): Promise<number[]> {
+    if (!this.isClientsApi(server)) {
+      throw new Error(`3X-UI ${server.code} does not support clients attachment API`);
+    }
+
+    const res = await this.request(server, `/panel/api/clients/get/${encodeURIComponent(email)}`);
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`3X-UI ${server.code} getClient failed: ${res.status} ${body}`);
+    }
+
+    const data = await res.json() as XuiApiResponse<{ inboundIds?: unknown }>;
+    if (!data.success) {
+      throw new Error(`3X-UI ${server.code} getClient returned success=false: ${data.msg ?? "unknown reason"}`);
+    }
+
+    if (!Array.isArray(data.obj?.inboundIds)) return [];
+    return [...new Set(
+      data.obj.inboundIds.filter(
+        (value): value is number => typeof value === "number" && Number.isInteger(value) && value > 0,
+      ),
+    )];
+  }
+
+  async attachClientToInbounds(server: XuiServerConfig, email: string, inboundIds: number[]): Promise<void> {
+    await this.changeClientInboundAttachments(server, email, inboundIds, "attach");
+  }
+
+  async detachClientFromInbounds(server: XuiServerConfig, email: string, inboundIds: number[]): Promise<void> {
+    await this.changeClientInboundAttachments(server, email, inboundIds, "detach");
+  }
+
+  async setClientEnabled(server: XuiServerConfig, email: string, enable: boolean): Promise<void> {
+    if (!this.isClientsApi(server)) {
+      throw new Error(`3X-UI ${server.code} does not support clients bulk enable API`);
+    }
+
+    const operation = enable ? "bulkEnable" : "bulkDisable";
+    const res = await this.request(server, `/panel/api/clients/${operation}`, {
+      method: "POST",
+      body: JSON.stringify({ emails: [email] }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`3X-UI ${server.code} ${operation} failed: ${res.status} ${body}`);
+    }
+
+    const data = await res.json() as XuiApiResponse<XuiBulkSetEnableResult>;
+    if (!data.success) {
+      throw new Error(`3X-UI ${server.code} ${operation} returned success=false: ${data.msg ?? "unknown reason"}`);
+    }
+
+    const skipped = data.obj?.skipped?.find((item) => item.email === email);
+    if (skipped) {
+      throw new Error(
+        `3X-UI ${server.code} ${operation} skipped ${email}: ${typeof skipped.reason === "string" ? skipped.reason : "unknown reason"}`,
+      );
+    }
+  }
+
+  private async changeClientInboundAttachments(
+    server: XuiServerConfig,
+    email: string,
+    inboundIds: number[],
+    operation: "attach" | "detach",
+  ): Promise<void> {
+    if (!this.isClientsApi(server)) {
+      throw new Error(`3X-UI ${server.code} does not support clients attachment API`);
+    }
+
+    const normalizedIds = [...new Set(inboundIds.filter((id) => Number.isInteger(id) && id > 0))];
+    if (normalizedIds.length === 0) return;
+
+    const res = await this.request(
+      server,
+      `/panel/api/clients/${encodeURIComponent(email)}/${operation}`,
+      {
+        method: "POST",
+        body: JSON.stringify({ inboundIds: normalizedIds }),
+      },
+    );
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`3X-UI ${server.code} ${operation} failed: ${res.status} ${body}`);
+    }
+
+    const data = await res.json() as XuiApiResponse;
+    if (!data.success) {
+      throw new Error(`3X-UI ${server.code} ${operation} returned success=false: ${data.msg ?? "unknown reason"}`);
     }
   }
 
