@@ -47,6 +47,9 @@ test("adds the Russia-labelled whitelist CDN profile after the Netherlands profi
   assert.equal(extra.uplinkDataKey, "X-Playback-Token");
   assert.equal(extra.uplinkHTTPMethod, "GET");
   assert.equal(extra.serverMaxHeaderBytes, 32768);
+  const xmux = extra.xmux as Record<string, unknown>;
+  assert.equal(xmux.maxConcurrency, "8-16");
+  assert.equal("maxConnections" in xmux, false);
 });
 
 test("does not add the CDN profile to another server or a non-XHTTP link", () => {
