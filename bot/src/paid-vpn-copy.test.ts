@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildNoRemovableAccessText,
+  buildPaidVpnAccessRemovedText,
   buildPendingAccessSavedText,
+  buildPendingAccessRemovedText,
   PAID_VPN_NO_ACCESS_TEXT,
   PAID_VPN_PENDING_ACCESS_ERROR_TEXT,
   PAID_VPN_PENDING_ACCESS_READY_TEXT,
   PAID_VPN_START_TEXT,
   parseAddUsername,
+  parseRemoveUsername,
 } from "./paid-vpn-copy.js";
 
 test("paid VPN start text points to /vpn and does not promise immediate paid access", () => {
@@ -39,4 +43,23 @@ test("/add parser rejects missing, short, and multiple usernames", () => {
   assert.deepEqual(parseAddUsername("/add"), { ok: false });
   assert.deepEqual(parseAddUsername("/add @abcd"), { ok: false });
   assert.deepEqual(parseAddUsername("/add @first_user @second_user"), { ok: false });
+});
+
+test("/remove parser accepts one valid Telegram username", () => {
+  assert.deepEqual(parseRemoveUsername("/remove @leis_x"), { ok: true, username: "leis_x" });
+  assert.deepEqual(parseRemoveUsername("/remove@mozhno_vpn_bot @User123"), {
+    ok: true,
+    username: "User123",
+  });
+});
+
+test("/remove parser rejects missing and multiple usernames", () => {
+  assert.deepEqual(parseRemoveUsername("/remove"), { ok: false });
+  assert.deepEqual(parseRemoveUsername("/remove @first_user @second_user"), { ok: false });
+});
+
+test("remove copy distinguishes active, pending, and empty access", () => {
+  assert.match(buildPaidVpnAccessRemovedText("leis_x"), /доступ.*отключён/i);
+  assert.match(buildPendingAccessRemovedText("leis_x"), /Разрешение.*удалено/);
+  assert.match(buildNoRemovableAccessText("leis_x"), /нет бесплатного доступа/);
 });

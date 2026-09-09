@@ -46,6 +46,26 @@ export class VpnService {
     return { alreadyGranted };
   }
 
+  async revokeFreeUnlimitedPaidAccess(
+    user: User,
+  ): Promise<{ hadSubscription: boolean; wasGranted: boolean }> {
+    const { subscription, wasGranted } = await vpnSubscriptionRepository.revokeFreeUnlimited(
+      user.id,
+      "paid",
+    );
+    if (!subscription) return { hadSubscription: false, wasGranted: false };
+
+    const [syncResult] = await vpnAccessSyncService.sync({ subscriptionId: subscription.id });
+    if (!syncResult) throw new Error(`VPN subscription ${subscription.id} was not found during synchronization`);
+    if (!syncResult.provisioning?.success) {
+      throw new Error(
+        `VPN subscription synchronization failed: ${syncResult.provisioning?.errors.join("; ") ?? "unknown error"}`,
+      );
+    }
+
+    return { hadSubscription: true, wasGranted };
+  }
+
   async listXuiServers(): Promise<VpnServer[]> {
     return vpnServerRepository.findActiveMany();
   }

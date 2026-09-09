@@ -79,6 +79,23 @@ export class VpnSubscriptionRepository {
     return { subscription, alreadyGranted };
   }
 
+  async revokeFreeUnlimited(
+    userId: number,
+    productCode: string,
+  ): Promise<{ subscription: VpnSubscription | null; wasGranted: boolean }> {
+    const existing = await this.findByUserAndProduct(userId, productCode);
+    if (!existing) return { subscription: null, wasGranted: false };
+    if (existing.accessOverride !== VpnSubscriptionAccessOverride.FREE_UNLIMITED) {
+      return { subscription: existing, wasGranted: false };
+    }
+
+    const subscription = await prisma.vpnSubscription.update({
+      where: { id: existing.id },
+      data: { accessOverride: VpnSubscriptionAccessOverride.NONE },
+    });
+    return { subscription, wasGranted: true };
+  }
+
   async findOrCreateForProduct(
     userId: number,
     productCode: string,

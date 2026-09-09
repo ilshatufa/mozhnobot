@@ -33,6 +33,16 @@ export class VpnPendingAccessGrantRepository {
     });
   }
 
+  async deletePending(username: string): Promise<boolean> {
+    const result = await prisma.vpnPendingAccessGrant.deleteMany({
+      where: {
+        normalizedUsername: normalizeUsername(username),
+        claimedAt: null,
+      },
+    });
+    return result.count > 0;
+  }
+
   async markClaimed(id: number, userId: number): Promise<boolean> {
     const result = await prisma.vpnPendingAccessGrant.updateMany({
       where: { id, claimedAt: null },

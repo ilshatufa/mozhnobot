@@ -126,6 +126,8 @@ test("provisions, disables, restores and changes product inbounds", {
     assert.equal(renewedGrant.id, pendingGrant.id);
     assert.equal(renewedGrant.claimedAt, null);
     assert.equal(renewedGrant.claimedByUserId, null);
+    assert.equal(await vpnPendingAccessGrantRepository.deletePending("@PENDING_USER"), true);
+    assert.equal(await vpnPendingAccessGrantRepository.deletePending("pending_user"), false);
 
     const vpnServer = await prisma.vpnServer.create({
       data: {
@@ -246,6 +248,20 @@ test("provisions, disables, restores and changes product inbounds", {
     assert.equal(result[0]?.plan.eligible, true);
     assert.equal(result[0]?.plan.reason, "FREE_UNLIMITED");
     assert.equal(result[0]?.provisioning?.success, true);
+
+    const revoked = await vpnSubscriptionRepository.revokeFreeUnlimited(user.id, paidProductCode);
+    assert.equal(revoked.wasGranted, true);
+    result = await vpnAccessSyncService.sync({ subscriptionId: granted.subscription.id });
+    assert.equal(result[0]?.plan.eligible, false);
+    assert.equal(result[0]?.plan.reason, "PAID_ACCESS_REQUIRED");
+    assert.equal(result[0]?.provisioning?.success, true);
+    key = await prisma.vpnKey.findFirstOrThrow({ where: { subscriptionId: granted.subscription.id } });
+    client = clients.get(key.providerClientId ?? "");
+    assert.equal(key.isActive, false);
+    assert.equal(client?.enable, false);
+
+    const revokedAgain = await vpnSubscriptionRepository.revokeFreeUnlimited(user.id, paidProductCode);
+    assert.equal(revokedAgain.wasGranted, false);
   } finally {
     await prisma.$disconnect();
     await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));

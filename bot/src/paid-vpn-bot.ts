@@ -3,6 +3,7 @@ import { config } from "./config.js";
 import {
   paidVpnAccessHandler,
   paidVpnAddHandler,
+  paidVpnRemoveHandler,
   paidVpnStartHandler,
 } from "./handlers/paid-vpn.js";
 import {
@@ -33,5 +34,6 @@ export function createPaidVpnBot(): Telegraf<PaidVpnContext> {
   bot.command("start", paidVpnStartHandler);
   bot.command("vpn", paidVpnAccessHandler);
   bot.command("add", paidVpnAdminOnly(), paidVpnAddHandler);
+  bot.command("remove", paidVpnAdminOnly(), paidVpnRemoveHandler);
   return bot;
 }

@@ -39,11 +39,33 @@ export function buildPendingAccessSavedText(username: string): string {
   ].join("\n");
 }
 
-export type AddUsernameParseResult =
+export function buildPaidVpnAccessRemovedText(username: string): string {
+  return `Бесплатный доступ для @${username} отключён.`;
+}
+
+export function buildPendingAccessRemovedText(username: string): string {
+  return `Разрешение для @${username} удалено.`;
+}
+
+export function buildNoRemovableAccessText(username: string): string {
+  return `У @${username} нет бесплатного доступа или ожидающего разрешения.`;
+}
+
+export type UsernameCommandParseResult =
   | { ok: true; username: string }
   | { ok: false };
 
-export function parseAddUsername(text: string): AddUsernameParseResult {
-  const match = text.trim().match(/^\/add(?:@\w+)?\s+@([A-Za-z0-9_]{5,32})$/i);
+function parseUsernameCommand(text: string, command: "add" | "remove"): UsernameCommandParseResult {
+  const match = text.trim().match(
+    new RegExp(`^\\/${command}(?:@\\w+)?\\s+@([A-Za-z0-9_]{5,32})$`, "i"),
+  );
   return match ? { ok: true, username: match[1] } : { ok: false };
+}
+
+export function parseAddUsername(text: string): UsernameCommandParseResult {
+  return parseUsernameCommand(text, "add");
+}
+
+export function parseRemoveUsername(text: string): UsernameCommandParseResult {
+  return parseUsernameCommand(text, "remove");
 }

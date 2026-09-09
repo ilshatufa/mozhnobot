@@ -25,7 +25,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "test": "npm run build && node --test dist/**/*.test.js"
+    "test": "npm run build && node --test dist/*.test.js dist/**/*.test.js"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",

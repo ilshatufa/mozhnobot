@@ -1,7 +1,10 @@
 import { logger } from "../logger.js";
 import { type PaidVpnContext } from "../middlewares/paid-vpn-auth.js";
 import {
+  buildNoRemovableAccessText,
+  buildPaidVpnAccessRemovedText,
   buildPendingAccessSavedText,
+  buildPendingAccessRemovedText,
   PAID_VPN_BLOCKED_TEXT,
   PAID_VPN_NO_ACCESS_TEXT,
   PAID_VPN_PENDING_ACCESS_ERROR_TEXT,
@@ -9,6 +12,7 @@ import {
   PAID_VPN_PENDING_ACCESS_READY_TEXT,
   PAID_VPN_START_TEXT,
   parseAddUsername,
+  parseRemoveUsername,
 } from "../paid-vpn-copy.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { vpnPendingAccessGrantRepository } from "../repositories/vpn-pending-access-grant.repository.js";
@@ -16,8 +20,10 @@ import { vpnService } from "../services/vpn.service.js";
 import { buildSetupInstructions } from "./vpn.js";
 
 const ADD_USAGE_TEXT = "Использование: /add @username";
+const REMOVE_USAGE_TEXT = "Использование: /remove @username";
 const ACCESS_PROGRESS_TEXT = "Проверяю доступ и готовлю личную ссылку…";
 const ADD_PROGRESS_TEXT = "Подключаю бесплатный доступ…";
+const REMOVE_PROGRESS_TEXT = "Отключаю бесплатный доступ…";
 
 async function editProgress(ctx: PaidVpnContext, messageId: number, text: string): Promise<void> {
   if (!ctx.chat) return;
@@ -32,6 +38,7 @@ export async function paidVpnStartHandler(ctx: PaidVpnContext): Promise<void> {
           { command: "start", description: "Открыть МОЖНО VPN" },
           { command: "vpn", description: "Получить инструкцию и личную ссылку" },
           { command: "add", description: "Выдать бесплатный доступ" },
+          { command: "remove", description: "Убрать бесплатный доступ" },
         ],
         { scope: { type: "chat", chat_id: ctx.chat.id } },
       );
@@ -150,5 +157,60 @@ export async function paidVpnAddHandler(ctx: PaidVpnContext): Promise<void> {
       error,
     });
     await editProgress(ctx, progress.message_id, "Не удалось подключить доступ. Проверь настройку платного продукта и повтори команду.");
+  }
+}
+
+export async function paidVpnRemoveHandler(ctx: PaidVpnContext): Promise<void> {
+  const message = ctx.message;
+  if (!message || !("text" in message)) {
+    await ctx.reply(REMOVE_USAGE_TEXT);
+    return;
+  }
+
+  const parsed = parseRemoveUsername(message.text);
+  if (!parsed.ok) {
+    await ctx.reply(REMOVE_USAGE_TEXT);
+    return;
+  }
+
+  const pendingRemoved = await vpnPendingAccessGrantRepository.deletePending(parsed.username);
+  const matches = await userRepository.findManyByUsername(parsed.username);
+  if (matches.length === 0) {
+    await ctx.reply(
+      pendingRemoved
+        ? buildPendingAccessRemovedText(parsed.username)
+        : buildNoRemovableAccessText(parsed.username),
+    );
+    return;
+  }
+  if (matches.length > 1) {
+    const prefix = pendingRemoved ? "Ожидающее разрешение удалено.\n\n" : "";
+    await ctx.reply(
+      `${prefix}Нашлось несколько пользователей с именем @${parsed.username}. Активный доступ не изменён. Попроси нужного пользователя отправить /start и повтори команду.`,
+    );
+    return;
+  }
+
+  const target = matches[0];
+  const progress = await ctx.reply(REMOVE_PROGRESS_TEXT);
+  try {
+    const result = await vpnService.revokeFreeUnlimitedPaidAccess(target);
+    const resultText = result.wasGranted
+      ? buildPaidVpnAccessRemovedText(parsed.username)
+      : pendingRemoved
+        ? buildPendingAccessRemovedText(parsed.username)
+        : buildNoRemovableAccessText(parsed.username);
+    await editProgress(ctx, progress.message_id, resultText);
+  } catch (error) {
+    logger.error("paidVpnRemoveHandler failed", {
+      adminUserId: ctx.dbUser.id,
+      targetUserId: target.id,
+      error,
+    });
+    await editProgress(
+      ctx,
+      progress.message_id,
+      `Не получилось полностью отключить доступ для @${parsed.username}. Повтори /remove @${parsed.username}.`,
+    );
   }
 }
