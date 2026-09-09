@@ -17,6 +17,8 @@ const SUBSCRIPTION_PROTOCOLS = [
 const WHITELIST_CDN_SOURCE_SERVER_CODE = "nl";
 const WHITELIST_CDN_HOST = "yc.cdn.mozhno.org";
 const WHITELIST_CDN_PROFILE_NAME = "🇷🇺 МОЖНО • Белые списки — Нидерланды";
+const VK_WHITELIST_CDN_HOST = "vk.cdn.mozhno.org";
+const VK_WHITELIST_CDN_PROFILE_NAME = "🇷🇺 МОЖНО • Белые списки — VK Cloud";
 const WHITELIST_CDN_PATH = "/api/upload";
 const WHITELIST_CDN_EXTRA = {
   xmux: {
@@ -125,19 +127,23 @@ function rewriteDisplayName(line: string, name: string): string {
   }
 }
 
-export function buildWhitelistCdnLink(line: string): string | null {
+function buildWhitelistCdnLinkForHost(
+  line: string,
+  host: string,
+  profileName: string,
+): string | null {
   try {
     const parsed = new URL(line);
     if (parsed.protocol !== "vless:" || parsed.searchParams.get("type") !== "xhttp") {
       return null;
     }
 
-    parsed.hostname = WHITELIST_CDN_HOST;
+    parsed.hostname = host;
     parsed.port = "443";
     parsed.searchParams.set("type", "xhttp");
     parsed.searchParams.set("security", "tls");
-    parsed.searchParams.set("sni", WHITELIST_CDN_HOST);
-    parsed.searchParams.set("host", WHITELIST_CDN_HOST);
+    parsed.searchParams.set("sni", host);
+    parsed.searchParams.set("host", host);
     parsed.searchParams.set("path", WHITELIST_CDN_PATH);
     parsed.searchParams.set("mode", "packet-up");
     parsed.searchParams.set("alpn", "h2");
@@ -146,11 +152,27 @@ export function buildWhitelistCdnLink(line: string): string | null {
     parsed.searchParams.delete("pbk");
     parsed.searchParams.delete("sid");
     parsed.searchParams.delete("spx");
-    parsed.hash = encodeURIComponent(WHITELIST_CDN_PROFILE_NAME);
+    parsed.hash = encodeURIComponent(profileName);
     return parsed.toString();
   } catch {
     return null;
   }
+}
+
+export function buildWhitelistCdnLink(line: string): string | null {
+  return buildWhitelistCdnLinkForHost(
+    line,
+    WHITELIST_CDN_HOST,
+    WHITELIST_CDN_PROFILE_NAME,
+  );
+}
+
+export function buildVkWhitelistCdnLink(line: string): string | null {
+  return buildWhitelistCdnLinkForHost(
+    line,
+    VK_WHITELIST_CDN_HOST,
+    VK_WHITELIST_CDN_PROFILE_NAME,
+  );
 }
 
 export function subscriptionLinksForServer(
@@ -162,8 +184,12 @@ export function subscriptionLinksForServer(
     return [primary];
   }
 
-  const whitelistCdn = buildWhitelistCdnLink(line);
-  return whitelistCdn && whitelistCdn !== primary ? [primary, whitelistCdn] : [primary];
+  const whitelistCdnLinks = [
+    buildWhitelistCdnLink(line),
+    buildVkWhitelistCdnLink(line),
+  ].filter((link): link is string => Boolean(link && link !== primary));
+
+  return [primary, ...whitelistCdnLinks];
 }
 
 export function rewriteNativeHtml(body: Buffer, subId: string): Buffer {

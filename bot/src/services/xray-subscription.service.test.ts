@@ -15,13 +15,13 @@ const SOURCE_LINK = [
   "#old-name",
 ].join("");
 
-test("adds the Russia-labelled whitelist CDN profile after the Netherlands profile", () => {
+test("adds the Russia-labelled whitelist CDN profiles after the Netherlands profile", () => {
   const links = subscriptionLinksForServer(SOURCE_LINK, {
     code: "nl",
     name: "🇳🇱 МОЖНО • Нидерланды",
   });
 
-  assert.equal(links.length, 2);
+  assert.equal(links.length, 3);
   assert.equal(
     decodeURIComponent(new URL(links[0]).hash.slice(1)),
     "🇳🇱 МОЖНО • Нидерланды",
@@ -47,6 +47,30 @@ test("adds the Russia-labelled whitelist CDN profile after the Netherlands profi
   assert.equal(extra.uplinkDataKey, "X-Playback-Token");
   assert.equal(extra.uplinkHTTPMethod, "GET");
   assert.equal(extra.serverMaxHeaderBytes, 32768);
+
+  const vkCdn = new URL(links[2]);
+  assert.equal(vkCdn.username, "11111111-2222-3333-4444-555555555555");
+  assert.equal(vkCdn.hostname, "vk.cdn.mozhno.org");
+  assert.equal(vkCdn.port, "443");
+  assert.equal(vkCdn.searchParams.get("type"), "xhttp");
+  assert.equal(vkCdn.searchParams.get("security"), "tls");
+  assert.equal(vkCdn.searchParams.get("sni"), "vk.cdn.mozhno.org");
+  assert.equal(vkCdn.searchParams.get("host"), "vk.cdn.mozhno.org");
+  assert.equal(vkCdn.searchParams.get("path"), "/api/upload");
+  assert.equal(vkCdn.searchParams.get("mode"), "packet-up");
+  assert.equal(vkCdn.searchParams.get("alpn"), "h2");
+  assert.equal(vkCdn.searchParams.get("fp"), "chrome");
+  assert.equal(vkCdn.searchParams.has("flow"), false);
+  assert.equal(
+    decodeURIComponent(vkCdn.hash.slice(1)),
+    "🇷🇺 МОЖНО • Белые списки — VK Cloud",
+  );
+
+  const vkExtra = JSON.parse(vkCdn.searchParams.get("extra") ?? "null") as Record<
+    string,
+    unknown
+  >;
+  assert.deepEqual(vkExtra, extra);
 });
 
 test("does not add the CDN profile to another server or a non-XHTTP link", () => {
@@ -86,6 +110,7 @@ test("adds the CDN profile to the native HTML subscription data", () => {
   const end = rewritten.indexOf(";</script>", start);
   const pageData = JSON.parse(rewritten.slice(start, end)) as { links: string[] };
 
-  assert.equal(pageData.links.length, 2);
+  assert.equal(pageData.links.length, 3);
   assert.equal(new URL(pageData.links[1]).hostname, "yc.cdn.mozhno.org");
+  assert.equal(new URL(pageData.links[2]).hostname, "vk.cdn.mozhno.org");
 });
