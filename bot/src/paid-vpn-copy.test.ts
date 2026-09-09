@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildPendingAccessSavedText,
   PAID_VPN_NO_ACCESS_TEXT,
+  PAID_VPN_PENDING_ACCESS_ERROR_TEXT,
+  PAID_VPN_PENDING_ACCESS_READY_TEXT,
   PAID_VPN_START_TEXT,
   parseAddUsername,
 } from "./paid-vpn-copy.js";
@@ -13,6 +16,15 @@ test("paid VPN start text points to /vpn and does not promise immediate paid acc
 
 test("paid VPN no-access text gives the next action", () => {
   assert.match(PAID_VPN_NO_ACCESS_TEXT, /напиши администратору/);
+});
+
+test("pending grant copy explains automatic first-start activation", () => {
+  const savedText = buildPendingAccessSavedText("leis_x");
+  assert.match(savedText, /@leis_x/);
+  assert.match(savedText, /впервые отправит \/start/);
+  assert.match(savedText, /Повторять \/add не нужно/);
+  assert.match(PAID_VPN_PENDING_ACCESS_READY_TEXT, /Отправь \/vpn/);
+  assert.match(PAID_VPN_PENDING_ACCESS_ERROR_TEXT, /Отправь \/start ещё раз/);
 });
 
 test("/add parser accepts one valid Telegram username", () => {

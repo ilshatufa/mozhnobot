@@ -270,6 +270,20 @@ model VpnSubscriptionInboundState {
   @@map("vpn_subscription_inbounds")
 }
 
+model VpnPendingAccessGrant {
+  id                    Int       @id @default(autoincrement())
+  username              String    @db.VarChar(32)
+  normalizedUsername    String    @unique @map("normalized_username") @db.VarChar(32)
+  grantedByTelegramId   BigInt    @map("granted_by_telegram_id")
+  claimedByUserId       Int?      @map("claimed_by_user_id")
+  claimedAt             DateTime? @map("claimed_at") @db.Timestamptz()
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@index([claimedAt])
+  @@map("vpn_pending_access_grants")
+}
+
 model ClubTopic {
   id                      Int             @id @default(autoincrement())
   chatTelegramId          BigInt          @map("chat_telegram_id")

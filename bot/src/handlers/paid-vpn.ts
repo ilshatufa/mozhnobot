@@ -1,12 +1,17 @@
 import { logger } from "../logger.js";
 import { type PaidVpnContext } from "../middlewares/paid-vpn-auth.js";
 import {
+  buildPendingAccessSavedText,
   PAID_VPN_BLOCKED_TEXT,
   PAID_VPN_NO_ACCESS_TEXT,
+  PAID_VPN_PENDING_ACCESS_ERROR_TEXT,
+  PAID_VPN_PENDING_ACCESS_PROGRESS_TEXT,
+  PAID_VPN_PENDING_ACCESS_READY_TEXT,
   PAID_VPN_START_TEXT,
   parseAddUsername,
 } from "../paid-vpn-copy.js";
 import { userRepository } from "../repositories/user.repository.js";
+import { vpnPendingAccessGrantRepository } from "../repositories/vpn-pending-access-grant.repository.js";
 import { vpnService } from "../services/vpn.service.js";
 import { buildSetupInstructions } from "./vpn.js";
 
@@ -37,6 +42,38 @@ export async function paidVpnStartHandler(ctx: PaidVpnContext): Promise<void> {
       });
     }
   }
+
+  const username = ctx.dbUser.username;
+  const pendingGrant = username
+    ? await vpnPendingAccessGrantRepository.findPending(username)
+    : null;
+  if (pendingGrant) {
+    const progress = await ctx.reply(PAID_VPN_PENDING_ACCESS_PROGRESS_TEXT);
+    try {
+      await vpnService.grantFreeUnlimitedPaidAccess(ctx.dbUser);
+      await vpnPendingAccessGrantRepository.markClaimed(pendingGrant.id, ctx.dbUser.id);
+    } catch (error) {
+      logger.error("Failed to activate pending paid VPN grant", {
+        userId: ctx.dbUser.id,
+        pendingGrantId: pendingGrant.id,
+        error,
+      });
+      await editProgress(
+        ctx,
+        progress.message_id,
+        PAID_VPN_PENDING_ACCESS_ERROR_TEXT,
+      );
+      return;
+    }
+
+    await editProgress(
+      ctx,
+      progress.message_id,
+      PAID_VPN_PENDING_ACCESS_READY_TEXT,
+    );
+    return;
+  }
+
   await ctx.reply(PAID_VPN_START_TEXT, { parse_mode: "HTML" });
 }
 
@@ -84,7 +121,8 @@ export async function paidVpnAddHandler(ctx: PaidVpnContext): Promise<void> {
 
   const matches = await userRepository.findManyByUsername(parsed.username);
   if (matches.length === 0) {
-    await ctx.reply(`Пользователь @${parsed.username} ещё не запускал бота. Попроси его отправить /start.`);
+    await vpnPendingAccessGrantRepository.save(parsed.username, ctx.dbUser.telegramId);
+    await ctx.reply(buildPendingAccessSavedText(parsed.username));
     return;
   }
   if (matches.length > 1) {

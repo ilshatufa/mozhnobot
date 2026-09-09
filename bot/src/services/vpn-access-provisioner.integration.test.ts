@@ -8,6 +8,7 @@ import {
   VpnSubscriptionInboundStatus,
 } from "@prisma/client";
 import { prisma } from "../database.js";
+import { vpnPendingAccessGrantRepository } from "../repositories/vpn-pending-access-grant.repository.js";
 import { vpnSubscriptionRepository } from "../repositories/vpn-subscription.repository.js";
 import { vpnAccessSyncService } from "./vpn-access-sync.service.js";
 
@@ -104,6 +105,28 @@ test("provisions, disables, restores and changes product inbounds", {
         clubStatus: ClubMembershipStatus.MEMBER,
       },
     });
+
+    const pendingGrant = await vpnPendingAccessGrantRepository.save(
+      "Pending_User",
+      BigInt("301474421"),
+    );
+    assert.equal(pendingGrant.normalizedUsername, "pending_user");
+    assert.equal(
+      (await vpnPendingAccessGrantRepository.findPending("@PENDING_USER"))?.id,
+      pendingGrant.id,
+    );
+    assert.equal(await vpnPendingAccessGrantRepository.markClaimed(pendingGrant.id, user.id), true);
+    assert.equal(await vpnPendingAccessGrantRepository.markClaimed(pendingGrant.id, user.id), false);
+    assert.equal(await vpnPendingAccessGrantRepository.findPending("pending_user"), null);
+
+    const renewedGrant = await vpnPendingAccessGrantRepository.save(
+      "pending_user",
+      BigInt("301474421"),
+    );
+    assert.equal(renewedGrant.id, pendingGrant.id);
+    assert.equal(renewedGrant.claimedAt, null);
+    assert.equal(renewedGrant.claimedByUserId, null);
+
     const vpnServer = await prisma.vpnServer.create({
       data: {
         code: "integration",
