@@ -20,6 +20,23 @@ async function editProgress(ctx: PaidVpnContext, messageId: number, text: string
 }
 
 export async function paidVpnStartHandler(ctx: PaidVpnContext): Promise<void> {
+  if (ctx.isPaidVpnAdmin && ctx.chat) {
+    try {
+      await ctx.telegram.setMyCommands(
+        [
+          { command: "start", description: "Открыть МОЖНО VPN" },
+          { command: "vpn", description: "Получить инструкцию и личную ссылку" },
+          { command: "add", description: "Выдать бесплатный доступ" },
+        ],
+        { scope: { type: "chat", chat_id: ctx.chat.id } },
+      );
+    } catch (error) {
+      logger.warn("Failed to configure paid VPN admin commands", {
+        adminUserId: ctx.dbUser.id,
+        error,
+      });
+    }
+  }
   await ctx.reply(PAID_VPN_START_TEXT, { parse_mode: "HTML" });
 }
 

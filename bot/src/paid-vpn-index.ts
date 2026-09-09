@@ -9,16 +9,6 @@ async function configureCommands(bot: ReturnType<typeof createPaidVpnBot>): Prom
     { command: "start", description: "Открыть МОЖНО VPN" },
     { command: "vpn", description: "Получить инструкцию и личную ссылку" },
   ]);
-
-  if (!config.vpnBot.adminTelegramId) throw new Error("VPN_BOT_ADMIN_TELEGRAM_ID is required");
-  await bot.telegram.setMyCommands(
-    [
-      { command: "start", description: "Открыть МОЖНО VPN" },
-      { command: "vpn", description: "Получить инструкцию и личную ссылку" },
-      { command: "add", description: "Выдать бесплатный доступ" },
-    ],
-    { scope: { type: "chat", chat_id: config.vpnBot.adminTelegramId.toString() } },
-  );
 }
 
 async function main(): Promise<void> {
