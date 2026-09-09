@@ -44,11 +44,11 @@ User
           │                    └── VpnProductInbound ──> VpnInbound ──> VpnServer
           │
           ├── VpnKey (технический клиент на сервере)
-          └── VpnSubscriptionInbound (фактическое состояние provisioning)
+          └── VpnSubscriptionInboundState (фактическое состояние provisioning)
 ```
 
 `VpnProductInbound` задаёт разрешённые inbound’ы, порядок профилей и
-обязательность. `VpnSubscriptionInbound` хранит состояние пары
+обязательность. `VpnSubscriptionInboundState` хранит состояние пары
 `подписка × inbound`: `PENDING`, `PROVISIONING`, `ACTIVE`, `ERROR`, `DISABLED`.
 
 Порт в `VpnInbound` — только диагностический атрибут. Он не является
@@ -60,7 +60,7 @@ User
 - `VpnInbound(serverId, providerInboundId)`;
 - `VpnProductInbound(productId, inboundId)`;
 - `VpnSubscription(userId, productId)`;
-- `VpnSubscriptionInbound(subscriptionId, inboundId)`;
+- `VpnSubscriptionInboundState(subscriptionId, inboundId)`;
 - `VpnKey(subscriptionId, serverId)` для новых записей.
 
 ## Правила допуска
@@ -90,7 +90,7 @@ User
 
 1. Проверяет право пользователя на продукт.
 2. Получает актуальный набор `VpnProductInbound`.
-3. Сверяет его с `VpnSubscriptionInbound` и клиентами 3X-UI.
+3. Сверяет его с `VpnSubscriptionInboundState` и клиентами 3X-UI.
 4. Идемпотентно создаёт отсутствующих клиентов.
 5. Включает ранее отключённых клиентов после восстановления права.
 6. Отключает клиентов при потере права или исключении inbound’а из продукта.

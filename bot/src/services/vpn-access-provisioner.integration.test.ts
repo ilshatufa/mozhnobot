@@ -143,7 +143,7 @@ test("provisions, disables, restores and changes product inbounds", {
     assert.ok(client);
     assert.deepEqual(client.inboundIds, [1, 5]);
     assert.equal(client.enable, true);
-    assert.equal(await prisma.vpnSubscriptionInbound.count({
+    assert.equal(await prisma.vpnSubscriptionInboundState.count({
       where: { subscriptionId: subscription.id, status: VpnSubscriptionInboundStatus.ACTIVE },
     }), 2);
 
@@ -186,7 +186,7 @@ test("provisions, disables, restores and changes product inbounds", {
     assert.equal(result[0]?.provisioning?.success, true);
     client = clients.get(key.providerClientId ?? "");
     assert.deepEqual(client?.inboundIds, [1, 7]);
-    assert.equal(await prisma.vpnSubscriptionInbound.findUniqueOrThrow({
+    assert.equal(await prisma.vpnSubscriptionInboundState.findUniqueOrThrow({
       where: {
         subscriptionId_inboundId: {
           subscriptionId: subscription.id,

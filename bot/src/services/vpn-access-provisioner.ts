@@ -267,7 +267,7 @@ export class VpnAccessProvisioner {
   ): Promise<void> {
     if (inboundIds.length === 0) return;
     await prisma.$transaction(
-      [...new Set(inboundIds)].map((inboundId) => prisma.vpnSubscriptionInbound.upsert({
+      [...new Set(inboundIds)].map((inboundId) => prisma.vpnSubscriptionInboundState.upsert({
         where: { subscriptionId_inboundId: { subscriptionId, inboundId } },
         create: { subscriptionId, inboundId, ...data },
         update: data,

@@ -152,10 +152,10 @@ model VpnKey {
   expiresAt        DateTime?   @map("expires_at") @db.Timestamptz()
   isActive         Boolean     @default(true) @map("is_active")
 
-  user          User                     @relation(fields: [userId], references: [id])
-  server        VpnServer?               @relation(fields: [serverId], references: [id])
-  subscription  VpnSubscription?         @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
-  inboundStates VpnSubscriptionInbound[]
+  user          User                          @relation(fields: [userId], references: [id])
+  server        VpnServer?                    @relation(fields: [serverId], references: [id])
+  subscription  VpnSubscription?              @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  inboundStates VpnSubscriptionInboundState[]
 
   @@unique([subscriptionId, serverId])
   @@index([userId, serverId, isActive])
@@ -194,9 +194,9 @@ model VpnInbound {
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
-  server             VpnServer                @relation(fields: [serverId], references: [id], onDelete: Restrict)
+  server             VpnServer                     @relation(fields: [serverId], references: [id], onDelete: Restrict)
   products           VpnProductInbound[]
-  subscriptionStates VpnSubscriptionInbound[]
+  subscriptionStates VpnSubscriptionInboundState[]
 
   @@unique([serverId, providerInboundId])
   @@index([serverId, isActive])
@@ -232,10 +232,10 @@ model VpnSubscription {
   createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz()
 
-  user          User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product       VpnProduct               @relation(fields: [productId], references: [id], onDelete: Restrict)
+  user          User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product       VpnProduct                    @relation(fields: [productId], references: [id], onDelete: Restrict)
   keys          VpnKey[]
-  inboundStates VpnSubscriptionInbound[]
+  inboundStates VpnSubscriptionInboundState[]
 
   @@unique([userId, productId])
   @@index([productId, status])
@@ -243,7 +243,7 @@ model VpnSubscription {
   @@map("vpn_subscriptions")
 }
 
-model VpnSubscriptionInbound {
+model VpnSubscriptionInboundState {
   subscriptionId Int                          @map("subscription_id")
   inboundId      Int                          @map("inbound_id")
   keyId          Int?                         @map("key_id")

@@ -245,7 +245,7 @@ export class VpnSubscriptionBackfillService {
       for (const item of product.inbounds) {
         const key = keysByServerCode.get(item.inbound.server.code);
         if (!key) throw new Error(`Validated ${group.productCode} group lost a required key`);
-        await tx.vpnSubscriptionInbound.upsert({
+        await tx.vpnSubscriptionInboundState.upsert({
           where: {
             subscriptionId_inboundId: {
               subscriptionId: subscription.id,
