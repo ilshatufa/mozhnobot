@@ -21,7 +21,7 @@ const WHITELIST_CDN_PATH = "/api/upload";
 const WHITELIST_CDN_EXTRA = {
   xmux: {
     cMaxReuseTimes: "36-96",
-    maxConcurrency: "8-16",
+    maxConnections: "32-64",
     hKeepAlivePeriod: 0,
     hMaxRequestTimes: "320-640",
     hMaxReusableSecs: "720-1800",
