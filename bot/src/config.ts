@@ -4,6 +4,8 @@ const envSchema = z.object({
   BOT_TOKEN: z.string().min(1),
   CLUB_GROUP_ID: z.string().min(1),
   SEED_ADMIN_ID: z.string().min(1),
+  VPN_BOT_TOKEN: z.string().optional().default(""),
+  VPN_BOT_ADMIN_TELEGRAM_ID: z.union([z.string().regex(/^\d+$/), z.literal("")]).default(""),
 
   XUI_BASE_URL: z.string().url(),
   XUI_SUB_BASE_URL: z.string().url(),
@@ -149,6 +151,12 @@ export const config = {
   botToken: env.BOT_TOKEN,
   clubGroupId: env.CLUB_GROUP_ID,
   seedAdminId: BigInt(env.SEED_ADMIN_ID),
+  vpnBot: {
+    token: env.VPN_BOT_TOKEN,
+    adminTelegramId: env.VPN_BOT_ADMIN_TELEGRAM_ID
+      ? BigInt(env.VPN_BOT_ADMIN_TELEGRAM_ID)
+      : null,
+  },
 
   xui: {
     baseUrl: defaultXuiServer.apiBaseUrl,

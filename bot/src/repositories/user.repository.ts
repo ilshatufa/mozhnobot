@@ -14,6 +14,14 @@ export class UserRepository {
     return prisma.user.findUnique({ where: { telegramId } });
   }
 
+  async findManyByUsername(username: string): Promise<User[]> {
+    return prisma.user.findMany({
+      where: { username: { equals: username, mode: "insensitive" } },
+      orderBy: { updatedAt: "desc" },
+      take: 2,
+    });
+  }
+
   async upsert(telegramId: bigint, username: string | undefined, firstName: string | undefined): Promise<User> {
     return prisma.user.upsert({
       where: { telegramId },
@@ -25,24 +33,36 @@ export class UserRepository {
   async upsertFromTelegramUser(user: TelegramUserInput, seenAt: Date): Promise<User> {
     const telegramId = BigInt(user.id);
 
-    const dbUser = await prisma.user.upsert({
-      where: { telegramId },
-      update: {
-        username: user.username,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        isBot: user.is_bot ?? false,
-        lastSeenAt: seenAt,
-      },
-      create: {
-        telegramId,
-        username: user.username,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        isBot: user.is_bot ?? false,
-        firstSeenAt: seenAt,
-        lastSeenAt: seenAt,
-      },
+    const dbUser = await prisma.$transaction(async (transaction) => {
+      if (user.username) {
+        await transaction.user.updateMany({
+          where: {
+            telegramId: { not: telegramId },
+            username: { equals: user.username, mode: "insensitive" },
+          },
+          data: { username: null },
+        });
+      }
+
+      return transaction.user.upsert({
+        where: { telegramId },
+        update: {
+          username: user.username ?? null,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          isBot: user.is_bot ?? false,
+          lastSeenAt: seenAt,
+        },
+        create: {
+          telegramId,
+          username: user.username,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          isBot: user.is_bot ?? false,
+          firstSeenAt: seenAt,
+          lastSeenAt: seenAt,
+        },
+      });
     });
 
     if (!dbUser.firstSeenAt) {

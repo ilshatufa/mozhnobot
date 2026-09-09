@@ -1,4 +1,9 @@
-import type { Prisma, VpnSubscription } from "@prisma/client";
+import {
+  VpnSubscriptionAccessOverride,
+  VpnSubscriptionStatus,
+  type Prisma,
+  type VpnSubscription,
+} from "@prisma/client";
 import { prisma } from "../database.js";
 
 const vpnSubscriptionForSync = {
@@ -33,6 +38,47 @@ export type VpnSubscriptionForSync = Prisma.VpnSubscriptionGetPayload<{
 }>;
 
 export class VpnSubscriptionRepository {
+  async findByUserAndProduct(userId: number, productCode: string): Promise<VpnSubscription | null> {
+    return prisma.vpnSubscription.findFirst({
+      where: { userId, product: { code: productCode } },
+    });
+  }
+
+  async grantFreeUnlimited(
+    userId: number,
+    productCode: string,
+    token: string,
+  ): Promise<{ subscription: VpnSubscription; alreadyGranted: boolean }> {
+    const product = await prisma.vpnProduct.findFirst({
+      where: { code: productCode, isActive: true },
+      select: { id: true },
+    });
+    if (!product) throw new Error(`Active VPN product ${productCode} is not configured`);
+
+    const existing = await prisma.vpnSubscription.findUnique({
+      where: { userId_productId: { userId, productId: product.id } },
+    });
+    const alreadyGranted = existing?.status === VpnSubscriptionStatus.ACTIVE &&
+      existing.accessOverride === VpnSubscriptionAccessOverride.FREE_UNLIMITED &&
+      existing.expiresAt === null;
+    const subscription = await prisma.vpnSubscription.upsert({
+      where: { userId_productId: { userId, productId: product.id } },
+      create: {
+        userId,
+        productId: product.id,
+        token,
+        accessOverride: VpnSubscriptionAccessOverride.FREE_UNLIMITED,
+      },
+      update: {
+        status: VpnSubscriptionStatus.ACTIVE,
+        accessOverride: VpnSubscriptionAccessOverride.FREE_UNLIMITED,
+        expiresAt: null,
+      },
+    });
+
+    return { subscription, alreadyGranted };
+  }
+
   async findOrCreateForProduct(
     userId: number,
     productCode: string,

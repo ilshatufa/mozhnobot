@@ -12,7 +12,7 @@ function escapeHtml(value: string): string {
     .replaceAll(">", "&gt;");
 }
 
-function buildSetupInstructions(subscriptionUrl: string): string {
+export function buildSetupInstructions(subscriptionUrl: string): string {
   return [
     "🔐 <b>МОЖНО VPN</b>",
     "",

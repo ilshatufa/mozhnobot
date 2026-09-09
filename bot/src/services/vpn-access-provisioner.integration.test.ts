@@ -8,6 +8,7 @@ import {
   VpnSubscriptionInboundStatus,
 } from "@prisma/client";
 import { prisma } from "../database.js";
+import { vpnSubscriptionRepository } from "../repositories/vpn-subscription.repository.js";
 import { vpnAccessSyncService } from "./vpn-access-sync.service.js";
 
 const integrationDatabaseUrl = process.env.VPN_ACCESS_INTEGRATION_DATABASE_URL;
@@ -194,6 +195,34 @@ test("provisions, disables, restores and changes product inbounds", {
         },
       },
     }).then((state) => state.status), VpnSubscriptionInboundStatus.DISABLED);
+
+    const paidProductCode = `paid-integration-${randomUUID()}`;
+    await prisma.vpnProduct.create({
+      data: {
+        code: paidProductCode,
+        name: "Paid integration product",
+        accessPolicy: VpnProductAccessPolicy.PAID_BALANCE,
+        inbounds: { create: [{ inboundId: inbounds[0].id, position: 1 }] },
+      },
+    });
+    const granted = await vpnSubscriptionRepository.grantFreeUnlimited(
+      user.id,
+      paidProductCode,
+      randomUUID(),
+    );
+    assert.equal(granted.alreadyGranted, false);
+    const grantedAgain = await vpnSubscriptionRepository.grantFreeUnlimited(
+      user.id,
+      paidProductCode,
+      randomUUID(),
+    );
+    assert.equal(grantedAgain.alreadyGranted, true);
+    assert.equal(grantedAgain.subscription.token, granted.subscription.token);
+
+    result = await vpnAccessSyncService.sync({ subscriptionId: granted.subscription.id });
+    assert.equal(result[0]?.plan.eligible, true);
+    assert.equal(result[0]?.plan.reason, "FREE_UNLIMITED");
+    assert.equal(result[0]?.provisioning?.success, true);
   } finally {
     await prisma.$disconnect();
     await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));

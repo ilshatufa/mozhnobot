@@ -2,6 +2,7 @@ import {
   ClubMembershipStatus,
   Role,
   VpnProductAccessPolicy,
+  VpnSubscriptionAccessOverride,
   VpnSubscriptionInboundStatus,
   VpnSubscriptionStatus,
 } from "@prisma/client";
@@ -13,6 +14,7 @@ export type VpnAccessDecisionReason =
   | "SUBSCRIPTION_EXPIRED"
   | "USER_BLOCKED"
   | "USER_BANNED"
+  | "FREE_UNLIMITED"
   | "CLUB_MEMBERSHIP_REQUIRED"
   | "PAID_ACCESS_REQUIRED";
 
@@ -37,6 +39,7 @@ export interface VpnAccessSyncPlanInput {
   };
   subscription: {
     status: VpnSubscriptionStatus;
+    accessOverride: VpnSubscriptionAccessOverride;
     expiresAt: Date | null;
     appliedRevision: number;
     inboundStates: Array<{
@@ -73,6 +76,9 @@ function accessDecision(input: VpnAccessSyncPlanInput): {
   }
   if (input.user.vpnBlocked) return { eligible: false, reason: "USER_BLOCKED" };
   if (input.user.isBanned) return { eligible: false, reason: "USER_BANNED" };
+  if (input.subscription.accessOverride === VpnSubscriptionAccessOverride.FREE_UNLIMITED) {
+    return { eligible: true, reason: "FREE_UNLIMITED" };
+  }
 
   switch (input.product.accessPolicy) {
     case VpnProductAccessPolicy.CLUB_MEMBERSHIP:

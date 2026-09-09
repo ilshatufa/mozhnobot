@@ -4,6 +4,7 @@ import {
   ClubMembershipStatus,
   Role,
   VpnProductAccessPolicy,
+  VpnSubscriptionAccessOverride,
   VpnSubscriptionInboundStatus,
   VpnSubscriptionStatus,
 } from "@prisma/client";
@@ -33,6 +34,7 @@ function input(overrides: Partial<VpnAccessSyncPlanInput> = {}): VpnAccessSyncPl
     },
     subscription: {
       status: VpnSubscriptionStatus.ACTIVE,
+      accessOverride: VpnSubscriptionAccessOverride.NONE,
       expiresAt: null,
       appliedRevision: 1,
       inboundStates: [],
@@ -91,6 +93,31 @@ test("paid product fails closed without a positive entitlement", () => {
 
   assert.equal(plan.eligible, false);
   assert.equal(plan.reason, "PAID_ACCESS_REQUIRED");
+});
+
+test("free unlimited override grants paid product access without balance", () => {
+  const plan = buildVpnAccessSyncPlan(input({
+    product: { accessPolicy: VpnProductAccessPolicy.PAID_BALANCE } as VpnAccessSyncPlanInput["product"],
+    subscription: {
+      accessOverride: VpnSubscriptionAccessOverride.FREE_UNLIMITED,
+    } as VpnAccessSyncPlanInput["subscription"],
+  }));
+
+  assert.equal(plan.eligible, true);
+  assert.equal(plan.reason, "FREE_UNLIMITED");
+});
+
+test("global block overrides free unlimited access", () => {
+  const plan = buildVpnAccessSyncPlan(input({
+    user: { vpnBlocked: true } as VpnAccessSyncPlanInput["user"],
+    product: { accessPolicy: VpnProductAccessPolicy.PAID_BALANCE } as VpnAccessSyncPlanInput["product"],
+    subscription: {
+      accessOverride: VpnSubscriptionAccessOverride.FREE_UNLIMITED,
+    } as VpnAccessSyncPlanInput["subscription"],
+  }));
+
+  assert.equal(plan.eligible, false);
+  assert.equal(plan.reason, "USER_BLOCKED");
 });
 
 test("global block overrides every access policy", () => {

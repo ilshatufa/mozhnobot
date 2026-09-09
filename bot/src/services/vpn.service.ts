@@ -23,35 +23,27 @@ export class VpnService {
       "club",
       xuiClient.generateSubId(),
     );
-    const [syncResult] = await vpnAccessSyncService.sync({ subscriptionId: subscription.id });
-    if (!syncResult) throw new Error(`VPN subscription ${subscription.id} was not found during synchronization`);
-    if (!syncResult.plan.eligible) {
-      throw new Error(`VPN access is not allowed: ${syncResult.plan.reason}`);
-    }
-    if (!syncResult.provisioning?.success) {
-      throw new Error(
-        `VPN subscription synchronization failed: ${syncResult.provisioning?.errors.join("; ") ?? "unknown error"}`,
-      );
-    }
+    const key = await this.syncSubscriptionKey(subscription.id, subscription.token);
+    if (!key) throw new Error(`VPN access is not allowed for subscription ${subscription.id}`);
+    return { key, alreadyExisted };
+  }
 
-    const [fresh] = await vpnSubscriptionRepository.findManyForSync({
-      subscriptionId: subscription.id,
-    });
-    const aggregatorCode = config.vpnServers.xui.multiServerCode;
-    const key = fresh?.keys.find(
-      (candidate) => candidate.isActive && candidate.server?.code === aggregatorCode,
-    ) ?? fresh?.keys.find((candidate) => candidate.isActive);
-    if (!key) throw new Error(`VPN subscription ${subscription.id} has no active key`);
+  async getPaidKey(user: User): Promise<VpnKeyResult | null> {
+    const subscription = await vpnSubscriptionRepository.findByUserAndProduct(user.id, "paid");
+    if (!subscription) return null;
+    const key = await this.syncSubscriptionKey(subscription.id, subscription.token);
+    return key ? { key, alreadyExisted: true } : null;
+  }
 
-    const baseUrl = config.vpnServers.xui.multiSubBaseUrl;
-    if (!baseUrl) throw new Error("VPN public subscription base URL is not configured");
-    return {
-      key: {
-        ...key,
-        subscriptionUrl: `${baseUrl.replace(/\/+$/, "")}/sub/${subscription.token}`,
-      },
-      alreadyExisted,
-    };
+  async grantFreeUnlimitedPaidAccess(user: User): Promise<{ alreadyGranted: boolean }> {
+    const { subscription, alreadyGranted } = await vpnSubscriptionRepository.grantFreeUnlimited(
+      user.id,
+      "paid",
+      xuiClient.generateSubId(),
+    );
+    const key = await this.syncSubscriptionKey(subscription.id, subscription.token);
+    if (!key) throw new Error(`VPN access is not allowed for subscription ${subscription.id}`);
+    return { alreadyGranted };
   }
 
   async listXuiServers(): Promise<VpnServer[]> {
@@ -222,6 +214,31 @@ export class VpnService {
     const server = await vpnServerRepository.findActiveByCode(code);
     if (!server || server.provider !== VpnProvider.XUI) throw new Error(`Xray server ${code} is not configured`);
     return server;
+  }
+
+  private async syncSubscriptionKey(subscriptionId: number, token: string): Promise<VpnKey | null> {
+    const [syncResult] = await vpnAccessSyncService.sync({ subscriptionId });
+    if (!syncResult) throw new Error(`VPN subscription ${subscriptionId} was not found during synchronization`);
+    if (!syncResult.plan.eligible) return null;
+    if (!syncResult.provisioning?.success) {
+      throw new Error(
+        `VPN subscription synchronization failed: ${syncResult.provisioning?.errors.join("; ") ?? "unknown error"}`,
+      );
+    }
+
+    const [fresh] = await vpnSubscriptionRepository.findManyForSync({ subscriptionId });
+    const aggregatorCode = config.vpnServers.xui.multiServerCode;
+    const key = fresh?.keys.find(
+      (candidate) => candidate.isActive && candidate.server?.code === aggregatorCode,
+    ) ?? fresh?.keys.find((candidate) => candidate.isActive);
+    if (!key) throw new Error(`VPN subscription ${subscriptionId} has no active key`);
+
+    const baseUrl = config.vpnServers.xui.multiSubBaseUrl;
+    if (!baseUrl) throw new Error("VPN public subscription base URL is not configured");
+    return {
+      ...key,
+      subscriptionUrl: `${baseUrl.replace(/\/+$/, "")}/sub/${token}`,
+    };
   }
 
   private requireXuiServerConfig(code: string): XuiServerConfig {

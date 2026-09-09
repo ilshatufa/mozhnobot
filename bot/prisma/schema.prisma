@@ -60,6 +60,11 @@ enum VpnSubscriptionStatus {
   DISABLED
 }
 
+enum VpnSubscriptionAccessOverride {
+  NONE
+  FREE_UNLIMITED
+}
+
 enum VpnSubscriptionInboundStatus {
   PENDING
   PROVISIONING
@@ -220,17 +225,18 @@ model VpnProductInbound {
 }
 
 model VpnSubscription {
-  id              Int                   @id @default(autoincrement())
-  userId          Int                   @map("user_id")
-  productId       Int                   @map("product_id")
-  token           String                @unique @db.VarChar(128)
-  status          VpnSubscriptionStatus @default(ACTIVE)
-  expiresAt       DateTime?             @map("expires_at") @db.Timestamptz()
-  appliedRevision Int                   @default(0) @map("applied_revision")
-  lastSyncedAt    DateTime?             @map("last_synced_at") @db.Timestamptz()
-  lastError       String?               @map("last_error") @db.Text
-  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz()
+  id              Int                           @id @default(autoincrement())
+  userId          Int                           @map("user_id")
+  productId       Int                           @map("product_id")
+  token           String                        @unique @db.VarChar(128)
+  status          VpnSubscriptionStatus         @default(ACTIVE)
+  accessOverride  VpnSubscriptionAccessOverride @default(NONE) @map("access_override")
+  expiresAt       DateTime?                     @map("expires_at") @db.Timestamptz()
+  appliedRevision Int                           @default(0) @map("applied_revision")
+  lastSyncedAt    DateTime?                     @map("last_synced_at") @db.Timestamptz()
+  lastError       String?                       @map("last_error") @db.Text
+  createdAt       DateTime                      @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime                      @updatedAt @map("updated_at") @db.Timestamptz()
 
   user          User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
   product       VpnProduct                    @relation(fields: [productId], references: [id], onDelete: Restrict)
