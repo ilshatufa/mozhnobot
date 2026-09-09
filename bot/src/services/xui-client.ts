@@ -527,6 +527,30 @@ export class XuiClient {
     };
   }
 
+  async getClientLinks(server: XuiServerConfig, email: string): Promise<string[]> {
+    if (!this.isClientsApi(server)) {
+      throw new Error(`3X-UI ${server.code} does not support clients links API`);
+    }
+
+    const res = await this.request(server, `/panel/api/clients/links/${encodeURIComponent(email)}`);
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`3X-UI ${server.code} getClientLinks failed: ${res.status} ${body}`);
+    }
+
+    const data = await res.json() as XuiApiResponse<unknown>;
+    if (!data.success) {
+      throw new Error(`3X-UI ${server.code} getClientLinks returned success=false: ${data.msg ?? "unknown reason"}`);
+    }
+    if (!Array.isArray(data.obj)) {
+      throw new Error(`3X-UI ${server.code} getClientLinks returned an unsupported response`);
+    }
+
+    return data.obj.filter(
+      (value): value is string => typeof value === "string" && this.isSubscriptionLink(value),
+    );
+  }
+
   async attachClientToInbounds(server: XuiServerConfig, email: string, inboundIds: number[]): Promise<void> {
     await this.changeClientInboundAttachments(server, email, inboundIds, "attach");
   }

@@ -3,6 +3,8 @@ import { config, type XuiServerConfig } from "../config.js";
 import { logger } from "../logger.js";
 import { vpnKeyRepository } from "../repositories/vpn-key.repository.js";
 import { vpnServerRepository } from "../repositories/vpn-server.repository.js";
+import { vpnSubscriptionRepository } from "../repositories/vpn-subscription.repository.js";
+import { vpnAccessSyncService } from "./vpn-access-sync.service.js";
 import { xuiClient } from "./xui-client.js";
 
 export interface VpnKeyResult {
@@ -16,7 +18,40 @@ function isXuiRecordNotFoundError(err: unknown): boolean {
 
 export class VpnService {
   async getOrCreateKey(user: User): Promise<VpnKeyResult> {
-    return this.getOrCreateMultiXuiKey(user);
+    const { subscription, alreadyExisted } = await vpnSubscriptionRepository.findOrCreateForProduct(
+      user.id,
+      "club",
+      xuiClient.generateSubId(),
+    );
+    const [syncResult] = await vpnAccessSyncService.sync({ subscriptionId: subscription.id });
+    if (!syncResult) throw new Error(`VPN subscription ${subscription.id} was not found during synchronization`);
+    if (!syncResult.plan.eligible) {
+      throw new Error(`VPN access is not allowed: ${syncResult.plan.reason}`);
+    }
+    if (!syncResult.provisioning?.success) {
+      throw new Error(
+        `VPN subscription synchronization failed: ${syncResult.provisioning?.errors.join("; ") ?? "unknown error"}`,
+      );
+    }
+
+    const [fresh] = await vpnSubscriptionRepository.findManyForSync({
+      subscriptionId: subscription.id,
+    });
+    const aggregatorCode = config.vpnServers.xui.multiServerCode;
+    const key = fresh?.keys.find(
+      (candidate) => candidate.isActive && candidate.server?.code === aggregatorCode,
+    ) ?? fresh?.keys.find((candidate) => candidate.isActive);
+    if (!key) throw new Error(`VPN subscription ${subscription.id} has no active key`);
+
+    const baseUrl = config.vpnServers.xui.multiSubBaseUrl;
+    if (!baseUrl) throw new Error("VPN public subscription base URL is not configured");
+    return {
+      key: {
+        ...key,
+        subscriptionUrl: `${baseUrl.replace(/\/+$/, "")}/sub/${subscription.token}`,
+      },
+      alreadyExisted,
+    };
   }
 
   async listXuiServers(): Promise<VpnServer[]> {

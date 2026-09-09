@@ -12,53 +12,7 @@ import { prisma } from "../database.js";
 import { logger } from "../logger.js";
 import { vpnKeyRepository } from "../repositories/vpn-key.repository.js";
 import { xuiClient } from "./xui-client.js";
-
-const SUBSCRIPTION_PROTOCOLS = [
-  "vless://",
-  "vmess://",
-  "trojan://",
-  "ss://",
-  "hysteria://",
-  "hysteria2://",
-];
-
-const WHITELIST_CDN_SOURCE_SERVER_CODE = "nl";
-const WHITELIST_CDN_HOST = "yc.cdn.mozhno.org";
-const WHITELIST_CDN_PROFILE_NAME = "🇷🇺 МОЖНО • Белые списки — Нидерланды";
-const WHITELIST_CDN_PATH = "/api/upload";
-// TODO: Replace this temporary port-based discriminator with an explicit
-// subscription/profile kind. A router port change must not affect CDN filtering.
-const ROUTER_PROFILE_PORT = "10443";
-const WHITELIST_CDN_EXTRA = {
-  xmux: {
-    cMaxReuseTimes: "36-96",
-    maxConnections: "32-64",
-    hKeepAlivePeriod: 0,
-    hMaxRequestTimes: "320-640",
-    hMaxReusableSecs: "720-1800",
-  },
-  seqKey: "offset",
-  headers: {
-    Accept: "application/vnd.api+json, application/json, text/plain, */*",
-    Pragma: "no-cache",
-    "Cache-Control": "no-cache",
-    "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
-  },
-  xPaddingKey: "q",
-  seqPlacement: "query",
-  uplinkDataKey: "X-Playback-Token",
-  xPaddingBytes: "48-320",
-  xPaddingHeader: "X-Rewrite-URL",
-  xPaddingMethod: "tokenish",
-  uplinkHTTPMethod: "GET",
-  xPaddingObfsMode: true,
-  xPaddingPlacement: "queryInHeader",
-  scMaxBufferedPosts: 2048,
-  scMaxEachPostBytes: "4000-5000",
-  uplinkDataPlacement: "header",
-  scMinPostsIntervalMs: "4-18",
-  serverMaxHeaderBytes: 32768,
-} as const;
+import { renderVpnInboundProfile } from "./vpn-public-profile.js";
 
 type XuiKeyWithServer = VpnKey & {
   server: VpnServer | null;
@@ -132,22 +86,6 @@ export function hasCompleteRequiredInbounds(
     .every((item) => activeInboundIds.has(item.inboundId));
 }
 
-function decodeSubscriptionBody(body: string): string {
-  const trimmed = body.trim();
-  if (SUBSCRIPTION_PROTOCOLS.some((protocol) => trimmed.includes(protocol))) {
-    return trimmed;
-  }
-
-  const normalized = trimmed.replace(/\s+/g, "");
-  const padding = normalized.length % 4 === 0 ? "" : "=".repeat(4 - (normalized.length % 4));
-  const decoded = Buffer.from(`${normalized}${padding}`, "base64").toString("utf8");
-  return SUBSCRIPTION_PROTOCOLS.some((protocol) => decoded.includes(protocol)) ? decoded : trimmed;
-}
-
-function isSubscriptionLink(value: string): boolean {
-  return SUBSCRIPTION_PROTOCOLS.some((protocol) => value.startsWith(protocol));
-}
-
 function rawSubBaseUrl(server: XuiServerConfig): string {
   return (server.rawSubBaseUrl ?? server.subBaseUrl).replace(/\/+$/, "");
 }
@@ -156,96 +94,7 @@ function subscriptionUrl(server: XuiServerConfig, subId: string): string {
   return `${rawSubBaseUrl(server)}/sub/${subId}`;
 }
 
-function linkHost(line: string): string | null {
-  try {
-    const parsed = new URL(line);
-    return parsed.hostname.toLowerCase();
-  } catch {
-    return null;
-  }
-}
-
-function expectedHost(server: XuiServerConfig): string {
-  return new URL(rawSubBaseUrl(server)).hostname.toLowerCase();
-}
-
-function displayName(server: XuiServerConfig): string {
-  return server.name;
-}
-
-function rewriteDisplayName(line: string, name: string): string {
-  try {
-    const parsed = new URL(line);
-    parsed.hash = encodeURIComponent(name);
-    return parsed.toString();
-  } catch {
-    return line;
-  }
-}
-
-function isRouterProfile(line: string): boolean {
-  try {
-    return new URL(line).port === ROUTER_PROFILE_PORT;
-  } catch {
-    return false;
-  }
-}
-
-function buildWhitelistCdnLinkForHost(
-  line: string,
-  host: string,
-  profileName: string,
-  extra: Record<string, unknown> = WHITELIST_CDN_EXTRA,
-): string | null {
-  try {
-    const parsed = new URL(line);
-    if (parsed.protocol !== "vless:" || parsed.searchParams.get("type") !== "xhttp") {
-      return null;
-    }
-
-    parsed.hostname = host;
-    parsed.port = "443";
-    parsed.searchParams.set("type", "xhttp");
-    parsed.searchParams.set("security", "tls");
-    parsed.searchParams.set("sni", host);
-    parsed.searchParams.set("host", host);
-    parsed.searchParams.set("path", WHITELIST_CDN_PATH);
-    parsed.searchParams.set("mode", "packet-up");
-    parsed.searchParams.set("alpn", "h2");
-    parsed.searchParams.set("extra", JSON.stringify(extra));
-    parsed.searchParams.delete("flow");
-    parsed.searchParams.delete("pbk");
-    parsed.searchParams.delete("sid");
-    parsed.searchParams.delete("spx");
-    parsed.hash = encodeURIComponent(profileName);
-    return parsed.toString();
-  } catch {
-    return null;
-  }
-}
-
-export function buildWhitelistCdnLink(line: string): string | null {
-  return buildWhitelistCdnLinkForHost(
-    line,
-    WHITELIST_CDN_HOST,
-    WHITELIST_CDN_PROFILE_NAME,
-  );
-}
-
-export function subscriptionLinksForServer(
-  line: string,
-  server: Pick<XuiServerConfig, "code" | "name">
-): string[] {
-  const primary = rewriteDisplayName(line, server.name);
-  if (server.code !== WHITELIST_CDN_SOURCE_SERVER_CODE || isRouterProfile(line)) {
-    return [primary];
-  }
-
-  const whitelistCdn = buildWhitelistCdnLink(line);
-  return whitelistCdn && whitelistCdn !== primary ? [primary, whitelistCdn] : [primary];
-}
-
-export function rewriteNativeHtml(body: Buffer, subId: string): Buffer {
+export function rewriteNativeHtml(body: Buffer, subId: string, links?: string[]): Buffer {
   let html = body.toString("utf8");
   html = html.replace("<head>", '<head><link rel="icon" href="data:," />');
 
@@ -265,16 +114,8 @@ export function rewriteNativeHtml(body: Buffer, subId: string): Buffer {
     if (publicUrl) {
       pageData.subUrl = publicUrl;
     }
-    if (Array.isArray(pageData.links)) {
-      pageData.links = pageData.links.flatMap((value) => {
-        if (typeof value !== "string") return [value];
-        const host = linkHost(value);
-        const server = config.vpnServers.xui.servers.find((candidate) => {
-          const publicHost = new URL(candidate.subBaseUrl).hostname.toLowerCase();
-          return host === expectedHost(candidate) || host === publicHost;
-        });
-        return server ? subscriptionLinksForServer(value, server) : [value];
-      });
+    if (links) {
+      pageData.links = links;
     }
 
     const serialized = JSON.stringify(pageData).replace(/</g, "\\u003c");
@@ -566,10 +407,12 @@ export class XraySubscriptionService {
       const aggregator = this.subscriptionAggregator();
       const entryPointKey = keys.find((key) => key.server?.code === aggregator.code);
       if (!entryPointKey?.subId) return null;
-      const [body] = await Promise.all([
-        this.fetchNativeHtml(entryPointKey.subId, token, userAgent, acceptHeader),
+      const [links] = await Promise.all([
+        this.collectLinks(subscription, keys),
         this.syncTraffic(keys),
       ]);
+      if (links.length === 0) return null;
+      const body = await this.fetchNativeHtml(entryPointKey.subId, token, userAgent, acceptHeader, links);
 
       logger.info("Xray subscription rendered", {
         userId: subscription.userId,
@@ -577,7 +420,7 @@ export class XraySubscriptionService {
         remoteAddress,
         userAgent,
         renderMode,
-        links: keys.length,
+        links: links.length,
         servers: keys.map((key) => key.server?.code ?? "unknown"),
       });
 
@@ -591,14 +434,14 @@ export class XraySubscriptionService {
           userId: subscription.userId,
           telegramId: subscription.user.telegramId.toString(),
           servers: keys.map((key) => key.server?.code ?? "unknown"),
-          links: keys.length,
+          links: links.length,
           renderMode,
         },
       };
     }
 
     const [links, usedBytes] = await Promise.all([
-      this.collectLinks(keys),
+      this.collectLinks(subscription, keys),
       this.syncTraffic(keys),
     ]);
     if (links.length === 0) {
@@ -704,32 +547,52 @@ export class XraySubscriptionService {
     return !user.vpnBlocked && !user.isBanned;
   }
 
-  private async collectLinks(keys: XuiKeyWithServer[]): Promise<string[]> {
-    const result: string[] = [];
-    const seen = new Set<string>();
-    const keysByServerCode = new Map(keys.map((key) => [key.server?.code, key]));
+  private async collectLinks(
+    subscription: RenderableSubscription,
+    keys: XuiKeyWithServer[],
+  ): Promise<string[]> {
+    const activeInboundIds = new Set(
+      subscription.inboundStates
+        .filter((state) => state.status === VpnSubscriptionInboundStatus.ACTIVE)
+        .map((state) => state.inboundId),
+    );
+    const desired = subscription.product.inbounds.filter(
+      (item) => item.inbound.isActive && activeInboundIds.has(item.inboundId),
+    );
+    const keysByServerId = new Map(
+      keys
+        .filter((key): key is XuiKeyWithServer & { serverId: number } => key.serverId !== null)
+        .map((key) => [key.serverId, key]),
+    );
+    const sourceByInboundId = new Map<number, string>();
 
-    for (const serverConfig of config.vpnServers.xui.servers) {
-      const key = keysByServerCode.get(serverConfig.code);
-      if (!key?.subId || !key.server) continue;
+    for (const serverId of new Set(desired.map((item) => item.inbound.serverId))) {
+      const serverInbounds = desired.filter((item) => item.inbound.serverId === serverId);
+      const key = keysByServerId.get(serverId);
+      if (!key?.server || !key.providerClientId) {
+        throw new Error(`VPN subscription ${subscription.id} has no active client for server ${serverId}`);
+      }
+      const serverConfig = config.vpnServers.xui.servers.find(
+        (candidate) => candidate.code === key.server?.code,
+      );
+      if (!serverConfig) {
+        throw new Error(`3X-UI server ${key.server.code} is not configured`);
+      }
 
-      let links: string[];
-      try {
-        links = await this.fetchServerLinks(serverConfig, key.subId);
-      } catch (err) {
-        logger.warn(`Unable to fetch Xray subscription links from ${serverConfig.code}`, err);
-        continue;
+      const links = await xuiClient.getClientLinks(serverConfig, key.providerClientId);
+      if (links.length !== serverInbounds.length) {
+        throw new Error(
+          `3X-UI ${serverConfig.code} returned ${links.length} links for ${serverInbounds.length} product inbounds`,
+        );
       }
-      for (const link of links) {
-        for (const decorated of subscriptionLinksForServer(link, serverConfig)) {
-          if (seen.has(decorated)) continue;
-          seen.add(decorated);
-          result.push(decorated);
-        }
-      }
+      serverInbounds.forEach((item, index) => sourceByInboundId.set(item.inboundId, links[index]));
     }
 
-    return result;
+    return desired.map((item) => {
+      const source = sourceByInboundId.get(item.inboundId);
+      if (!source) throw new Error(`VPN inbound ${item.inbound.code} has no provider link`);
+      return renderVpnInboundProfile(source, item.inbound.name, item.inbound.publicProfile);
+    });
   }
 
   private async syncTraffic(keys: XuiKeyWithServer[]): Promise<bigint> {
@@ -754,33 +617,12 @@ export class XraySubscriptionService {
     return totals.reduce((sum, value) => sum + value, 0n);
   }
 
-  private async fetchServerLinks(server: XuiServerConfig, subId: string): Promise<string[]> {
-    const url = subscriptionUrl(server, subId);
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": "xray-subscription-service/1.0",
-      },
-    });
-
-    if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`3X-UI subscription ${server.code} failed: ${res.status} ${body}`);
-    }
-
-    const decoded = decodeSubscriptionBody(await res.text());
-    const host = expectedHost(server);
-    return decoded
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => isSubscriptionLink(line))
-      .filter((line) => linkHost(line) === host);
-  }
-
   private async fetchNativeHtml(
     upstreamSubId: string,
     publicToken: string,
     userAgent: string,
     acceptHeader: string,
+    links: string[],
   ): Promise<Buffer> {
     const aggregator = this.subscriptionAggregator();
     const publicUrl = new URL(aggregator.subBaseUrl);
@@ -802,7 +644,7 @@ export class XraySubscriptionService {
       throw new Error(`3X-UI HTML subscription ${aggregator.code} returned ${contentType || "unknown content type"}`);
     }
 
-    return rewriteNativeHtml(Buffer.from(await res.arrayBuffer()), publicToken);
+    return rewriteNativeHtml(Buffer.from(await res.arrayBuffer()), publicToken, links);
   }
 
   private subscriptionAggregator(): XuiServerConfig {

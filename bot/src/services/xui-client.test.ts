@@ -102,3 +102,30 @@ test("uses bulk enable and treats a skipped client as an error", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("reads generated links for one client without using a shared subscription", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = async (input) => {
+    requests.push(String(input));
+    return new Response(JSON.stringify({
+      success: true,
+      obj: ["vless://id@example.test:443?type=xhttp#one", "https://ignored.example.test"],
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  try {
+    const { XuiClient } = await import("./xui-client.js");
+    const client = new XuiClient();
+    const apiServer = { ...server([]), apiToken: "test-token" };
+
+    assert.deepEqual(await client.getClientLinks(apiServer, "user+vpn@example.test"), [
+      "vless://id@example.test:443?type=xhttp#one",
+    ]);
+    assert.deepEqual(requests, [
+      "https://panel.example.test/panel/api/clients/links/user%2Bvpn%40example.test",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

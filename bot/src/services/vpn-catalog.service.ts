@@ -1,5 +1,6 @@
 import { Prisma, VpnProductAccessPolicy } from "@prisma/client";
 import { prisma } from "../database.js";
+import { YANDEX_CDN_PUBLIC_PROFILE } from "./vpn-public-profile.js";
 
 interface VpnInboundCatalogEntry {
   code: string;
@@ -32,12 +33,7 @@ export const INITIAL_VPN_INBOUND_CATALOG: readonly VpnInboundCatalogEntry[] = [
     providerInboundId: 5,
     name: "🇷🇺 МОЖНО • Белые списки — Нидерланды",
     port: 8443,
-    publicProfile: {
-      kind: "YANDEX_CDN",
-      host: "yc.cdn.mozhno.org",
-      port: 443,
-      path: "/api/upload",
-    },
+    publicProfile: YANDEX_CDN_PUBLIC_PROFILE,
   },
   {
     code: "club-de-direct",

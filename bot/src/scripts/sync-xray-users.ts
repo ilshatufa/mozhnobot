@@ -32,7 +32,7 @@ async function main(): Promise<void> {
   let completed = 0;
   for (const row of activeRows) {
     const user = await prisma.user.findUniqueOrThrow({ where: { id: row.userId } });
-    await vpnService.getOrCreateMultiXuiKey(user);
+    await vpnService.getOrCreateKey(user);
     completed += 1;
     logger.info("Xray user synchronized", { userId: user.id, completed, total: activeRows.length });
   }

@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { VpnSubscriptionInboundStatus } from "@prisma/client";
 import {
-  buildWhitelistCdnLink,
   hasCompleteRequiredInbounds,
   outboundFromUri,
   rewriteNativeHtml,
-  subscriptionLinksForServer,
 } from "./xray-subscription.service.js";
+import {
+  renderVpnInboundProfile,
+  YANDEX_CDN_PUBLIC_PROFILE,
+} from "./vpn-public-profile.js";
 
 const SOURCE_LINK = [
   "vless://11111111-2222-3333-4444-555555555555@xraynl.vpn.mozhno.org:443",
@@ -43,13 +45,16 @@ test("requires every active required inbound before rendering a subscription", (
   }), false);
 });
 
-test("adds the Russia-labelled whitelist CDN profile after the Netherlands profile", () => {
-  const links = subscriptionLinksForServer(SOURCE_LINK, {
-    code: "nl",
-    name: "🇳🇱 МОЖНО • Нидерланды",
-  });
+test("renders direct and CDN profiles from explicit inbound metadata", () => {
+  const links = [
+    renderVpnInboundProfile(SOURCE_LINK, "🇳🇱 МОЖНО • Нидерланды", null),
+    renderVpnInboundProfile(
+      SOURCE_LINK,
+      "🇷🇺 МОЖНО • Белые списки — Нидерланды",
+      YANDEX_CDN_PUBLIC_PROFILE,
+    ),
+  ];
 
-  assert.equal(links.length, 2);
   assert.equal(
     decodeURIComponent(new URL(links[0]).hash.slice(1)),
     "🇳🇱 МОЖНО • Нидерланды",
@@ -85,28 +90,22 @@ test("adds the Russia-labelled whitelist CDN profile after the Netherlands profi
   });
 });
 
-test("does not add the CDN profile to another server or a non-XHTTP link", () => {
-  assert.equal(
-    subscriptionLinksForServer(SOURCE_LINK, { code: "de", name: "МОЖНО • Германия" }).length,
-    1,
+test("keeps a router profile direct because it has no public override", () => {
+  const link = renderVpnInboundProfile(
+    ROUTER_SOURCE_LINK,
+    "🇳🇱 МОЖНО • Роутер — Нидерланды",
+    null,
   );
-  assert.equal(buildWhitelistCdnLink(SOURCE_LINK.replace("type=xhttp", "type=tcp")), null);
-});
-
-test("does not add the whitelist CDN profile to a router profile", () => {
-  const links = subscriptionLinksForServer(ROUTER_SOURCE_LINK, {
-    code: "nl",
-    name: "🇳🇱 МОЖНО • Нидерланды",
-  });
-
-  assert.equal(links.length, 1);
-  assert.equal(new URL(links[0]).port, "10443");
-  assert.equal(new URL(links[0]).hostname, "xraynl.vpn.mozhno.org");
+  assert.equal(new URL(link).port, "10443");
+  assert.equal(new URL(link).hostname, "xraynl.vpn.mozhno.org");
 });
 
 test("keeps the XHTTP extra object in JSON subscriptions", () => {
-  const cdnLink = buildWhitelistCdnLink(SOURCE_LINK);
-  assert.ok(cdnLink);
+  const cdnLink = renderVpnInboundProfile(
+    SOURCE_LINK,
+    "🇷🇺 МОЖНО • Белые списки — Нидерланды",
+    YANDEX_CDN_PUBLIC_PROFILE,
+  );
 
   const outbound = outboundFromUri(cdnLink);
   assert.ok(outbound);
@@ -121,35 +120,51 @@ test("keeps the XHTTP extra object in JSON subscriptions", () => {
   assert.equal(extra.scMaxBufferedPosts, 2048);
 });
 
-test("adds the CDN profile to the native HTML subscription data", () => {
+test("replaces native HTML links with the product profiles", () => {
   const marker = "window.__SUB_PAGE_DATA__=";
   const html = `<html><head></head><body><script>${marker}${JSON.stringify({
     links: [SOURCE_LINK],
     subUrl: "https://old.example/sub/test",
   })};</script></body></html>`;
 
-  const rewritten = rewriteNativeHtml(Buffer.from(html, "utf8"), "test-sub-id").toString("utf8");
+  const productLinks = [
+    renderVpnInboundProfile(SOURCE_LINK, "🇳🇱 МОЖНО • Нидерланды", null),
+    renderVpnInboundProfile(SOURCE_LINK, "🇷🇺 МОЖНО • Белые списки — Нидерланды", YANDEX_CDN_PUBLIC_PROFILE),
+  ];
+  const rewritten = rewriteNativeHtml(
+    Buffer.from(html, "utf8"),
+    "test-sub-id",
+    productLinks,
+  ).toString("utf8");
   const start = rewritten.indexOf(marker) + marker.length;
   const end = rewritten.indexOf(";</script>", start);
   const pageData = JSON.parse(rewritten.slice(start, end)) as { links: string[] };
 
-  assert.equal(pageData.links.length, 2);
-  assert.equal(new URL(pageData.links[1]).hostname, "yc.cdn.mozhno.org");
+  assert.deepEqual(pageData.links, productLinks);
 });
 
-test("does not add the CDN profile to router links in native HTML", () => {
+test("keeps router HTML limited to the router product links", () => {
   const marker = "window.__SUB_PAGE_DATA__=";
   const html = `<html><head></head><body><script>${marker}${JSON.stringify({
     links: [ROUTER_SOURCE_LINK],
     subUrl: "https://old.example/sub/test",
   })};</script></body></html>`;
 
-  const rewritten = rewriteNativeHtml(Buffer.from(html, "utf8"), "test-sub-id").toString("utf8");
+  const routerLinks = [renderVpnInboundProfile(
+    ROUTER_SOURCE_LINK,
+    "🇳🇱 МОЖНО • Роутер — Нидерланды",
+    null,
+  )];
+  const rewritten = rewriteNativeHtml(
+    Buffer.from(html, "utf8"),
+    "test-sub-id",
+    routerLinks,
+  ).toString("utf8");
   const start = rewritten.indexOf(marker) + marker.length;
   const end = rewritten.indexOf(";</script>", start);
   const pageData = JSON.parse(rewritten.slice(start, end)) as { links: string[] };
 
-  assert.equal(pageData.links.length, 1);
+  assert.deepEqual(pageData.links, routerLinks);
   assert.equal(new URL(pageData.links[0]).port, "10443");
   assert.equal(new URL(pageData.links[0]).hostname, "xraynl.vpn.mozhno.org");
 });
