@@ -18,6 +18,9 @@ const WHITELIST_CDN_SOURCE_SERVER_CODE = "nl";
 const WHITELIST_CDN_HOST = "yc.cdn.mozhno.org";
 const WHITELIST_CDN_PROFILE_NAME = "🇷🇺 МОЖНО • Белые списки — Нидерланды";
 const WHITELIST_CDN_PATH = "/api/upload";
+// TODO: Replace this temporary port-based discriminator with an explicit
+// subscription/profile kind. A router port change must not affect CDN filtering.
+const ROUTER_PROFILE_PORT = "10443";
 const WHITELIST_CDN_EXTRA = {
   xmux: {
     cMaxReuseTimes: "36-96",
@@ -125,6 +128,14 @@ function rewriteDisplayName(line: string, name: string): string {
   }
 }
 
+function isRouterProfile(line: string): boolean {
+  try {
+    return new URL(line).port === ROUTER_PROFILE_PORT;
+  } catch {
+    return false;
+  }
+}
+
 function buildWhitelistCdnLinkForHost(
   line: string,
   host: string,
@@ -171,7 +182,7 @@ export function subscriptionLinksForServer(
   server: Pick<XuiServerConfig, "code" | "name">
 ): string[] {
   const primary = rewriteDisplayName(line, server.name);
-  if (server.code !== WHITELIST_CDN_SOURCE_SERVER_CODE) {
+  if (server.code !== WHITELIST_CDN_SOURCE_SERVER_CODE || isRouterProfile(line)) {
     return [primary];
   }
 

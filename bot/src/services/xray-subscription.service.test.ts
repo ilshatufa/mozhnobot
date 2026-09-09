@@ -15,6 +15,8 @@ const SOURCE_LINK = [
   "#old-name",
 ].join("");
 
+const ROUTER_SOURCE_LINK = SOURCE_LINK.replace(":443", ":10443");
+
 test("adds the Russia-labelled whitelist CDN profile after the Netherlands profile", () => {
   const links = subscriptionLinksForServer(SOURCE_LINK, {
     code: "nl",
@@ -65,6 +67,17 @@ test("does not add the CDN profile to another server or a non-XHTTP link", () =>
   assert.equal(buildWhitelistCdnLink(SOURCE_LINK.replace("type=xhttp", "type=tcp")), null);
 });
 
+test("does not add the whitelist CDN profile to a router profile", () => {
+  const links = subscriptionLinksForServer(ROUTER_SOURCE_LINK, {
+    code: "nl",
+    name: "🇳🇱 МОЖНО • Нидерланды",
+  });
+
+  assert.equal(links.length, 1);
+  assert.equal(new URL(links[0]).port, "10443");
+  assert.equal(new URL(links[0]).hostname, "xraynl.vpn.mozhno.org");
+});
+
 test("keeps the XHTTP extra object in JSON subscriptions", () => {
   const cdnLink = buildWhitelistCdnLink(SOURCE_LINK);
   assert.ok(cdnLink);
@@ -96,4 +109,21 @@ test("adds the CDN profile to the native HTML subscription data", () => {
 
   assert.equal(pageData.links.length, 2);
   assert.equal(new URL(pageData.links[1]).hostname, "yc.cdn.mozhno.org");
+});
+
+test("does not add the CDN profile to router links in native HTML", () => {
+  const marker = "window.__SUB_PAGE_DATA__=";
+  const html = `<html><head></head><body><script>${marker}${JSON.stringify({
+    links: [ROUTER_SOURCE_LINK],
+    subUrl: "https://old.example/sub/test",
+  })};</script></body></html>`;
+
+  const rewritten = rewriteNativeHtml(Buffer.from(html, "utf8"), "test-sub-id").toString("utf8");
+  const start = rewritten.indexOf(marker) + marker.length;
+  const end = rewritten.indexOf(";</script>", start);
+  const pageData = JSON.parse(rewritten.slice(start, end)) as { links: string[] };
+
+  assert.equal(pageData.links.length, 1);
+  assert.equal(new URL(pageData.links[0]).port, "10443");
+  assert.equal(new URL(pageData.links[0]).hostname, "xraynl.vpn.mozhno.org");
 });
