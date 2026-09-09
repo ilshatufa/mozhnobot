@@ -14,6 +14,41 @@ const SUBSCRIPTION_PROTOCOLS = [
   "hysteria2://",
 ];
 
+const WHITELIST_CDN_SOURCE_SERVER_CODE = "nl";
+const WHITELIST_CDN_HOST = "yc.cdn.mozhno.org";
+const WHITELIST_CDN_PROFILE_NAME = "🇷🇺 МОЖНО • Белые списки — Нидерланды";
+const WHITELIST_CDN_PATH = "/api/upload";
+const WHITELIST_CDN_EXTRA = {
+  xmux: {
+    cMaxReuseTimes: "36-96",
+    maxConnections: "32-64",
+    hKeepAlivePeriod: 0,
+    hMaxRequestTimes: "320-640",
+    hMaxReusableSecs: "720-1800",
+  },
+  seqKey: "offset",
+  headers: {
+    Accept: "application/vnd.api+json, application/json, text/plain, */*",
+    Pragma: "no-cache",
+    "Cache-Control": "no-cache",
+    "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+  },
+  xPaddingKey: "q",
+  seqPlacement: "query",
+  uplinkDataKey: "X-Playback-Token",
+  xPaddingBytes: "48-320",
+  xPaddingHeader: "X-Rewrite-URL",
+  xPaddingMethod: "tokenish",
+  uplinkHTTPMethod: "GET",
+  xPaddingObfsMode: true,
+  xPaddingPlacement: "queryInHeader",
+  scMaxBufferedPosts: 2048,
+  scMaxEachPostBytes: "4000-5000",
+  uplinkDataPlacement: "header",
+  scMinPostsIntervalMs: "4-18",
+  serverMaxHeaderBytes: 32768,
+} as const;
+
 type XuiKeyWithServer = VpnKey & {
   server: VpnServer | null;
 };
@@ -90,7 +125,48 @@ function rewriteDisplayName(line: string, name: string): string {
   }
 }
 
-function rewriteNativeHtml(body: Buffer, subId: string): Buffer {
+export function buildWhitelistCdnLink(line: string): string | null {
+  try {
+    const parsed = new URL(line);
+    if (parsed.protocol !== "vless:" || parsed.searchParams.get("type") !== "xhttp") {
+      return null;
+    }
+
+    parsed.hostname = WHITELIST_CDN_HOST;
+    parsed.port = "443";
+    parsed.searchParams.set("type", "xhttp");
+    parsed.searchParams.set("security", "tls");
+    parsed.searchParams.set("sni", WHITELIST_CDN_HOST);
+    parsed.searchParams.set("host", WHITELIST_CDN_HOST);
+    parsed.searchParams.set("path", WHITELIST_CDN_PATH);
+    parsed.searchParams.set("mode", "packet-up");
+    parsed.searchParams.set("alpn", "h2");
+    parsed.searchParams.set("extra", JSON.stringify(WHITELIST_CDN_EXTRA));
+    parsed.searchParams.delete("flow");
+    parsed.searchParams.delete("pbk");
+    parsed.searchParams.delete("sid");
+    parsed.searchParams.delete("spx");
+    parsed.hash = encodeURIComponent(WHITELIST_CDN_PROFILE_NAME);
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+export function subscriptionLinksForServer(
+  line: string,
+  server: Pick<XuiServerConfig, "code" | "name">
+): string[] {
+  const primary = rewriteDisplayName(line, server.name);
+  if (server.code !== WHITELIST_CDN_SOURCE_SERVER_CODE) {
+    return [primary];
+  }
+
+  const whitelistCdn = buildWhitelistCdnLink(line);
+  return whitelistCdn && whitelistCdn !== primary ? [primary, whitelistCdn] : [primary];
+}
+
+export function rewriteNativeHtml(body: Buffer, subId: string): Buffer {
   let html = body.toString("utf8");
   html = html.replace("<head>", '<head><link rel="icon" href="data:," />');
 
@@ -111,14 +187,14 @@ function rewriteNativeHtml(body: Buffer, subId: string): Buffer {
       pageData.subUrl = publicUrl;
     }
     if (Array.isArray(pageData.links)) {
-      pageData.links = pageData.links.map((value) => {
-        if (typeof value !== "string") return value;
+      pageData.links = pageData.links.flatMap((value) => {
+        if (typeof value !== "string") return [value];
         const host = linkHost(value);
         const server = config.vpnServers.xui.servers.find((candidate) => {
           const publicHost = new URL(candidate.subBaseUrl).hostname.toLowerCase();
           return host === expectedHost(candidate) || host === publicHost;
         });
-        return server ? rewriteDisplayName(value, displayName(server)) : value;
+        return server ? subscriptionLinksForServer(value, server) : [value];
       });
     }
 
@@ -149,6 +225,19 @@ function splitAlpn(value: string): string[] {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
+function parseJsonObject(value: string | undefined): Record<string, unknown> | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
 function routingRules(): Array<Record<string, unknown>> {
   const rules: Array<Record<string, unknown>> = [
     { type: "field", port: "53", outboundTag: "dns-out" },
@@ -167,7 +256,7 @@ function routingRules(): Array<Record<string, unknown>> {
   return rules;
 }
 
-function outboundFromUri(line: string): Record<string, unknown> | null {
+export function outboundFromUri(line: string): Record<string, unknown> | null {
   const parsed = new URL(line);
   const query = parsedQuery(parsed);
   const host = parsed.hostname;
@@ -249,11 +338,16 @@ function outboundFromUri(line: string): Record<string, unknown> | null {
     if (query.host) {
       headers.Host = query.host;
     }
-    streamSettings.xhttpSettings = {
+    const xhttpSettings: Record<string, unknown> = {
       path: query.path ?? "/",
       mode: query.mode ?? "auto",
       headers,
     };
+    const extra = parseJsonObject(query.extra);
+    if (extra) {
+      xhttpSettings.extra = extra;
+    }
+    streamSettings.xhttpSettings = xhttpSettings;
   } else if (network === "tcp") {
     streamSettings.tcpSettings = { header: { type: "none" } };
   }
@@ -557,10 +651,11 @@ export class XraySubscriptionService {
         continue;
       }
       for (const link of links) {
-        const rewritten = rewriteDisplayName(link, displayName(serverConfig));
-        if (seen.has(rewritten)) continue;
-        seen.add(rewritten);
-        result.push(rewritten);
+        for (const decorated of subscriptionLinksForServer(link, serverConfig)) {
+          if (seen.has(decorated)) continue;
+          seen.add(decorated);
+          result.push(decorated);
+        }
       }
     }
 
