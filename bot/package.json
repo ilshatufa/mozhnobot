@@ -19,6 +19,7 @@
     "sync:xray-users": "tsx src/scripts/sync-xray-users.ts",
     "sync:vpn-access": "tsx src/scripts/sync-vpn-access.ts",
     "bootstrap:vpn-catalog": "tsx src/scripts/bootstrap-vpn-catalog.ts",
+    "backfill:vpn-subscriptions": "tsx src/scripts/backfill-vpn-subscriptions.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
