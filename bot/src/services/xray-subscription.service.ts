@@ -1,4 +1,12 @@
-import { VpnProvider, type VpnKey, type VpnServer, type User } from "@prisma/client";
+import {
+  Prisma,
+  VpnProvider,
+  VpnSubscriptionInboundStatus,
+  VpnSubscriptionStatus,
+  type VpnKey,
+  type VpnServer,
+  type User,
+} from "@prisma/client";
 import { config, type XuiServerConfig } from "../config.js";
 import { prisma } from "../database.js";
 import { logger } from "../logger.js";
@@ -56,9 +64,31 @@ type XuiKeyWithServer = VpnKey & {
   server: VpnServer | null;
 };
 
-type EntryPointKey = VpnKey & {
-  user: User;
-};
+const renderableSubscriptionInclude = {
+  user: true,
+  product: {
+    include: {
+      inbounds: {
+        include: { inbound: true },
+        orderBy: { position: "asc" },
+      },
+    },
+  },
+  keys: {
+    where: {
+      provider: VpnProvider.XUI,
+      isActive: true,
+      subId: { not: null },
+    },
+    include: { server: true },
+    orderBy: { createdAt: "asc" },
+  },
+  inboundStates: true,
+} satisfies Prisma.VpnSubscriptionInclude;
+
+type RenderableSubscription = Prisma.VpnSubscriptionGetPayload<{
+  include: typeof renderableSubscriptionInclude;
+}>;
 
 export interface RenderedSubscription {
   body: Buffer;
@@ -75,6 +105,31 @@ export interface RenderedSubscription {
 export interface RenderedSubscriptionAsset {
   body: Buffer;
   headers: Record<string, string>;
+}
+
+export function hasCompleteRequiredInbounds(
+  subscription: {
+    product: {
+      inbounds: Array<{
+        inboundId: number;
+        isRequired: boolean;
+        inbound: { isActive: boolean };
+      }>;
+    };
+    inboundStates: Array<{
+      inboundId: number;
+      status: VpnSubscriptionInboundStatus;
+    }>;
+  },
+): boolean {
+  const activeInboundIds = new Set(
+    subscription.inboundStates
+      .filter((state) => state.status === VpnSubscriptionInboundStatus.ACTIVE)
+      .map((state) => state.inboundId),
+  );
+  return subscription.product.inbounds
+    .filter((item) => item.isRequired && item.inbound.isActive)
+    .every((item) => activeInboundIds.has(item.inboundId));
 }
 
 function decodeSubscriptionBody(body: string): string {
@@ -483,17 +538,24 @@ function contentDispositionHeader(): string {
 
 export class XraySubscriptionService {
   async render(
-    subId: string,
+    token: string,
     userAgent: string,
     remoteAddress: string,
     acceptHeader = ""
   ): Promise<RenderedSubscription | null> {
-    const entryPoint = await this.findEntryPointKey(subId);
-    if (!entryPoint || !this.isUserAllowed(entryPoint.user)) {
+    const subscription = await this.findSubscription(token);
+    if (
+      !subscription ||
+      !this.isUserAllowed(subscription.user) ||
+      !hasCompleteRequiredInbounds(subscription)
+    ) {
       return null;
     }
 
-    const keys = await this.findUserXuiKeys(entryPoint.userId);
+    const now = new Date();
+    const keys = subscription.keys.filter(
+      (key) => key.expiresAt === null || key.expiresAt > now,
+    );
     const renderMode = shouldRenderJson(userAgent)
       ? "json"
       : shouldRenderHtml(userAgent, acceptHeader)
@@ -501,14 +563,17 @@ export class XraySubscriptionService {
         : "uri";
 
     if (renderMode === "html") {
+      const aggregator = this.subscriptionAggregator();
+      const entryPointKey = keys.find((key) => key.server?.code === aggregator.code);
+      if (!entryPointKey?.subId) return null;
       const [body] = await Promise.all([
-        this.fetchNativeHtml(subId, userAgent, acceptHeader),
+        this.fetchNativeHtml(entryPointKey.subId, token, userAgent, acceptHeader),
         this.syncTraffic(keys),
       ]);
 
       logger.info("Xray subscription rendered", {
-        userId: entryPoint.userId,
-        telegramId: entryPoint.user.telegramId.toString(),
+        userId: subscription.userId,
+        telegramId: subscription.user.telegramId.toString(),
         remoteAddress,
         userAgent,
         renderMode,
@@ -523,8 +588,8 @@ export class XraySubscriptionService {
           "Cache-Control": "no-store",
         },
         meta: {
-          userId: entryPoint.userId,
-          telegramId: entryPoint.user.telegramId.toString(),
+          userId: subscription.userId,
+          telegramId: subscription.user.telegramId.toString(),
           servers: keys.map((key) => key.server?.code ?? "unknown"),
           links: keys.length,
           renderMode,
@@ -543,8 +608,8 @@ export class XraySubscriptionService {
     const body = renderMode === "json" ? renderV2rayJson(links) : renderUriSubscription(links);
 
     logger.info("Xray subscription rendered", {
-      userId: entryPoint.userId,
-      telegramId: entryPoint.user.telegramId.toString(),
+      userId: subscription.userId,
+      telegramId: subscription.user.telegramId.toString(),
       remoteAddress,
       userAgent,
       renderMode,
@@ -569,8 +634,8 @@ export class XraySubscriptionService {
         "Cache-Control": "no-store",
       },
       meta: {
-        userId: entryPoint.userId,
-        telegramId: entryPoint.user.telegramId.toString(),
+        userId: subscription.userId,
+        telegramId: subscription.user.telegramId.toString(),
         servers: keys.map((key) => key.server?.code ?? "unknown"),
         links: links.length,
         renderMode,
@@ -623,39 +688,20 @@ export class XraySubscriptionService {
     logger.info("Periodic Xray traffic synchronization complete", { keys: keys.length });
   }
 
-  private async findEntryPointKey(subId: string): Promise<EntryPointKey | null> {
-    return prisma.vpnKey.findFirst({
+  private async findSubscription(token: string): Promise<RenderableSubscription | null> {
+    return prisma.vpnSubscription.findFirst({
       where: {
-        subId,
-        provider: VpnProvider.XUI,
-        isActive: true,
+        token,
+        status: VpnSubscriptionStatus.ACTIVE,
+        product: { isActive: true },
         OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
       },
-      include: {
-        user: true,
-      },
-      orderBy: { createdAt: "desc" },
+      include: renderableSubscriptionInclude,
     });
   }
 
   private isUserAllowed(user: User): boolean {
     return !user.vpnBlocked && !user.isBanned;
-  }
-
-  private async findUserXuiKeys(userId: number): Promise<XuiKeyWithServer[]> {
-    return prisma.vpnKey.findMany({
-      where: {
-        userId,
-        provider: VpnProvider.XUI,
-        isActive: true,
-        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-        subId: { not: null },
-      },
-      include: {
-        server: true,
-      },
-      orderBy: { createdAt: "asc" },
-    });
   }
 
   private async collectLinks(keys: XuiKeyWithServer[]): Promise<string[]> {
@@ -730,10 +776,15 @@ export class XraySubscriptionService {
       .filter((line) => linkHost(line) === host);
   }
 
-  private async fetchNativeHtml(subId: string, userAgent: string, acceptHeader: string): Promise<Buffer> {
+  private async fetchNativeHtml(
+    upstreamSubId: string,
+    publicToken: string,
+    userAgent: string,
+    acceptHeader: string,
+  ): Promise<Buffer> {
     const aggregator = this.subscriptionAggregator();
     const publicUrl = new URL(aggregator.subBaseUrl);
-    const res = await fetch(subscriptionUrl(aggregator, subId), {
+    const res = await fetch(subscriptionUrl(aggregator, upstreamSubId), {
       headers: {
         Accept: acceptHeader || "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         Host: publicUrl.host,
@@ -751,7 +802,7 @@ export class XraySubscriptionService {
       throw new Error(`3X-UI HTML subscription ${aggregator.code} returned ${contentType || "unknown content type"}`);
     }
 
-    return rewriteNativeHtml(Buffer.from(await res.arrayBuffer()), subId);
+    return rewriteNativeHtml(Buffer.from(await res.arrayBuffer()), publicToken);
   }
 
   private subscriptionAggregator(): XuiServerConfig {

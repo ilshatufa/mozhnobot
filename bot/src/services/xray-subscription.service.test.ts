@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { VpnSubscriptionInboundStatus } from "@prisma/client";
 import {
   buildWhitelistCdnLink,
+  hasCompleteRequiredInbounds,
   outboundFromUri,
   rewriteNativeHtml,
   subscriptionLinksForServer,
@@ -16,6 +18,30 @@ const SOURCE_LINK = [
 ].join("");
 
 const ROUTER_SOURCE_LINK = SOURCE_LINK.replace(":443", ":10443");
+
+test("requires every active required inbound before rendering a subscription", () => {
+  const product = {
+    inbounds: [
+      { inboundId: 1, isRequired: true, inbound: { isActive: true } },
+      { inboundId: 2, isRequired: true, inbound: { isActive: true } },
+    ],
+  };
+
+  assert.equal(hasCompleteRequiredInbounds({
+    product,
+    inboundStates: [
+      { inboundId: 1, status: VpnSubscriptionInboundStatus.ACTIVE },
+      { inboundId: 2, status: VpnSubscriptionInboundStatus.ACTIVE },
+    ],
+  }), true);
+  assert.equal(hasCompleteRequiredInbounds({
+    product,
+    inboundStates: [
+      { inboundId: 1, status: VpnSubscriptionInboundStatus.ACTIVE },
+      { inboundId: 2, status: VpnSubscriptionInboundStatus.ERROR },
+    ],
+  }), false);
+});
 
 test("adds the Russia-labelled whitelist CDN profile after the Netherlands profile", () => {
   const links = subscriptionLinksForServer(SOURCE_LINK, {
