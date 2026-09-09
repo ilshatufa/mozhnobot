@@ -17,7 +17,6 @@ const SUBSCRIPTION_PROTOCOLS = [
 const WHITELIST_CDN_SOURCE_SERVER_CODE = "nl";
 const WHITELIST_CDN_HOST = "yc.cdn.mozhno.org";
 const WHITELIST_CDN_PROFILE_NAME = "🇷🇺 МОЖНО • Белые списки — Нидерланды";
-const WHITELIST_CDN_IPHONE_PROFILE_NAME = "🇷🇺 МОЖНО • Белые списки — iPhone";
 const WHITELIST_CDN_PATH = "/api/upload";
 const WHITELIST_CDN_EXTRA = {
   xmux: {
@@ -48,13 +47,6 @@ const WHITELIST_CDN_EXTRA = {
   uplinkDataPlacement: "header",
   scMinPostsIntervalMs: "4-18",
   serverMaxHeaderBytes: 32768,
-} as const;
-const WHITELIST_CDN_IPHONE_EXTRA = {
-  ...WHITELIST_CDN_EXTRA,
-  xmux: {
-    ...WHITELIST_CDN_EXTRA.xmux,
-    maxConnections: "3-6",
-  },
 } as const;
 
 type XuiKeyWithServer = VpnKey & {
@@ -133,11 +125,7 @@ function rewriteDisplayName(line: string, name: string): string {
   }
 }
 
-export function buildWhitelistCdnLink(
-  line: string,
-  profileName = WHITELIST_CDN_PROFILE_NAME,
-  extra: object = WHITELIST_CDN_EXTRA
-): string | null {
+export function buildWhitelistCdnLink(line: string): string | null {
   try {
     const parsed = new URL(line);
     if (parsed.protocol !== "vless:" || parsed.searchParams.get("type") !== "xhttp") {
@@ -153,12 +141,12 @@ export function buildWhitelistCdnLink(
     parsed.searchParams.set("path", WHITELIST_CDN_PATH);
     parsed.searchParams.set("mode", "packet-up");
     parsed.searchParams.set("alpn", "h2");
-    parsed.searchParams.set("extra", JSON.stringify(extra));
+    parsed.searchParams.set("extra", JSON.stringify(WHITELIST_CDN_EXTRA));
     parsed.searchParams.delete("flow");
     parsed.searchParams.delete("pbk");
     parsed.searchParams.delete("sid");
     parsed.searchParams.delete("spx");
-    parsed.hash = encodeURIComponent(profileName);
+    parsed.hash = encodeURIComponent(WHITELIST_CDN_PROFILE_NAME);
     return parsed.toString();
   } catch {
     return null;
@@ -174,15 +162,8 @@ export function subscriptionLinksForServer(
     return [primary];
   }
 
-  const whitelistCdnIphone = buildWhitelistCdnLink(
-    line,
-    WHITELIST_CDN_IPHONE_PROFILE_NAME,
-    WHITELIST_CDN_IPHONE_EXTRA
-  );
   const whitelistCdn = buildWhitelistCdnLink(line);
-  return whitelistCdnIphone && whitelistCdn
-    ? [primary, whitelistCdnIphone, whitelistCdn]
-    : [primary];
+  return whitelistCdn && whitelistCdn !== primary ? [primary, whitelistCdn] : [primary];
 }
 
 export function rewriteNativeHtml(body: Buffer, subId: string): Buffer {
