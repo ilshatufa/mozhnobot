@@ -17,8 +17,6 @@ const SUBSCRIPTION_PROTOCOLS = [
 const WHITELIST_CDN_SOURCE_SERVER_CODE = "nl";
 const WHITELIST_CDN_HOST = "yc.cdn.mozhno.org";
 const WHITELIST_CDN_PROFILE_NAME = "🇷🇺 МОЖНО • Белые списки — Нидерланды";
-const VK_WHITELIST_CDN_HOST = "vk.cdn.mozhno.org";
-const VK_WHITELIST_CDN_PROFILE_NAME = "🇷🇺 МОЖНО • Белые списки — VK Cloud";
 const WHITELIST_CDN_PATH = "/api/upload";
 const WHITELIST_CDN_EXTRA = {
   xmux: {
@@ -49,17 +47,6 @@ const WHITELIST_CDN_EXTRA = {
   uplinkDataPlacement: "header",
   scMinPostsIntervalMs: "4-18",
   serverMaxHeaderBytes: 32768,
-} as const;
-
-const VK_WHITELIST_CDN_EXTRA = {
-  ...WHITELIST_CDN_EXTRA,
-  xmux: {
-    cMaxReuseTimes: "0",
-    maxConnections: "4-6",
-    hKeepAlivePeriod: 0,
-    hMaxRequestTimes: "600-900",
-    hMaxReusableSecs: "900-1800",
-  },
 } as const;
 
 type XuiKeyWithServer = VpnKey & {
@@ -179,15 +166,6 @@ export function buildWhitelistCdnLink(line: string): string | null {
   );
 }
 
-export function buildVkWhitelistCdnLink(line: string): string | null {
-  return buildWhitelistCdnLinkForHost(
-    line,
-    VK_WHITELIST_CDN_HOST,
-    VK_WHITELIST_CDN_PROFILE_NAME,
-    VK_WHITELIST_CDN_EXTRA,
-  );
-}
-
 export function subscriptionLinksForServer(
   line: string,
   server: Pick<XuiServerConfig, "code" | "name">
@@ -197,12 +175,8 @@ export function subscriptionLinksForServer(
     return [primary];
   }
 
-  const whitelistCdnLinks = [
-    buildWhitelistCdnLink(line),
-    buildVkWhitelistCdnLink(line),
-  ].filter((link): link is string => Boolean(link && link !== primary));
-
-  return [primary, ...whitelistCdnLinks];
+  const whitelistCdn = buildWhitelistCdnLink(line);
+  return whitelistCdn && whitelistCdn !== primary ? [primary, whitelistCdn] : [primary];
 }
 
 export function rewriteNativeHtml(body: Buffer, subId: string): Buffer {
