@@ -15,13 +15,13 @@ const SOURCE_LINK = [
   "#old-name",
 ].join("");
 
-test("adds the Russia-labelled whitelist CDN profile after the Netherlands profile", () => {
+test("adds optimized and reserve Russia-labelled CDN profiles after the Netherlands profile", () => {
   const links = subscriptionLinksForServer(SOURCE_LINK, {
     code: "nl",
     name: "🇳🇱 МОЖНО • Нидерланды",
   });
 
-  assert.equal(links.length, 2);
+  assert.equal(links.length, 3);
   assert.equal(
     decodeURIComponent(new URL(links[0]).hash.slice(1)),
     "🇳🇱 МОЖНО • Нидерланды",
@@ -50,6 +50,13 @@ test("adds the Russia-labelled whitelist CDN profile after the Netherlands profi
   const xmux = extra.xmux as Record<string, unknown>;
   assert.equal(xmux.maxConcurrency, "8-16");
   assert.equal("maxConnections" in xmux, false);
+
+  const reserve = new URL(links[2]);
+  assert.equal(decodeURIComponent(reserve.hash.slice(1)), "🇷🇺 МОЖНО • Белые списки — резерв");
+  const reserveExtra = JSON.parse(reserve.searchParams.get("extra") ?? "null") as Record<string, unknown>;
+  const reserveXmux = reserveExtra.xmux as Record<string, unknown>;
+  assert.equal(reserveXmux.maxConnections, "32-64");
+  assert.equal("maxConcurrency" in reserveXmux, false);
 });
 
 test("does not add the CDN profile to another server or a non-XHTTP link", () => {
@@ -89,6 +96,6 @@ test("adds the CDN profile to the native HTML subscription data", () => {
   const end = rewritten.indexOf(";</script>", start);
   const pageData = JSON.parse(rewritten.slice(start, end)) as { links: string[] };
 
-  assert.equal(pageData.links.length, 2);
+  assert.equal(pageData.links.length, 3);
   assert.equal(new URL(pageData.links[1]).hostname, "yc.cdn.mozhno.org");
 });
