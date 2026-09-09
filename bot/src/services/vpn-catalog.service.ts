@@ -70,6 +70,27 @@ export const INITIAL_VPN_INBOUND_CATALOG: readonly VpnInboundCatalogEntry[] = [
     name: "🇱🇻 МОЖНО • Роутер — Латвия",
     port: 10443,
   },
+  {
+    code: "paid-nl-direct",
+    serverCode: "nl",
+    providerInboundId: 6,
+    name: "🇳🇱 МОЖНО • Нидерланды",
+    port: 11443,
+  },
+  {
+    code: "paid-de-direct",
+    serverCode: "de",
+    providerInboundId: 4,
+    name: "🇩🇪 МОЖНО • Германия",
+    port: 11443,
+  },
+  {
+    code: "paid-lv-direct",
+    serverCode: "lv",
+    providerInboundId: 3,
+    name: "🇱🇻 МОЖНО • Латвия",
+    port: 11443,
+  },
 ] as const;
 
 export const INITIAL_VPN_PRODUCT_CATALOG: readonly VpnProductCatalogEntry[] = [
@@ -91,8 +112,8 @@ export const INITIAL_VPN_PRODUCT_CATALOG: readonly VpnProductCatalogEntry[] = [
     code: "paid",
     name: "МОЖНО VPN",
     accessPolicy: VpnProductAccessPolicy.PAID_BALANCE,
-    isActive: false,
-    inboundCodes: [],
+    isActive: true,
+    inboundCodes: ["paid-nl-direct", "club-nl-yandex-cdn", "paid-de-direct", "paid-lv-direct"],
   },
 ] as const;
 
@@ -175,6 +196,7 @@ export class VpnCatalogService {
           update: {
             name: item.name,
             accessPolicy: item.accessPolicy,
+            isActive: item.isActive,
           },
         });
 
