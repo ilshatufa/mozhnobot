@@ -17,6 +17,7 @@
     "import:telegram-messages": "tsx src/scripts/import-telegram-messages.ts",
     "sync:club-users": "tsx src/scripts/sync-known-club-users.ts",
     "sync:xray-users": "tsx src/scripts/sync-xray-users.ts",
+    "sync:vpn-access": "tsx src/scripts/sync-vpn-access.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",

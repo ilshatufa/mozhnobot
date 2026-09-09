@@ -49,6 +49,25 @@ enum VpnProvider {
   XUI
 }
 
+enum VpnProductAccessPolicy {
+  CLUB_MEMBERSHIP
+  PAID_BALANCE
+  MANUAL
+}
+
+enum VpnSubscriptionStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum VpnSubscriptionInboundStatus {
+  PENDING
+  PROVISIONING
+  ACTIVE
+  ERROR
+  DISABLED
+}
+
 enum ClubSearchRequestStatus {
   PENDING
   PROCESSING
@@ -78,8 +97,9 @@ model User {
   createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt    DateTime             @updatedAt @map("updated_at") @db.Timestamptz()
 
-  vpnKeys      VpnKey[]
-  clubInterest ClubInterest?
+  vpnKeys          VpnKey[]
+  vpnSubscriptions VpnSubscription[]
+  clubInterest     ClubInterest?
 
   @@index([clubStatus])
   @@index([botStatus])
@@ -108,36 +128,140 @@ model VpnServer {
   createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt  DateTime    @updatedAt @map("updated_at") @db.Timestamptz()
 
-  vpnKeys VpnKey[]
+  vpnKeys     VpnKey[]
+  vpnInbounds VpnInbound[]
 
   @@index([provider, isActive])
   @@map("vpn_servers")
 }
 
 model VpnKey {
-  id               Int          @id @default(autoincrement())
-  userId           Int          @map("user_id")
-  serverId         Int?         @map("server_id")
-  provider         VpnProvider  @default(XUI)
-  xuiClientId      String       @map("xui_client_id") @db.VarChar(255)
-  providerClientId String?      @map("provider_client_id") @db.VarChar(255)
-  providerPeerId   String?      @map("provider_peer_id") @db.VarChar(255)
-  subId            String?      @map("sub_id") @db.VarChar(128)
-  subscriptionUrl  String       @map("subscription_url")
-  trafficUsedBytes BigInt?      @map("traffic_used_bytes")
-  lastSyncedAt     DateTime?    @map("last_synced_at") @db.Timestamptz()
-  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz()
-  expiresAt        DateTime?    @map("expires_at") @db.Timestamptz()
-  isActive         Boolean      @default(true) @map("is_active")
+  id               Int         @id @default(autoincrement())
+  userId           Int         @map("user_id")
+  serverId         Int?        @map("server_id")
+  subscriptionId   Int?        @map("subscription_id")
+  provider         VpnProvider @default(XUI)
+  xuiClientId      String      @map("xui_client_id") @db.VarChar(255)
+  providerClientId String?     @map("provider_client_id") @db.VarChar(255)
+  providerPeerId   String?     @map("provider_peer_id") @db.VarChar(255)
+  subId            String?     @map("sub_id") @db.VarChar(128)
+  subscriptionUrl  String      @map("subscription_url")
+  trafficUsedBytes BigInt?     @map("traffic_used_bytes")
+  lastSyncedAt     DateTime?   @map("last_synced_at") @db.Timestamptz()
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+  expiresAt        DateTime?   @map("expires_at") @db.Timestamptz()
+  isActive         Boolean     @default(true) @map("is_active")
 
-  user   User       @relation(fields: [userId], references: [id])
-  server VpnServer? @relation(fields: [serverId], references: [id])
+  user          User                     @relation(fields: [userId], references: [id])
+  server        VpnServer?               @relation(fields: [serverId], references: [id])
+  subscription  VpnSubscription?         @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  inboundStates VpnSubscriptionInbound[]
 
+  @@unique([subscriptionId, serverId])
   @@index([userId, serverId, isActive])
   @@index([provider, isActive])
   @@index([subId])
   @@index([expiresAt])
   @@map("vpn_keys")
+}
+
+model VpnProduct {
+  id           Int                    @id @default(autoincrement())
+  code         String                 @unique @db.VarChar(80)
+  name         String                 @db.VarChar(255)
+  accessPolicy VpnProductAccessPolicy @map("access_policy")
+  isActive     Boolean                @default(true) @map("is_active")
+  revision     Int                    @default(1)
+  createdAt    DateTime               @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime               @updatedAt @map("updated_at") @db.Timestamptz()
+
+  inbounds      VpnProductInbound[]
+  subscriptions VpnSubscription[]
+
+  @@index([accessPolicy, isActive])
+  @@map("vpn_products")
+}
+
+model VpnInbound {
+  id                Int      @id @default(autoincrement())
+  serverId          Int      @map("server_id")
+  code              String   @unique @db.VarChar(120)
+  providerInboundId Int      @map("provider_inbound_id")
+  name              String   @db.VarChar(255)
+  port              Int
+  publicProfile     Json?    @map("public_profile")
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  server             VpnServer                @relation(fields: [serverId], references: [id], onDelete: Restrict)
+  products           VpnProductInbound[]
+  subscriptionStates VpnSubscriptionInbound[]
+
+  @@unique([serverId, providerInboundId])
+  @@index([serverId, isActive])
+  @@map("vpn_inbounds")
+}
+
+model VpnProductInbound {
+  productId  Int      @map("product_id")
+  inboundId  Int      @map("inbound_id")
+  position   Int
+  isRequired Boolean  @default(true) @map("is_required")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  product VpnProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  inbound VpnInbound @relation(fields: [inboundId], references: [id], onDelete: Restrict)
+
+  @@id([productId, inboundId])
+  @@unique([productId, position])
+  @@map("vpn_product_inbounds")
+}
+
+model VpnSubscription {
+  id              Int                   @id @default(autoincrement())
+  userId          Int                   @map("user_id")
+  productId       Int                   @map("product_id")
+  token           String                @unique @db.VarChar(128)
+  status          VpnSubscriptionStatus @default(ACTIVE)
+  expiresAt       DateTime?             @map("expires_at") @db.Timestamptz()
+  appliedRevision Int                   @default(0) @map("applied_revision")
+  lastSyncedAt    DateTime?             @map("last_synced_at") @db.Timestamptz()
+  lastError       String?               @map("last_error") @db.Text
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user          User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product       VpnProduct               @relation(fields: [productId], references: [id], onDelete: Restrict)
+  keys          VpnKey[]
+  inboundStates VpnSubscriptionInbound[]
+
+  @@unique([userId, productId])
+  @@index([productId, status])
+  @@index([status, expiresAt])
+  @@map("vpn_subscriptions")
+}
+
+model VpnSubscriptionInbound {
+  subscriptionId Int                          @map("subscription_id")
+  inboundId      Int                          @map("inbound_id")
+  keyId          Int?                         @map("key_id")
+  status         VpnSubscriptionInboundStatus @default(PENDING)
+  lastAttemptAt  DateTime?                    @map("last_attempt_at") @db.Timestamptz()
+  lastSyncedAt   DateTime?                    @map("last_synced_at") @db.Timestamptz()
+  lastError      String?                      @map("last_error") @db.Text
+  createdAt      DateTime                     @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime                     @updatedAt @map("updated_at") @db.Timestamptz()
+
+  subscription VpnSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  inbound      VpnInbound      @relation(fields: [inboundId], references: [id], onDelete: Restrict)
+  key          VpnKey?         @relation(fields: [keyId], references: [id], onDelete: SetNull)
+
+  @@id([subscriptionId, inboundId])
+  @@index([inboundId, status])
+  @@index([keyId])
+  @@map("vpn_subscription_inbounds")
 }
 
 model ClubTopic {
