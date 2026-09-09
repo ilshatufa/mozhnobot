@@ -70,7 +70,23 @@ test("adds the Russia-labelled whitelist CDN profiles after the Netherlands prof
     string,
     unknown
   >;
-  assert.deepEqual(vkExtra, extra);
+  assert.deepEqual(vkExtra, {
+    ...extra,
+    xmux: {
+      cMaxReuseTimes: "0",
+      maxConnections: "4-6",
+      hKeepAlivePeriod: 0,
+      hMaxRequestTimes: "600-900",
+      hMaxReusableSecs: "900-1800",
+    },
+  });
+  assert.deepEqual(extra.xmux, {
+    cMaxReuseTimes: "36-96",
+    maxConnections: "32-64",
+    hKeepAlivePeriod: 0,
+    hMaxRequestTimes: "320-640",
+    hMaxReusableSecs: "720-1800",
+  });
 });
 
 test("does not add the CDN profile to another server or a non-XHTTP link", () => {

@@ -51,6 +51,17 @@ const WHITELIST_CDN_EXTRA = {
   serverMaxHeaderBytes: 32768,
 } as const;
 
+const VK_WHITELIST_CDN_EXTRA = {
+  ...WHITELIST_CDN_EXTRA,
+  xmux: {
+    cMaxReuseTimes: "0",
+    maxConnections: "4-6",
+    hKeepAlivePeriod: 0,
+    hMaxRequestTimes: "600-900",
+    hMaxReusableSecs: "900-1800",
+  },
+} as const;
+
 type XuiKeyWithServer = VpnKey & {
   server: VpnServer | null;
 };
@@ -131,6 +142,7 @@ function buildWhitelistCdnLinkForHost(
   line: string,
   host: string,
   profileName: string,
+  extra: Record<string, unknown> = WHITELIST_CDN_EXTRA,
 ): string | null {
   try {
     const parsed = new URL(line);
@@ -147,7 +159,7 @@ function buildWhitelistCdnLinkForHost(
     parsed.searchParams.set("path", WHITELIST_CDN_PATH);
     parsed.searchParams.set("mode", "packet-up");
     parsed.searchParams.set("alpn", "h2");
-    parsed.searchParams.set("extra", JSON.stringify(WHITELIST_CDN_EXTRA));
+    parsed.searchParams.set("extra", JSON.stringify(extra));
     parsed.searchParams.delete("flow");
     parsed.searchParams.delete("pbk");
     parsed.searchParams.delete("sid");
@@ -172,6 +184,7 @@ export function buildVkWhitelistCdnLink(line: string): string | null {
     line,
     VK_WHITELIST_CDN_HOST,
     VK_WHITELIST_CDN_PROFILE_NAME,
+    VK_WHITELIST_CDN_EXTRA,
   );
 }
 
