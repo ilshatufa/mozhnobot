@@ -15,13 +15,13 @@ const SOURCE_LINK = [
   "#old-name",
 ].join("");
 
-test("adds the Russia-labelled whitelist CDN profile after the Netherlands profile", () => {
+test("adds iPhone and reserve Russia-labelled CDN profiles after the Netherlands profile", () => {
   const links = subscriptionLinksForServer(SOURCE_LINK, {
     code: "nl",
     name: "🇳🇱 МОЖНО • Нидерланды",
   });
 
-  assert.equal(links.length, 2);
+  assert.equal(links.length, 3);
   assert.equal(
     decodeURIComponent(new URL(links[0]).hash.slice(1)),
     "🇳🇱 МОЖНО • Нидерланды",
@@ -40,13 +40,19 @@ test("adds the Russia-labelled whitelist CDN profile after the Netherlands profi
   assert.equal(cdn.searchParams.get("alpn"), "h2");
   assert.equal(cdn.searchParams.get("fp"), "chrome");
   assert.equal(cdn.searchParams.has("flow"), false);
-  assert.equal(decodeURIComponent(cdn.hash.slice(1)), "🇷🇺 МОЖНО • Белые списки — Нидерланды");
+  assert.equal(decodeURIComponent(cdn.hash.slice(1)), "🇷🇺 МОЖНО • Белые списки — iPhone");
 
   const extra = JSON.parse(cdn.searchParams.get("extra") ?? "null") as Record<string, unknown>;
   assert.equal(extra.uplinkDataPlacement, "header");
   assert.equal(extra.uplinkDataKey, "X-Playback-Token");
   assert.equal(extra.uplinkHTTPMethod, "GET");
   assert.equal(extra.serverMaxHeaderBytes, 32768);
+  assert.deepEqual((extra.xmux as Record<string, unknown>).maxConnections, "3-6");
+
+  const reserve = new URL(links[2]);
+  const reserveExtra = JSON.parse(reserve.searchParams.get("extra") ?? "null") as Record<string, unknown>;
+  assert.equal(decodeURIComponent(reserve.hash.slice(1)), "🇷🇺 МОЖНО • Белые списки — Нидерланды");
+  assert.deepEqual((reserveExtra.xmux as Record<string, unknown>).maxConnections, "32-64");
 });
 
 test("does not add the CDN profile to another server or a non-XHTTP link", () => {
@@ -86,6 +92,7 @@ test("adds the CDN profile to the native HTML subscription data", () => {
   const end = rewritten.indexOf(";</script>", start);
   const pageData = JSON.parse(rewritten.slice(start, end)) as { links: string[] };
 
-  assert.equal(pageData.links.length, 2);
+  assert.equal(pageData.links.length, 3);
   assert.equal(new URL(pageData.links[1]).hostname, "yc.cdn.mozhno.org");
+  assert.equal(new URL(pageData.links[2]).hostname, "yc.cdn.mozhno.org");
 });
