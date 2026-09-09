@@ -7,6 +7,10 @@ import {
   buildVpnAccessSyncPlan,
   type VpnAccessSyncPlan,
 } from "./vpn-access-sync-plan.js";
+import {
+  vpnAccessProvisioner,
+  type VpnAccessProvisioningResult,
+} from "./vpn-access-provisioner.js";
 
 export interface PaidVpnAccessProvider {
   hasAccess(subscription: VpnSubscriptionForSync, now: Date): Promise<boolean>;
@@ -23,6 +27,7 @@ export interface PlannedVpnSubscriptionSync {
   userId: number;
   productCode: string;
   plan: VpnAccessSyncPlan;
+  provisioning?: VpnAccessProvisioningResult;
 }
 
 export class VpnAccessSyncService {
@@ -59,6 +64,37 @@ export class VpnAccessSyncService {
     }
 
     return result;
+  }
+
+  async sync(filters: {
+    subscriptionId?: number;
+    userId?: number;
+    now?: Date;
+  } = {}): Promise<PlannedVpnSubscriptionSync[]> {
+    const plans = await this.buildPlan(filters);
+
+    for (const item of plans) {
+      const [subscription] = await vpnSubscriptionRepository.findManyForSync({
+        subscriptionId: item.subscriptionId,
+      });
+      if (!subscription) {
+        item.provisioning = {
+          success: false,
+          errors: [`VPN subscription ${item.subscriptionId} disappeared before provisioning`],
+        };
+        continue;
+      }
+      try {
+        item.provisioning = await vpnAccessProvisioner.apply(subscription, item.plan);
+      } catch (err) {
+        item.provisioning = {
+          success: false,
+          errors: [err instanceof Error ? err.message : String(err)],
+        };
+      }
+    }
+
+    return plans;
   }
 }
 

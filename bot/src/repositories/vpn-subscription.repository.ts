@@ -6,12 +6,26 @@ const vpnSubscriptionForSync = {
   product: {
     include: {
       inbounds: {
-        include: { inbound: true },
+        include: {
+          inbound: {
+            include: { server: true },
+          },
+        },
         orderBy: { position: "asc" },
       },
     },
   },
-  inboundStates: true,
+  keys: {
+    include: { server: true },
+    orderBy: { id: "asc" },
+  },
+  inboundStates: {
+    include: {
+      inbound: {
+        include: { server: true },
+      },
+    },
+  },
 } satisfies Prisma.VpnSubscriptionInclude;
 
 export type VpnSubscriptionForSync = Prisma.VpnSubscriptionGetPayload<{

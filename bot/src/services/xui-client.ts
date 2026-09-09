@@ -43,6 +43,23 @@ interface XuiBulkSetEnableResult {
   skipped?: Array<{ email?: unknown; reason?: unknown }>;
 }
 
+interface XuiClientRecordResponse {
+  client?: {
+    id?: unknown;
+    uuid?: unknown;
+    email?: unknown;
+    subId?: unknown;
+  };
+  inboundIds?: unknown;
+}
+
+export interface XuiManagedClient {
+  clientId: string | null;
+  email: string;
+  subId: string | null;
+  inboundIds: number[];
+}
+
 interface XuiSession {
   cookie: string;
   csrfToken: string | null;
@@ -289,11 +306,21 @@ export class XuiClient {
     telegramId: bigint,
     username: string | null,
     expiryTime: number,
-    trafficLimitBytes: bigint | null
+    trafficLimitBytes: bigint | null,
+    options: {
+      email?: string;
+      inboundIds?: number[];
+    } = {},
   ): Promise<{ clientId: string; email: string; subId: string }> {
     const clientId = randomUUID();
-    const email = this.buildClientEmail(telegramId, username);
+    const email = options.email ?? this.buildClientEmail(telegramId, username);
     const subId = this.generateSubId();
+    const inboundIds = options.inboundIds === undefined
+      ? xuiInboundIdsForNewClient(server)
+      : [...new Set(options.inboundIds.filter((id) => Number.isInteger(id) && id > 0))];
+    if (inboundIds.length === 0) {
+      throw new Error(`3X-UI ${server.code} addClient requires at least one inbound ID`);
+    }
     const clientSettings = this.buildClientSettings(
       clientId,
       email,
@@ -309,7 +336,7 @@ export class XuiClient {
           method: "POST",
           body: JSON.stringify({
             client: clientSettings,
-            inboundIds: xuiInboundIdsForNewClient(server),
+            inboundIds,
           }),
         })
       : await this.request(server, "/panel/api/inbounds/addClient", {
@@ -327,6 +354,22 @@ export class XuiClient {
 
     const data = await res.json() as XuiApiResponse;
     if (!data.success) {
+      if (this.isClientsApi(server)) {
+        const existing = await this.getClient(server, email);
+        const missingInboundIds = inboundIds.filter((id) => !existing.inboundIds.includes(id));
+        await this.attachClientToInbounds(server, email, missingInboundIds);
+        await this.setClientEnabled(server, email, true);
+        if (!existing.clientId || !existing.subId) {
+          throw new Error(`3X-UI ${server.code} existing client ${email} has no UUID or subscription ID`);
+        }
+        logger.warn(`3X-UI ${server.code} addClient conflict resolved by clients API lookup (${email})`);
+        return {
+          clientId: existing.clientId,
+          email,
+          subId: existing.subId,
+        };
+      }
+
       const existingClients = await this.listInboundClients(server);
       const byEmail = existingClients.find((client) => client.email === email);
       const prefix = `tg_${telegramId}`;
@@ -351,6 +394,18 @@ export class XuiClient {
       }
 
       throw new Error(`3X-UI ${server.code} addClient returned success=false: ${data.msg ?? "unknown reason"}`);
+    }
+
+    if (this.isClientsApi(server)) {
+      const persisted = await this.getClient(server, email);
+      if (!persisted.clientId || !persisted.subId) {
+        throw new Error(`3X-UI ${server.code} created client ${email} has no UUID or subscription ID`);
+      }
+      return {
+        clientId: persisted.clientId,
+        email,
+        subId: persisted.subId,
+      };
     }
 
     return { clientId, email, subId };
@@ -432,6 +487,10 @@ export class XuiClient {
   }
 
   async getClientInboundIds(server: XuiServerConfig, email: string): Promise<number[]> {
+    return (await this.getClient(server, email)).inboundIds;
+  }
+
+  async getClient(server: XuiServerConfig, email: string): Promise<XuiManagedClient> {
     if (!this.isClientsApi(server)) {
       throw new Error(`3X-UI ${server.code} does not support clients attachment API`);
     }
@@ -442,17 +501,30 @@ export class XuiClient {
       throw new Error(`3X-UI ${server.code} getClient failed: ${res.status} ${body}`);
     }
 
-    const data = await res.json() as XuiApiResponse<{ inboundIds?: unknown }>;
+    const data = await res.json() as XuiApiResponse<XuiClientRecordResponse>;
     if (!data.success) {
       throw new Error(`3X-UI ${server.code} getClient returned success=false: ${data.msg ?? "unknown reason"}`);
     }
 
-    if (!Array.isArray(data.obj?.inboundIds)) return [];
-    return [...new Set(
-      data.obj.inboundIds.filter(
-        (value): value is number => typeof value === "number" && Number.isInteger(value) && value > 0,
-      ),
-    )];
+    const inboundIds = Array.isArray(data.obj?.inboundIds)
+      ? [...new Set(
+          data.obj.inboundIds.filter(
+            (value): value is number => typeof value === "number" && Number.isInteger(value) && value > 0,
+          ),
+        )]
+      : [];
+    const clientId = typeof data.obj?.client?.uuid === "string"
+      ? data.obj.client.uuid
+      : typeof data.obj?.client?.id === "string"
+        ? data.obj.client.id
+        : null;
+
+    return {
+      clientId,
+      email: typeof data.obj?.client?.email === "string" ? data.obj.client.email : email,
+      subId: typeof data.obj?.client?.subId === "string" ? data.obj.client.subId : null,
+      inboundIds,
+    };
   }
 
   async attachClientToInbounds(server: XuiServerConfig, email: string, inboundIds: number[]): Promise<void> {

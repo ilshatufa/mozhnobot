@@ -23,6 +23,9 @@ const envSchema = z.object({
   XRAY_SUBSCRIPTION_FILE_NAME_UTF8: z.string().min(1).default("МОЖНО VPN.txt"),
   XRAY_SUBSCRIPTION_UPDATE_INTERVAL_HOURS: z.coerce.number().int().positive().default(12),
   XRAY_TRAFFIC_SYNC_INTERVAL_MS: z.coerce.number().int().positive().default(300000),
+  VPN_ACCESS_SYNC_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  VPN_ACCESS_SYNC_INTERVAL_MS: z.coerce.number().int().positive().default(86400000),
+  VPN_ACCESS_SYNC_INITIAL_DELAY_MS: z.coerce.number().int().positive().default(60000),
   XRAY_SUBSCRIPTION_JSON_USER_AGENT_PATTERN: z.string().min(1).default("(v2box|incy)"),
   XRAY_SUBSCRIPTION_JSON_RU_DNS: z.string().min(1).default("77.88.8.8"),
   XRAY_SUBSCRIPTION_JSON_REMOTE_DNS: z.string().min(1).default("https://1.1.1.1/dns-query"),
@@ -203,5 +206,11 @@ export const config = {
     jsonBlockUdp443: env.XRAY_SUBSCRIPTION_JSON_BLOCK_UDP_443,
     jsonDirectDomains: parseStringArrayEnv(env.XRAY_SUBSCRIPTION_JSON_DIRECT_DOMAINS_JSON, defaultXrayDirectDomains, "XRAY_SUBSCRIPTION_JSON_DIRECT_DOMAINS_JSON"),
     jsonPrivateIps: parseStringArrayEnv(env.XRAY_SUBSCRIPTION_JSON_PRIVATE_IPS_JSON, defaultXrayPrivateIps, "XRAY_SUBSCRIPTION_JSON_PRIVATE_IPS_JSON"),
+  },
+
+  vpnAccessSync: {
+    enabled: env.VPN_ACCESS_SYNC_ENABLED,
+    intervalMs: env.VPN_ACCESS_SYNC_INTERVAL_MS,
+    initialDelayMs: env.VPN_ACCESS_SYNC_INITIAL_DELAY_MS,
   },
 } as const;

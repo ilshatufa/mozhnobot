@@ -52,6 +52,7 @@ export class VpnKeyRepository {
   async create(data: {
     userId: number;
     serverId: number;
+    subscriptionId?: number;
     provider: VpnProvider;
     xuiClientId: string;
     providerClientId: string;
@@ -61,6 +62,16 @@ export class VpnKeyRepository {
     expiresAt: Date | null;
   }): Promise<VpnKey> {
     return prisma.vpnKey.create({ data });
+  }
+
+  async findBySubscriptionAndServer(subscriptionId: number, serverId: number): Promise<VpnKey | null> {
+    return prisma.vpnKey.findUnique({
+      where: { subscriptionId_serverId: { subscriptionId, serverId } },
+    });
+  }
+
+  async setActive(id: number, isActive: boolean): Promise<void> {
+    await prisma.vpnKey.update({ where: { id }, data: { isActive } });
   }
 
   async updateSubscription(id: number, subId: string, subscriptionUrl: string): Promise<VpnKey> {

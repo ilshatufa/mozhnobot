@@ -11,27 +11,34 @@ function positiveIntArgument(name: string): number | undefined {
 }
 
 async function main(): Promise<void> {
-  if (!process.argv.includes("--dry-run")) {
-    throw new Error(
-      "The first implementation stage is plan-only. Use --dry-run; XUI changes stay disabled until the provisioner and backfill are verified.",
-    );
-  }
+  const dryRun = process.argv.includes("--dry-run");
+  const apply = process.argv.includes("--apply");
+  if (dryRun === apply) throw new Error("Choose exactly one mode: --dry-run or --apply");
 
   await prisma.$connect();
-  const plans = await vpnAccessSyncService.buildPlan({
-    subscriptionId: positiveIntArgument("--subscription-id"),
-    userId: positiveIntArgument("--user-id"),
-  });
+  const subscriptionId = positiveIntArgument("--subscription-id");
+  const userId = positiveIntArgument("--user-id");
+  if (apply && subscriptionId === undefined && userId === undefined && !process.argv.includes("--all")) {
+    throw new Error("Apply mode requires --subscription-id, --user-id or explicit --all");
+  }
+
+  const filters = { subscriptionId, userId };
+  const plans = dryRun
+    ? await vpnAccessSyncService.buildPlan(filters)
+    : await vpnAccessSyncService.sync(filters);
 
   let actionCount = 0;
   for (const item of plans) {
     actionCount += item.plan.actions.length;
     logger.info("VPN access sync plan", item);
   }
-  logger.info("VPN access sync dry-run complete", {
+  const failed = plans.filter((item) => item.provisioning?.success === false).length;
+  logger.info(`VPN access sync ${dryRun ? "dry-run" : "apply"} complete`, {
     subscriptions: plans.length,
     actions: actionCount,
+    failed,
   });
+  if (failed > 0) process.exitCode = 1;
 }
 
 main()

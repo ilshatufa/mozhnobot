@@ -4,6 +4,7 @@ import { config } from "./config.js";
 import { prisma } from "./database.js";
 import { logger } from "./logger.js";
 import { registerProcessErrorHandlers } from "./error-handling.js";
+import { vpnAccessSyncService } from "./services/vpn-access-sync.service.js";
 import { xraySubscriptionService } from "./services/xray-subscription.service.js";
 
 const SUB_PATH_RE = /^\/sub\/([A-Za-z0-9._~-]+)$/;
@@ -87,6 +88,7 @@ async function main(): Promise<void> {
   await prisma.$connect();
   let shuttingDown = false;
   let trafficSyncTimer: NodeJS.Timeout | null = null;
+  let accessSyncTimer: NodeJS.Timeout | null = null;
 
   const scheduleTrafficSync = (delayMs: number) => {
     trafficSyncTimer = setTimeout(async () => {
@@ -97,6 +99,24 @@ async function main(): Promise<void> {
       } finally {
         if (!shuttingDown) {
           scheduleTrafficSync(config.xraySubscription.trafficSyncIntervalMs);
+        }
+      }
+    }, delayMs);
+  };
+
+  const scheduleAccessSync = (delayMs: number) => {
+    accessSyncTimer = setTimeout(async () => {
+      try {
+        const results = await vpnAccessSyncService.sync();
+        logger.info("Periodic VPN access synchronization complete", {
+          subscriptions: results.length,
+          failed: results.filter((item) => item.provisioning?.success === false).length,
+        });
+      } catch (err) {
+        logger.error("Periodic VPN access synchronization failed", err);
+      } finally {
+        if (!shuttingDown) {
+          scheduleAccessSync(config.vpnAccessSync.intervalMs);
         }
       }
     }, delayMs);
@@ -116,6 +136,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string) => {
     shuttingDown = true;
     if (trafficSyncTimer) clearTimeout(trafficSyncTimer);
+    if (accessSyncTimer) clearTimeout(accessSyncTimer);
     logger.info(`${signal} received, shutting down xray subscription server...`);
     server.close(async () => {
       await prisma.$disconnect();
@@ -134,6 +155,9 @@ async function main(): Promise<void> {
       publicBaseUrl: config.vpnServers.xui.multiSubBaseUrl || null,
     });
     scheduleTrafficSync(1000);
+    if (config.vpnAccessSync.enabled) {
+      scheduleAccessSync(config.vpnAccessSync.initialDelayMs);
+    }
   });
 }
 
