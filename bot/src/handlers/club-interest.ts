@@ -43,7 +43,7 @@ export async function waitlistHandler(ctx: AuthContext): Promise<void> {
 
   await clubInterestRepository.recordWaitlisted(ctx.dbUser.id);
   await ctx.editMessageText(
-    "спасибо, вот тебе методичка нашего клуба «Все фишки Авито»",
+    "Спасибо! Лови методичку нашего клуба «Все фишки Авито» 👋",
     Markup.inlineKeyboard([
       Markup.button.callback("Получить методичку", CLUB_AVITO_GUIDE_ACTION),
     ]),
