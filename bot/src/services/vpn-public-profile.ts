@@ -5,51 +5,61 @@ export interface VpnPublicProfileOverride {
   removeQuery?: string[];
 }
 
-export const YANDEX_CDN_PUBLIC_PROFILE = {
-  host: "yc.cdn.mozhno.org",
-  port: 443,
-  query: {
-    type: "xhttp",
-    security: "tls",
-    sni: "yc.cdn.mozhno.org",
-    host: "yc.cdn.mozhno.org",
-    path: "/api/upload",
-    mode: "packet-up",
-    alpn: "h2",
-    fp: "chrome",
-    extra: {
-      xmux: {
-        cMaxReuseTimes: "36-96",
-        maxConnections: "32-64",
-        hKeepAlivePeriod: 0,
-        hMaxRequestTimes: "320-640",
-        hMaxReusableSecs: "720-1800",
+function yandexCdnPublicProfile(host: string): VpnPublicProfileOverride {
+  return {
+    host,
+    port: 443,
+    query: {
+      type: "xhttp",
+      security: "tls",
+      sni: host,
+      host,
+      path: "/api/upload",
+      mode: "packet-up",
+      alpn: "h2",
+      fp: "chrome",
+      extra: {
+        xmux: {
+          cMaxReuseTimes: "36-96",
+          maxConnections: "32-64",
+          hKeepAlivePeriod: 0,
+          hMaxRequestTimes: "320-640",
+          hMaxReusableSecs: "720-1800",
+        },
+        seqKey: "offset",
+        headers: {
+          Accept: "application/vnd.api+json, application/json, text/plain, */*",
+          Pragma: "no-cache",
+          "Cache-Control": "no-cache",
+          "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+        },
+        xPaddingKey: "q",
+        seqPlacement: "query",
+        uplinkDataKey: "X-Playback-Token",
+        xPaddingBytes: "48-320",
+        xPaddingHeader: "X-Rewrite-URL",
+        xPaddingMethod: "tokenish",
+        uplinkHTTPMethod: "GET",
+        xPaddingObfsMode: true,
+        xPaddingPlacement: "queryInHeader",
+        scMaxBufferedPosts: 2048,
+        scMaxEachPostBytes: "4000-5000",
+        uplinkDataPlacement: "header",
+        scMinPostsIntervalMs: "4-18",
+        serverMaxHeaderBytes: 32768,
       },
-      seqKey: "offset",
-      headers: {
-        Accept: "application/vnd.api+json, application/json, text/plain, */*",
-        Pragma: "no-cache",
-        "Cache-Control": "no-cache",
-        "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
-      },
-      xPaddingKey: "q",
-      seqPlacement: "query",
-      uplinkDataKey: "X-Playback-Token",
-      xPaddingBytes: "48-320",
-      xPaddingHeader: "X-Rewrite-URL",
-      xPaddingMethod: "tokenish",
-      uplinkHTTPMethod: "GET",
-      xPaddingObfsMode: true,
-      xPaddingPlacement: "queryInHeader",
-      scMaxBufferedPosts: 2048,
-      scMaxEachPostBytes: "4000-5000",
-      uplinkDataPlacement: "header",
-      scMinPostsIntervalMs: "4-18",
-      serverMaxHeaderBytes: 32768,
     },
-  },
-  removeQuery: ["flow", "pbk", "sid", "spx"],
-} satisfies VpnPublicProfileOverride;
+    removeQuery: ["flow", "pbk", "sid", "spx"],
+  };
+}
+
+export const YANDEX_CDN_PUBLIC_PROFILE = yandexCdnPublicProfile(
+  "mozhnoclub.yc.cdn.mozhno.org",
+);
+
+export const PAID_YANDEX_CDN_PUBLIC_PROFILE = yandexCdnPublicProfile(
+  "paid.yc.cdn.mozhno.org",
+);
 
 export function parseVpnPublicProfile(value: unknown): VpnPublicProfileOverride | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;

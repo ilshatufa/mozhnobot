@@ -108,7 +108,8 @@ export class XuiClient {
     server: XuiServerConfig,
     expiryTime: number,
     trafficLimitBytes: bigint | null,
-    enable: boolean
+    enable: boolean,
+    trafficResetDays = 0,
   ): XuiClientSettings {
     return {
       id: clientId,
@@ -119,7 +120,7 @@ export class XuiClient {
       expiryTime,
       totalGB: this.formatTrafficLimitBytes(trafficLimitBytes),
       security: "auto",
-      reset: 0,
+      reset: trafficResetDays,
       limitIp: 0,
       tgId: 0,
       group: "",
@@ -310,6 +311,7 @@ export class XuiClient {
     options: {
       email?: string;
       inboundIds?: number[];
+      trafficResetDays?: number;
     } = {},
   ): Promise<{ clientId: string; email: string; subId: string }> {
     const clientId = randomUUID();
@@ -328,7 +330,8 @@ export class XuiClient {
       server,
       expiryTime,
       trafficLimitBytes,
-      true
+      true,
+      options.trafficResetDays ?? 0,
     );
 
     const res = this.isClientsApi(server)
@@ -362,6 +365,16 @@ export class XuiClient {
         if (!existing.clientId || !existing.subId) {
           throw new Error(`3X-UI ${server.code} existing client ${email} has no UUID or subscription ID`);
         }
+        await this.updateClientSubscription(
+          server,
+          existing.clientId,
+          email,
+          email,
+          expiryTime,
+          existing.subId,
+          trafficLimitBytes,
+          options.trafficResetDays ?? 0,
+        );
         logger.warn(`3X-UI ${server.code} addClient conflict resolved by clients API lookup (${email})`);
         return {
           clientId: existing.clientId,
@@ -387,7 +400,8 @@ export class XuiClient {
           email,
           expiryTime,
           resolvedSubId,
-          trafficLimitBytes
+          trafficLimitBytes,
+          options.trafficResetDays ?? 0,
         );
         logger.warn(`3X-UI ${server.code} addClient conflict resolved by existing client ${existing.id} (${existing.email})`);
         return { clientId: existing.id, email, subId: resolvedSubId };
@@ -418,7 +432,8 @@ export class XuiClient {
     email: string,
     expiryTime: number,
     subId: string,
-    trafficLimitBytes: bigint | null
+    trafficLimitBytes: bigint | null,
+    trafficResetDays = 0,
   ): Promise<void> {
     const clientSettings = this.buildClientSettings(
       xuiClientId,
@@ -427,7 +442,8 @@ export class XuiClient {
       server,
       expiryTime,
       trafficLimitBytes,
-      true
+      true,
+      trafficResetDays,
     );
 
     const res = this.isClientsApi(server)

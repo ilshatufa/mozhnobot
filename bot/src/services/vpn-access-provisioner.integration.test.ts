@@ -20,6 +20,8 @@ interface FakeClient {
   subId: string;
   inboundIds: number[];
   enable: boolean;
+  totalGB: number;
+  reset: number;
 }
 
 test("provisions, disables, restores and changes product inbounds", {
@@ -44,7 +46,23 @@ test("provisions, disables, restores and changes product inbounds", {
         subId: String(body.client.subId),
         inboundIds: body.inboundIds,
         enable: true,
+        totalGB: Number(body.client.totalGB),
+        reset: Number(body.client.reset),
       });
+      send({ success: true });
+      return;
+    }
+
+    const updateMatch = path.match(/^\/panel\/api\/clients\/update\/(.+)$/);
+    if (req.method === "POST" && updateMatch) {
+      const email = decodeURIComponent(updateMatch[1]);
+      const client = clients.get(email);
+      assert.ok(client);
+      client.uuid = String(body.id);
+      client.subId = String(body.subId);
+      client.enable = Boolean(body.enable);
+      client.totalGB = Number(body.totalGB);
+      client.reset = Number(body.reset);
       send({ success: true });
       return;
     }
@@ -220,6 +238,45 @@ test("provisions, disables, restores and changes product inbounds", {
         },
       },
     }).then((state) => state.status), VpnSubscriptionInboundStatus.DISABLED);
+
+    const directUuid = client?.uuid;
+    await prisma.$transaction([
+      prisma.vpnProductInbound.update({
+        where: { productId_inboundId: { productId: product.id, inboundId: inbounds[0].id } },
+        data: { clientGroup: "direct" },
+      }),
+      prisma.vpnProductInbound.update({
+        where: { productId_inboundId: { productId: product.id, inboundId: inbounds[2].id } },
+        data: { clientGroup: "direct" },
+      }),
+      prisma.vpnProductInbound.create({
+        data: {
+          productId: product.id,
+          inboundId: inbounds[1].id,
+          position: 2,
+          clientGroup: "whitelist",
+          trafficLimitBytes: 1024n ** 3n,
+          trafficResetDays: 30,
+        },
+      }),
+      prisma.vpnProduct.update({ where: { id: product.id }, data: { revision: 4 } }),
+    ]);
+    result = await vpnAccessSyncService.sync({ subscriptionId: subscription.id });
+    assert.equal(result[0]?.provisioning?.success, true);
+    const splitKeys = await prisma.vpnKey.findMany({
+      where: { subscriptionId: subscription.id },
+      orderBy: { clientGroup: "asc" },
+    });
+    assert.deepEqual(splitKeys.map((item) => item.clientGroup), ["direct", "whitelist"]);
+    const directClient = clients.get(splitKeys[0].providerClientId ?? "");
+    const whitelistClient = clients.get(splitKeys[1].providerClientId ?? "");
+    assert.equal(directClient?.uuid, directUuid);
+    assert.deepEqual(directClient?.inboundIds, [1, 7]);
+    assert.equal(directClient?.totalGB, 0);
+    assert.equal(directClient?.reset, 0);
+    assert.deepEqual(whitelistClient?.inboundIds, [5]);
+    assert.equal(whitelistClient?.totalGB, Number(1024n ** 3n));
+    assert.equal(whitelistClient?.reset, 30);
 
     const paidProductCode = `paid-integration-${randomUUID()}`;
     await prisma.vpnProduct.create({

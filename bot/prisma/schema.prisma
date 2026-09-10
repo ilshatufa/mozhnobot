@@ -145,6 +145,7 @@ model VpnKey {
   userId           Int         @map("user_id")
   serverId         Int?        @map("server_id")
   subscriptionId   Int?        @map("subscription_id")
+  clientGroup      String      @default("default") @map("client_group") @db.VarChar(40)
   provider         VpnProvider @default(XUI)
   xuiClientId      String      @map("xui_client_id") @db.VarChar(255)
   providerClientId String?     @map("provider_client_id") @db.VarChar(255)
@@ -162,7 +163,7 @@ model VpnKey {
   subscription  VpnSubscription?              @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
   inboundStates VpnSubscriptionInboundState[]
 
-  @@unique([subscriptionId, serverId])
+  @@unique([subscriptionId, serverId, clientGroup])
   @@index([userId, serverId, isActive])
   @@index([provider, isActive])
   @@index([subId])
@@ -209,12 +210,15 @@ model VpnInbound {
 }
 
 model VpnProductInbound {
-  productId  Int      @map("product_id")
-  inboundId  Int      @map("inbound_id")
-  position   Int
-  isRequired Boolean  @default(true) @map("is_required")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  productId         Int      @map("product_id")
+  inboundId         Int      @map("inbound_id")
+  position          Int
+  isRequired        Boolean  @default(true) @map("is_required")
+  clientGroup       String   @default("default") @map("client_group") @db.VarChar(40)
+  trafficLimitBytes BigInt?  @map("traffic_limit_bytes")
+  trafficResetDays  Int      @default(0) @map("traffic_reset_days")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
   product VpnProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
   inbound VpnInbound @relation(fields: [inboundId], references: [id], onDelete: Restrict)
@@ -271,14 +275,14 @@ model VpnSubscriptionInboundState {
 }
 
 model VpnPendingAccessGrant {
-  id                    Int       @id @default(autoincrement())
-  username              String    @db.VarChar(32)
-  normalizedUsername    String    @unique @map("normalized_username") @db.VarChar(32)
-  grantedByTelegramId   BigInt    @map("granted_by_telegram_id")
-  claimedByUserId       Int?      @map("claimed_by_user_id")
-  claimedAt             DateTime? @map("claimed_at") @db.Timestamptz()
-  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  id                  Int       @id @default(autoincrement())
+  username            String    @db.VarChar(32)
+  normalizedUsername  String    @unique @map("normalized_username") @db.VarChar(32)
+  grantedByTelegramId BigInt    @map("granted_by_telegram_id")
+  claimedByUserId     Int?      @map("claimed_by_user_id")
+  claimedAt           DateTime? @map("claimed_at") @db.Timestamptz()
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
 
   @@index([claimedAt])
   @@map("vpn_pending_access_grants")
@@ -403,23 +407,23 @@ model BotSetting {
 }
 
 model ClubSearchRequest {
-  id                    String                  @id @default(uuid()) @db.Uuid
-  requesterTelegramId   BigInt                  @map("requester_telegram_id")
-  telegramChatId        BigInt                  @map("telegram_chat_id")
-  progressMessageId     Int                     @map("progress_message_id")
-  question              String                  @db.Text
-  status                ClubSearchRequestStatus @default(PENDING)
-  activeKey             String?                 @unique @map("active_key") @db.VarChar(32)
-  progressStage         Int                     @default(0) @map("progress_stage")
-  answer                String?                 @db.Text
-  sourceMessageIds      Int[]                   @default([]) @map("source_message_ids")
-  errorCode             String?                 @map("error_code") @db.VarChar(64)
-  attempts              Int                     @default(0)
-  startedAt             DateTime?               @map("started_at") @db.Timestamptz()
-  completedAt           DateTime?               @map("completed_at") @db.Timestamptz()
-  deliveredAt           DateTime?               @map("delivered_at") @db.Timestamptz()
-  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt             DateTime                @updatedAt @map("updated_at") @db.Timestamptz()
+  id                  String                  @id @default(uuid()) @db.Uuid
+  requesterTelegramId BigInt                  @map("requester_telegram_id")
+  telegramChatId      BigInt                  @map("telegram_chat_id")
+  progressMessageId   Int                     @map("progress_message_id")
+  question            String                  @db.Text
+  status              ClubSearchRequestStatus @default(PENDING)
+  activeKey           String?                 @unique @map("active_key") @db.VarChar(32)
+  progressStage       Int                     @default(0) @map("progress_stage")
+  answer              String?                 @db.Text
+  sourceMessageIds    Int[]                   @default([]) @map("source_message_ids")
+  errorCode           String?                 @map("error_code") @db.VarChar(64)
+  attempts            Int                     @default(0)
+  startedAt           DateTime?               @map("started_at") @db.Timestamptz()
+  completedAt         DateTime?               @map("completed_at") @db.Timestamptz()
+  deliveredAt         DateTime?               @map("delivered_at") @db.Timestamptz()
+  createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt           DateTime                @updatedAt @map("updated_at") @db.Timestamptz()
 
   @@index([status, createdAt])
   @@index([requesterTelegramId, createdAt])

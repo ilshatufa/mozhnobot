@@ -3,10 +3,12 @@ import test from "node:test";
 import { VpnSubscriptionInboundStatus } from "@prisma/client";
 import {
   hasCompleteRequiredInbounds,
+  mapProviderLinksByInbound,
   outboundFromUri,
   rewriteNativeHtml,
 } from "./xray-subscription.service.js";
 import {
+  PAID_YANDEX_CDN_PUBLIC_PROFILE,
   renderVpnInboundProfile,
   YANDEX_CDN_PUBLIC_PROFILE,
 } from "./vpn-public-profile.js";
@@ -45,6 +47,19 @@ test("requires every active required inbound before rendering a subscription", (
   }), false);
 });
 
+test("uses a separate Yandex CDN domain for the paid whitelist", () => {
+  const paid = new URL(renderVpnInboundProfile(
+    SOURCE_LINK.replace(":443", ":12443"),
+    "🇷🇺 МОЖНО • Белые списки — Нидерланды",
+    PAID_YANDEX_CDN_PUBLIC_PROFILE,
+  ));
+
+  assert.equal(paid.hostname, "paid.yc.cdn.mozhno.org");
+  assert.equal(paid.port, "443");
+  assert.equal(paid.searchParams.get("sni"), "paid.yc.cdn.mozhno.org");
+  assert.equal(paid.searchParams.get("host"), "paid.yc.cdn.mozhno.org");
+});
+
 test("renders direct and CDN profiles from explicit inbound metadata", () => {
   const links = [
     renderVpnInboundProfile(SOURCE_LINK, "🇳🇱 МОЖНО • Нидерланды", null),
@@ -62,12 +77,12 @@ test("renders direct and CDN profiles from explicit inbound metadata", () => {
 
   const cdn = new URL(links[1]);
   assert.equal(cdn.username, "11111111-2222-3333-4444-555555555555");
-  assert.equal(cdn.hostname, "yc.cdn.mozhno.org");
+  assert.equal(cdn.hostname, "mozhnoclub.yc.cdn.mozhno.org");
   assert.equal(cdn.port, "443");
   assert.equal(cdn.searchParams.get("type"), "xhttp");
   assert.equal(cdn.searchParams.get("security"), "tls");
-  assert.equal(cdn.searchParams.get("sni"), "yc.cdn.mozhno.org");
-  assert.equal(cdn.searchParams.get("host"), "yc.cdn.mozhno.org");
+  assert.equal(cdn.searchParams.get("sni"), "mozhnoclub.yc.cdn.mozhno.org");
+  assert.equal(cdn.searchParams.get("host"), "mozhnoclub.yc.cdn.mozhno.org");
   assert.equal(cdn.searchParams.get("path"), "/api/upload");
   assert.equal(cdn.searchParams.get("mode"), "packet-up");
   assert.equal(cdn.searchParams.get("alpn"), "h2");
@@ -88,6 +103,21 @@ test("renders direct and CDN profiles from explicit inbound metadata", () => {
     hMaxRequestTimes: "320-640",
     hMaxReusableSecs: "720-1800",
   });
+});
+
+test("maps provider links to inbounds by port rather than response order", () => {
+  const direct = SOURCE_LINK.replace(":443", ":11443");
+  const whitelist = SOURCE_LINK.replace(":443", ":12443");
+  const mapped = mapProviderLinksByInbound(
+    [whitelist, direct],
+    [
+      { inboundId: 6, code: "paid-nl-direct", port: 11443 },
+      { inboundId: 7, code: "paid-nl-yandex-cdn", port: 12443 },
+    ],
+  );
+
+  assert.equal(mapped.get(6), direct);
+  assert.equal(mapped.get(7), whitelist);
 });
 
 test("keeps a router profile direct because it has no public override", () => {

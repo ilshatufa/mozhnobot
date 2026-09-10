@@ -64,6 +64,18 @@ If a fallback is truly necessary for UX, **ask the user first** and get explicit
 - what exact placeholder/value is shown
 - which statuses/fields it affects
 
+## VPN Product Isolation
+
+- Каждый VPN-продукт (`club`, `router`, `paid` и будущие продукты) использует
+  только собственные inbound'ы. Один `VpnInbound` нельзя включать одновременно
+  в несколько продуктов.
+- Общий физический Xray-сервер допустим. Общий CDN-провайдер допустим, но его
+  ресурсы, домены, origin-порты, inbound'ы и клиенты должны быть раздельными по
+  продуктам.
+- Если для одного продукта на одном сервере нужны разные правила трафика,
+  использовать разные `clientGroup` и отдельных клиентов 3X-UI. Лимит одного
+  клиента не должен ограничивать остальные группы подписки.
+
 ## Language Rule
 
 Write all user-facing responses in Russian.

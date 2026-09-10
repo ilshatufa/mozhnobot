@@ -53,6 +53,7 @@ export class VpnKeyRepository {
     userId: number;
     serverId: number;
     subscriptionId?: number;
+    clientGroup?: string;
     provider: VpnProvider;
     xuiClientId: string;
     providerClientId: string;
@@ -64,10 +65,20 @@ export class VpnKeyRepository {
     return prisma.vpnKey.create({ data });
   }
 
-  async findBySubscriptionAndServer(subscriptionId: number, serverId: number): Promise<VpnKey | null> {
+  async findBySubscriptionServerAndGroup(
+    subscriptionId: number,
+    serverId: number,
+    clientGroup: string,
+  ): Promise<VpnKey | null> {
     return prisma.vpnKey.findUnique({
-      where: { subscriptionId_serverId: { subscriptionId, serverId } },
+      where: {
+        subscriptionId_serverId_clientGroup: { subscriptionId, serverId, clientGroup },
+      },
     });
+  }
+
+  async updateClientGroup(id: number, clientGroup: string): Promise<VpnKey> {
+    return prisma.vpnKey.update({ where: { id }, data: { clientGroup } });
   }
 
   async setActive(id: number, isActive: boolean): Promise<void> {

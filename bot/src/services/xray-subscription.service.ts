@@ -61,6 +61,45 @@ export interface RenderedSubscriptionAsset {
   headers: Record<string, string>;
 }
 
+interface ProviderLinkInbound {
+  inboundId: number;
+  code: string;
+  port: number;
+}
+
+export function mapProviderLinksByInbound(
+  links: string[],
+  inbounds: ProviderLinkInbound[],
+): Map<number, string> {
+  if (links.length !== inbounds.length) {
+    throw new Error(
+      `3X-UI returned ${links.length} links for ${inbounds.length} product inbounds`,
+    );
+  }
+
+  const remaining = [...inbounds];
+  const result = new Map<number, string>();
+  for (const link of links) {
+    let port: number;
+    try {
+      port = Number(new URL(link).port);
+    } catch {
+      throw new Error("3X-UI returned an invalid client link");
+    }
+    const candidates = remaining.filter((item) => item.port === port);
+    if (candidates.length !== 1) {
+      throw new Error(
+        `3X-UI link port ${port || "missing"} matches ${candidates.length} product inbounds`,
+      );
+    }
+    const [matched] = candidates;
+    result.set(matched.inboundId, link);
+    remaining.splice(remaining.indexOf(matched), 1);
+  }
+
+  return result;
+}
+
 export function hasCompleteRequiredInbounds(
   subscription: {
     product: {
@@ -551,26 +590,31 @@ export class XraySubscriptionService {
     subscription: RenderableSubscription,
     keys: XuiKeyWithServer[],
   ): Promise<string[]> {
-    const activeInboundIds = new Set(
+    const activeStateByInboundId = new Map(
       subscription.inboundStates
         .filter((state) => state.status === VpnSubscriptionInboundStatus.ACTIVE)
-        .map((state) => state.inboundId),
+        .map((state) => [state.inboundId, state]),
     );
     const desired = subscription.product.inbounds.filter(
-      (item) => item.inbound.isActive && activeInboundIds.has(item.inboundId),
+      (item) => item.inbound.isActive && activeStateByInboundId.has(item.inboundId),
     );
-    const keysByServerId = new Map(
-      keys
-        .filter((key): key is XuiKeyWithServer & { serverId: number } => key.serverId !== null)
-        .map((key) => [key.serverId, key]),
-    );
+    const keysById = new Map(keys.map((key) => [key.id, key]));
+    const desiredByKeyId = new Map<number, typeof desired>();
+    for (const item of desired) {
+      const state = activeStateByInboundId.get(item.inboundId);
+      if (state?.keyId === null || state?.keyId === undefined) {
+        throw new Error(`VPN inbound ${item.inbound.code} has no assigned client key`);
+      }
+      const current = desiredByKeyId.get(state.keyId) ?? [];
+      current.push(item);
+      desiredByKeyId.set(state.keyId, current);
+    }
     const sourceByInboundId = new Map<number, string>();
 
-    for (const serverId of new Set(desired.map((item) => item.inbound.serverId))) {
-      const serverInbounds = desired.filter((item) => item.inbound.serverId === serverId);
-      const key = keysByServerId.get(serverId);
+    for (const [keyId, keyInbounds] of desiredByKeyId) {
+      const key = keysById.get(keyId);
       if (!key?.server || !key.providerClientId) {
-        throw new Error(`VPN subscription ${subscription.id} has no active client for server ${serverId}`);
+        throw new Error(`VPN subscription ${subscription.id} has no active client key ${keyId}`);
       }
       const serverConfig = config.vpnServers.xui.servers.find(
         (candidate) => candidate.code === key.server?.code,
@@ -580,12 +624,17 @@ export class XraySubscriptionService {
       }
 
       const links = await xuiClient.getClientLinks(serverConfig, key.providerClientId);
-      if (links.length !== serverInbounds.length) {
-        throw new Error(
-          `3X-UI ${serverConfig.code} returned ${links.length} links for ${serverInbounds.length} product inbounds`,
-        );
+      const mapped = mapProviderLinksByInbound(
+        links,
+        keyInbounds.map((item) => ({
+          inboundId: item.inboundId,
+          code: item.inbound.code,
+          port: item.inbound.port,
+        })),
+      );
+      for (const [inboundId, source] of mapped) {
+        sourceByInboundId.set(inboundId, source);
       }
-      serverInbounds.forEach((item, index) => sourceByInboundId.set(item.inboundId, links[index]));
     }
 
     return desired.map((item) => {

@@ -1,6 +1,10 @@
 import { Prisma, VpnProductAccessPolicy } from "@prisma/client";
+import { config } from "../config.js";
 import { prisma } from "../database.js";
-import { YANDEX_CDN_PUBLIC_PROFILE } from "./vpn-public-profile.js";
+import {
+  PAID_YANDEX_CDN_PUBLIC_PROFILE,
+  YANDEX_CDN_PUBLIC_PROFILE,
+} from "./vpn-public-profile.js";
 
 interface VpnInboundCatalogEntry {
   code: string;
@@ -16,7 +20,21 @@ interface VpnProductCatalogEntry {
   name: string;
   accessPolicy: VpnProductAccessPolicy;
   isActive: boolean;
-  inboundCodes: string[];
+  inbounds: Array<{
+    code: string;
+    clientGroup: string;
+    trafficLimitBytes: bigint | null;
+    trafficResetDays: number;
+  }>;
+}
+
+function productInbound(
+  code: string,
+  clientGroup = "default",
+  trafficLimitBytes: bigint | null = null,
+  trafficResetDays = 0,
+): VpnProductCatalogEntry["inbounds"][number] {
+  return { code, clientGroup, trafficLimitBytes, trafficResetDays };
 }
 
 export const INITIAL_VPN_INBOUND_CATALOG: readonly VpnInboundCatalogEntry[] = [
@@ -33,7 +51,7 @@ export const INITIAL_VPN_INBOUND_CATALOG: readonly VpnInboundCatalogEntry[] = [
     providerInboundId: 5,
     name: "🇷🇺 МОЖНО • Белые списки — Нидерланды",
     port: 8443,
-    publicProfile: YANDEX_CDN_PUBLIC_PROFILE,
+    publicProfile: YANDEX_CDN_PUBLIC_PROFILE as unknown as Prisma.InputJsonObject,
   },
   {
     code: "club-de-direct",
@@ -78,6 +96,14 @@ export const INITIAL_VPN_INBOUND_CATALOG: readonly VpnInboundCatalogEntry[] = [
     port: 11443,
   },
   {
+    code: "paid-nl-yandex-cdn",
+    serverCode: "nl",
+    providerInboundId: 7,
+    name: "🇷🇺 МОЖНО • Белые списки — Нидерланды",
+    port: 12443,
+    publicProfile: PAID_YANDEX_CDN_PUBLIC_PROFILE as unknown as Prisma.InputJsonObject,
+  },
+  {
     code: "paid-de-direct",
     serverCode: "de",
     providerInboundId: 4,
@@ -99,21 +125,40 @@ export const INITIAL_VPN_PRODUCT_CATALOG: readonly VpnProductCatalogEntry[] = [
     name: "МОЖНО Клуб",
     accessPolicy: VpnProductAccessPolicy.CLUB_MEMBERSHIP,
     isActive: true,
-    inboundCodes: ["club-nl-direct", "club-nl-yandex-cdn", "club-de-direct", "club-lv-direct"],
+    inbounds: [
+      productInbound("club-nl-direct"),
+      productInbound("club-nl-yandex-cdn"),
+      productInbound("club-de-direct"),
+      productInbound("club-lv-direct"),
+    ],
   },
   {
     code: "router",
     name: "МОЖНО Роутер",
     accessPolicy: VpnProductAccessPolicy.MANUAL,
     isActive: true,
-    inboundCodes: ["router-nl", "router-de", "router-lv"],
+    inbounds: [
+      productInbound("router-nl"),
+      productInbound("router-de"),
+      productInbound("router-lv"),
+    ],
   },
   {
     code: "paid",
     name: "МОЖНО VPN",
     accessPolicy: VpnProductAccessPolicy.PAID_BALANCE,
     isActive: true,
-    inboundCodes: ["paid-nl-direct", "club-nl-yandex-cdn", "paid-de-direct", "paid-lv-direct"],
+    inbounds: [
+      productInbound("paid-nl-direct", "direct"),
+      productInbound(
+        "paid-nl-yandex-cdn",
+        "whitelist",
+        config.vpnAccessSync.paidWhitelistTrafficLimitBytes || null,
+        config.vpnAccessSync.paidWhitelistTrafficResetDays,
+      ),
+      productInbound("paid-de-direct", "direct"),
+      productInbound("paid-lv-direct", "direct"),
+    ],
   },
 ] as const;
 
@@ -140,7 +185,7 @@ export class VpnCatalogService {
       products: INITIAL_VPN_PRODUCT_CATALOG.length,
       inbounds: INITIAL_VPN_INBOUND_CATALOG.length,
       productInboundLinks: INITIAL_VPN_PRODUCT_CATALOG.reduce(
-        (sum, product) => sum + product.inboundCodes.length,
+        (sum, product) => sum + product.inbounds.length,
         0,
       ),
     };
@@ -200,15 +245,36 @@ export class VpnCatalogService {
           },
         });
 
-        for (const [index, inboundCode] of item.inboundCodes.entries()) {
-          const inboundId = inboundIdByCode.get(inboundCode);
-          if (!inboundId) throw new Error(`VPN inbound ${inboundCode} is missing from the catalog`);
+        const desiredInboundIds: number[] = [];
+        for (const [index, assignment] of item.inbounds.entries()) {
+          const inboundId = inboundIdByCode.get(assignment.code);
+          if (!inboundId) throw new Error(`VPN inbound ${assignment.code} is missing from the catalog`);
+          desiredInboundIds.push(inboundId);
           await tx.vpnProductInbound.upsert({
             where: { productId_inboundId: { productId: product.id, inboundId } },
-            create: { productId: product.id, inboundId, position: index + 1 },
-            update: { position: index + 1, isRequired: true },
+            create: {
+              productId: product.id,
+              inboundId,
+              position: index + 1,
+              clientGroup: assignment.clientGroup,
+              trafficLimitBytes: assignment.trafficLimitBytes,
+              trafficResetDays: assignment.trafficResetDays,
+            },
+            update: {
+              position: index + 1,
+              isRequired: true,
+              clientGroup: assignment.clientGroup,
+              trafficLimitBytes: assignment.trafficLimitBytes,
+              trafficResetDays: assignment.trafficResetDays,
+            },
           });
         }
+        await tx.vpnProductInbound.deleteMany({
+          where: {
+            productId: product.id,
+            inboundId: { notIn: desiredInboundIds },
+          },
+        });
       }
     });
 
