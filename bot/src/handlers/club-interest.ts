@@ -45,7 +45,7 @@ export async function waitlistHandler(ctx: AuthContext): Promise<void> {
   await ctx.editMessageText(
     "спасибо, вот тебе методичка нашего клуба «Все фишки Авито»",
     Markup.inlineKeyboard([
-      Markup.button.callback("получить", CLUB_AVITO_GUIDE_ACTION),
+      Markup.button.callback("Получить методичку", CLUB_AVITO_GUIDE_ACTION),
     ]),
   );
 }
