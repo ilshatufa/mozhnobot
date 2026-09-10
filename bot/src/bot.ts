@@ -3,7 +3,12 @@ import { config } from "./config.js";
 import { type AuthContext, authMiddleware, adminOnly } from "./middlewares/auth.js";
 import { eventLoggerMiddleware } from "./middlewares/event-logger.js";
 import { startHandler } from "./handlers/start.js";
-import { CLUB_WAITLIST_ACTION, waitlistHandler } from "./handlers/club-interest.js";
+import {
+  CLUB_AVITO_GUIDE_ACTION,
+  CLUB_WAITLIST_ACTION,
+  avitoGuideHandler,
+  waitlistHandler,
+} from "./handlers/club-interest.js";
 import { helpHandler } from "./handlers/help.js";
 import { vpnHandler, statusHandler } from "./handlers/vpn.js";
 import { statsHandler } from "./handlers/stats.js";
@@ -36,6 +41,7 @@ export function createBot(): Telegraf<AuthContext> {
 
   bot.command("start", startHandler);
   bot.action(CLUB_WAITLIST_ACTION, waitlistHandler);
+  bot.action(CLUB_AVITO_GUIDE_ACTION, avitoGuideHandler);
   bot.command("help", helpHandler);
   bot.command("vpn", vpnHandler);
   bot.command("status", statusHandler);

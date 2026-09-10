@@ -11,7 +11,7 @@ export interface AuthContext extends Context {
 }
 
 const ALLOWED_STATUSES = new Set(["member", "administrator", "creator"]);
-const CLUB_WAITLIST_ACTION = "club_waitlist_join";
+const CLUB_WAITLIST_ACTIONS = new Set(["club_waitlist_join", "club_avito_guide"]);
 
 function isStartCommand(ctx: Context): boolean {
   const message = ctx.message;
@@ -20,7 +20,11 @@ function isStartCommand(ctx: Context): boolean {
 
 function isWaitlistAction(ctx: Context): boolean {
   const callbackQuery = ctx.callbackQuery;
-  return Boolean(callbackQuery && "data" in callbackQuery && callbackQuery.data === CLUB_WAITLIST_ACTION);
+  return Boolean(
+    callbackQuery &&
+      "data" in callbackQuery &&
+      CLUB_WAITLIST_ACTIONS.has(callbackQuery.data),
+  );
 }
 
 export function authMiddleware(): MiddlewareFn<AuthContext> {
