@@ -25,7 +25,7 @@ export async function startHandler(ctx: AuthContext): Promise<void> {
         parse_mode: "HTML",
         ...Markup.inlineKeyboard([
           Markup.button.callback(
-            "Жми кнопку, и мы маякнем об открытии👋",
+            "Хочу в клуб!",
             CLUB_WAITLIST_ACTION,
           ),
         ]),
