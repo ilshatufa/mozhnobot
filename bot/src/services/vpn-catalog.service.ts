@@ -245,14 +245,12 @@ export class VpnCatalogService {
           },
         });
 
-        const desiredInboundIds: number[] = [];
+        await tx.vpnProductInbound.deleteMany({ where: { productId: product.id } });
         for (const [index, assignment] of item.inbounds.entries()) {
           const inboundId = inboundIdByCode.get(assignment.code);
           if (!inboundId) throw new Error(`VPN inbound ${assignment.code} is missing from the catalog`);
-          desiredInboundIds.push(inboundId);
-          await tx.vpnProductInbound.upsert({
-            where: { productId_inboundId: { productId: product.id, inboundId } },
-            create: {
+          await tx.vpnProductInbound.create({
+            data: {
               productId: product.id,
               inboundId,
               position: index + 1,
@@ -260,21 +258,8 @@ export class VpnCatalogService {
               trafficLimitBytes: assignment.trafficLimitBytes,
               trafficResetDays: assignment.trafficResetDays,
             },
-            update: {
-              position: index + 1,
-              isRequired: true,
-              clientGroup: assignment.clientGroup,
-              trafficLimitBytes: assignment.trafficLimitBytes,
-              trafficResetDays: assignment.trafficResetDays,
-            },
           });
         }
-        await tx.vpnProductInbound.deleteMany({
-          where: {
-            productId: product.id,
-            inboundId: { notIn: desiredInboundIds },
-          },
-        });
       }
     });
 
