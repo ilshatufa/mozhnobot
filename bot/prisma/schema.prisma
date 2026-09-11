@@ -145,7 +145,7 @@ model VpnKey {
   userId           Int         @map("user_id")
   serverId         Int?        @map("server_id")
   subscriptionId   Int?        @map("subscription_id")
-  clientGroup      String      @default("default") @map("client_group") @db.VarChar(40)
+  clientGroup      String      @default("direct") @map("client_group") @db.VarChar(40)
   provider         VpnProvider @default(XUI)
   xuiClientId      String      @map("xui_client_id") @db.VarChar(255)
   providerClientId String?     @map("provider_client_id") @db.VarChar(255)
@@ -214,7 +214,7 @@ model VpnProductInbound {
   inboundId         Int      @map("inbound_id")
   position          Int
   isRequired        Boolean  @default(true) @map("is_required")
-  clientGroup       String   @default("default") @map("client_group") @db.VarChar(40)
+  clientGroup       String   @default("direct") @map("client_group") @db.VarChar(40)
   trafficLimitBytes BigInt?  @map("traffic_limit_bytes")
   trafficResetDays  Int      @default(0) @map("traffic_reset_days")
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz()

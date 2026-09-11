@@ -30,7 +30,7 @@ interface VpnProductCatalogEntry {
 
 function productInbound(
   code: string,
-  clientGroup = "default",
+  clientGroup = "direct",
   trafficLimitBytes: bigint | null = null,
   trafficResetDays = 0,
 ): VpnProductCatalogEntry["inbounds"][number] {

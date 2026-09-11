@@ -20,7 +20,7 @@ export function vpnProductClientEmail(
   telegramId: bigint,
   username: string | null,
   productCode: string,
-  clientGroup = "default",
+  clientGroup = "direct",
 ): string {
   const base = xuiClient.buildClientEmail(telegramId, username);
   const product = productCode.toLowerCase().replace(/[^a-z0-9_]/g, "_");

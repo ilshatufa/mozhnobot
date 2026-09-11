@@ -21,6 +21,16 @@ test("assigns every catalog inbound to exactly one VPN product", () => {
   );
 });
 
+test("uses direct as the canonical group for every non-whitelist inbound", () => {
+  const assignments = INITIAL_VPN_PRODUCT_CATALOG.flatMap((product) => product.inbounds);
+  assert.deepEqual(
+    assignments
+      .filter((item) => item.clientGroup !== "whitelist")
+      .map((item) => item.clientGroup),
+    Array(assignments.filter((item) => item.clientGroup !== "whitelist").length).fill("direct"),
+  );
+});
+
 test("keeps paid direct and whitelist traffic in separate client groups", () => {
   const paid = INITIAL_VPN_PRODUCT_CATALOG.find((product) => product.code === "paid");
   assert.ok(paid);
