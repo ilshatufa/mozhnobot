@@ -80,6 +80,11 @@ enum ClubSearchRequestStatus {
   FAILED
 }
 
+enum ClubSearchRequestMode {
+  CLUB
+  WEB
+}
+
 model User {
   id           Int                  @id @default(autoincrement())
   telegramId   BigInt               @unique @map("telegram_id")
@@ -412,11 +417,13 @@ model ClubSearchRequest {
   telegramChatId      BigInt                  @map("telegram_chat_id")
   progressMessageId   Int                     @map("progress_message_id")
   question            String                  @db.Text
+  mode                ClubSearchRequestMode   @default(CLUB)
   status              ClubSearchRequestStatus @default(PENDING)
   activeKey           String?                 @unique @map("active_key") @db.VarChar(32)
   progressStage       Int                     @default(0) @map("progress_stage")
   answer              String?                 @db.Text
   sourceMessageIds    Int[]                   @default([]) @map("source_message_ids")
+  webSources          Json                    @default("[]") @map("web_sources")
   errorCode           String?                 @map("error_code") @db.VarChar(64)
   attempts            Int                     @default(0)
   startedAt           DateTime?               @map("started_at") @db.Timestamptz()
