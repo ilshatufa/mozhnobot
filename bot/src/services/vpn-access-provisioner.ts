@@ -9,6 +9,7 @@ import { vpnKeyRepository } from "../repositories/vpn-key.repository.js";
 import type { VpnSubscriptionForSync } from "../repositories/vpn-subscription.repository.js";
 import { xuiClient } from "./xui-client.js";
 import type { VpnAccessSyncPlan } from "./vpn-access-sync-plan.js";
+import { resolveVpnTrafficLimitBytes } from "./vpn-traffic-policy.js";
 
 export interface VpnAccessProvisioningResult {
   success: boolean;
@@ -184,14 +185,23 @@ export class VpnAccessProvisioner {
     existingKey: VpnKey | null,
   ): Promise<VpnKey> {
     const desiredProviderIds = desired.map((item) => item.inbound.providerInboundId);
-    const trafficLimits = new Set(desired.map((item) => item.trafficLimitBytes?.toString() ?? "unlimited"));
+    const trafficLimits = new Set(desired.map((item) =>
+      resolveVpnTrafficLimitBytes(
+        subscription.product.code,
+        clientGroup,
+        item.trafficLimitBytes,
+      )?.toString() ?? "unlimited"));
     const trafficResetDays = new Set(desired.map((item) => item.trafficResetDays));
     if (trafficLimits.size !== 1 || trafficResetDays.size !== 1) {
       throw new Error(
         `VPN client group ${clientGroup} on ${serverConfig.code} has inconsistent traffic policy`,
       );
     }
-    const trafficLimitBytes = desired[0]?.trafficLimitBytes ?? null;
+    const trafficLimitBytes = resolveVpnTrafficLimitBytes(
+      subscription.product.code,
+      clientGroup,
+      desired[0]?.trafficLimitBytes ?? null,
+    );
     const resetDays = desired[0]?.trafficResetDays ?? 0;
     const expiryTime = subscription.expiresAt?.getTime() ?? 0;
     let key = existingKey;
