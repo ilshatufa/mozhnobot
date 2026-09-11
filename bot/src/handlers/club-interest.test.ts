@@ -37,7 +37,7 @@ test("waitlist confirmation offers the Avito guide", async (t) => {
   assert.equal(callbackAnswered, true);
   assert.equal(
     editedText,
-    "спасибо, вот тебе методичка нашего клуба «Все фишки Авито»",
+    "Спасибо! Лови методичку 👋",
   );
   assert.deepEqual(JSON.parse(JSON.stringify(editedExtra)), {
     reply_markup: {
@@ -46,7 +46,7 @@ test("waitlist confirmation offers the Avito guide", async (t) => {
           {
             callback_data: CLUB_AVITO_GUIDE_ACTION,
             hide: false,
-            text: "получить",
+            text: "Получить",
           },
         ],
       ],
