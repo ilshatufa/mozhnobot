@@ -9,7 +9,10 @@ import { vpnKeyRepository } from "../repositories/vpn-key.repository.js";
 import type { VpnSubscriptionForSync } from "../repositories/vpn-subscription.repository.js";
 import { xuiClient } from "./xui-client.js";
 import type { VpnAccessSyncPlan } from "./vpn-access-sync-plan.js";
-import { resolveVpnTrafficLimitBytes } from "./vpn-traffic-policy.js";
+import {
+  resolveVpnTrafficLimitBytes,
+  resolveVpnTrafficResetDays,
+} from "./vpn-traffic-policy.js";
 
 export interface VpnAccessProvisioningResult {
   success: boolean;
@@ -228,7 +231,12 @@ export class VpnAccessProvisioner {
       clientGroup,
       desired[0]?.trafficLimitBytes ?? null,
     );
-    const resetDays = desired[0]?.trafficResetDays ?? 0;
+    const resetDays = resolveVpnTrafficResetDays(
+      subscription.product.accessPolicy,
+      clientGroup,
+      desired[0]?.trafficResetDays ?? 0,
+      subscription.expiresAt,
+    );
     const expiryTime = subscription.expiresAt?.getTime() ?? 0;
     let key = existingKey;
 
