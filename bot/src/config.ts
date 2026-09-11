@@ -29,7 +29,7 @@ const envSchema = z.object({
   VPN_ACCESS_SYNC_INTERVAL_MS: z.coerce.number().int().positive().default(86400000),
   VPN_ACCESS_SYNC_INITIAL_DELAY_MS: z.coerce.number().int().positive().default(60000),
   VPN_PAID_WHITELIST_TRAFFIC_LIMIT_GB: z.coerce.number().int().nonnegative().default(0),
-  VPN_PAID_WHITELIST_TRAFFIC_RESET_DAYS: z.coerce.number().int().nonnegative().default(0),
+  VPN_PAID_WHITELIST_TRAFFIC_RESET_DAYS: z.coerce.number().int().nonnegative().default(30),
   XRAY_SUBSCRIPTION_JSON_USER_AGENT_PATTERN: z.string().min(1).default("(v2box|incy)"),
   XRAY_SUBSCRIPTION_JSON_RU_DNS: z.string().min(1).default("77.88.8.8"),
   XRAY_SUBSCRIPTION_JSON_REMOTE_DNS: z.string().min(1).default("https://1.1.1.1/dns-query"),
