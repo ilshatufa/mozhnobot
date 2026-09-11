@@ -21,31 +21,61 @@ export function extractSearchQuestion(text: string, command: SearchCommand = "as
   return text.replace(new RegExp(`^/${command}(?:@\\w+)?(?:\\s+|$)`, "i"), "").trim();
 }
 
+export function extractSearchQuestionFromMessage(
+  message: Message.TextMessage,
+  command: SearchCommand = "ask",
+): string {
+  const explicitQuestion = extractSearchQuestion(message.text, command);
+  if (explicitQuestion) return explicitQuestion;
+
+  const repliedMessage = message.reply_to_message;
+  if (!repliedMessage) return "";
+  if ("text" in repliedMessage) return repliedMessage.text.trim();
+  if ("caption" in repliedMessage && repliedMessage.caption) {
+    return repliedMessage.caption.trim();
+  }
+  return "";
+}
+
+function topicReplyOptions(message: Message.TextMessage): { message_thread_id: number } | undefined {
+  return message.message_thread_id
+    ? { message_thread_id: message.message_thread_id }
+    : undefined;
+}
+
 async function searchHandler(ctx: AuthContext, options: SearchModeOptions): Promise<void> {
   if (!ctx.message || !("text" in ctx.message) || !ctx.from || !ctx.chat) {
     return;
   }
 
-  const question = extractSearchQuestion(ctx.message.text, options.command);
+  const question = extractSearchQuestionFromMessage(ctx.message, options.command);
+  const replyOptions = topicReplyOptions(ctx.message);
   if (question.length < MIN_QUESTION_LENGTH) {
-    await ctx.reply(`Напишите вопрос после команды.\n\nНапример: ${options.missingQuestionExample}`);
+    await ctx.reply(
+      `Напишите вопрос после команды или ответьте командой на сообщение.\n\nНапример: ${options.missingQuestionExample}`,
+      replyOptions,
+    );
     return;
   }
 
   if (question.length > MAX_QUESTION_LENGTH) {
-    await ctx.reply(`Сократите вопрос до ${MAX_QUESTION_LENGTH} знаков.`);
+    await ctx.reply(`Сократите вопрос до ${MAX_QUESTION_LENGTH} знаков.`, replyOptions);
     return;
   }
 
   const requesterTelegramId = BigInt(ctx.from.id);
   const activeRequest = await clubSearchRequestRepository.findActiveForRequester(requesterTelegramId);
   if (activeRequest) {
-    await ctx.reply("Предыдущий поиск ещё выполняется. Дождитесь ответа и задайте следующий вопрос.");
+    await ctx.reply(
+      "Предыдущий поиск ещё выполняется. Дождитесь ответа и задайте следующий вопрос.",
+      replyOptions,
+    );
     return;
   }
 
   const progressMessage = await ctx.reply(
     `${options.progressText}\n\n«${question}»\n\n${options.estimatedTimeText}`,
+    replyOptions,
   ) as Message.TextMessage;
 
   try {

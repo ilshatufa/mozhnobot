@@ -27,16 +27,34 @@ function isWaitlistAction(ctx: Context): boolean {
   );
 }
 
+export function isClubGroupSearchCommand(
+  ctx: Context,
+  clubGroupId: string = config.clubGroupId,
+): boolean {
+  const message = ctx.message;
+  const chatType = ctx.chat?.type;
+
+  return Boolean(
+    ctx.updateType === "message" &&
+      (chatType === "group" || chatType === "supergroup") &&
+      String(ctx.chat?.id) === clubGroupId &&
+      message &&
+      "text" in message &&
+      /^\/(?:ask|web)(?:@\w+)?(?:\s|$)/i.test(message.text),
+  );
+}
+
 export function authMiddleware(): MiddlewareFn<AuthContext> {
   return async (ctx, next) => {
     const telegramId = ctx.from?.id;
     if (!telegramId) return;
 
-    // Обрабатываем только личные сообщения и callback-и пользователя.
-    if (
-      ctx.chat?.type !== "private" ||
-      (ctx.updateType !== "message" && ctx.updateType !== "callback_query")
-    ) {
+    const isPrivateUpdate =
+      ctx.chat?.type === "private" &&
+      (ctx.updateType === "message" || ctx.updateType === "callback_query");
+
+    // В клубной группе пропускаем только явно вызванные команды поиска.
+    if (!isPrivateUpdate && !isClubGroupSearchCommand(ctx)) {
       return;
     }
 
