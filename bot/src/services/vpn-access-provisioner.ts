@@ -125,6 +125,34 @@ export class VpnAccessProvisioner {
           if (!serverKeys.some((key) => key.id === ensuredKey.id)) serverKeys.push(ensuredKey);
         }
 
+        const intendedKeyIdByProviderInboundId = new Map<number, number>();
+        for (const [clientGroup, groupInbounds] of desiredByGroup) {
+          const intendedKey = ensuredKeys.get(clientGroup);
+          if (!intendedKey) throw new Error(`VPN client group ${clientGroup} was not provisioned`);
+          for (const item of groupInbounds) {
+            intendedKeyIdByProviderInboundId.set(
+              item.inbound.providerInboundId,
+              intendedKey.id,
+            );
+          }
+        }
+        for (const key of serverKeys) {
+          if (!key.providerClientId) continue;
+          const attachedProviderIds = await xuiClient.getClientInboundIds(
+            serverConfig,
+            key.providerClientId,
+          );
+          const misplacedProviderIds = attachedProviderIds.filter((providerInboundId) => {
+            const intendedKeyId = intendedKeyIdByProviderInboundId.get(providerInboundId);
+            return intendedKeyId !== undefined && intendedKeyId !== key.id;
+          });
+          await xuiClient.detachClientFromInbounds(
+            serverConfig,
+            key.providerClientId,
+            misplacedProviderIds,
+          );
+        }
+
         const keysById = new Map(serverKeys.map((key) => [key.id, key]));
         for (const state of stale) {
           const candidateKeys = state.keyId === null
@@ -187,7 +215,6 @@ export class VpnAccessProvisioner {
     const desiredProviderIds = desired.map((item) => item.inbound.providerInboundId);
     const trafficLimits = new Set(desired.map((item) =>
       resolveVpnTrafficLimitBytes(
-        subscription.product.code,
         clientGroup,
         item.trafficLimitBytes,
       )?.toString() ?? "unlimited"));
@@ -198,7 +225,6 @@ export class VpnAccessProvisioner {
       );
     }
     const trafficLimitBytes = resolveVpnTrafficLimitBytes(
-      subscription.product.code,
       clientGroup,
       desired[0]?.trafficLimitBytes ?? null,
     );

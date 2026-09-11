@@ -31,3 +31,15 @@ test("keeps paid direct and whitelist traffic in separate client groups", () => 
   assert.equal(nlDirect?.trafficLimitBytes, null);
   assert.equal(whitelist?.clientGroup, "whitelist");
 });
+
+test("keeps club direct and whitelist traffic in separate client groups", () => {
+  const club = INITIAL_VPN_PRODUCT_CATALOG.find((product) => product.code === "club");
+  assert.ok(club);
+
+  const nlDirect = club.inbounds.find((item) => item.code === "club-nl-direct");
+  const whitelist = club.inbounds.find((item) => item.code === "club-nl-yandex-cdn");
+  assert.equal(nlDirect?.clientGroup, "direct");
+  assert.equal(nlDirect?.trafficLimitBytes, null);
+  assert.equal(whitelist?.clientGroup, "whitelist");
+  assert.equal(whitelist?.trafficLimitBytes, null);
+});

@@ -126,8 +126,8 @@ export const INITIAL_VPN_PRODUCT_CATALOG: readonly VpnProductCatalogEntry[] = [
     accessPolicy: VpnProductAccessPolicy.CLUB_MEMBERSHIP,
     isActive: true,
     inbounds: [
-      productInbound("club-nl-direct"),
-      productInbound("club-nl-yandex-cdn"),
+      productInbound("club-nl-direct", "direct"),
+      productInbound("club-nl-yandex-cdn", "whitelist"),
       productInbound("club-de-direct"),
       productInbound("club-lv-direct"),
     ],
