@@ -52,4 +52,5 @@ test("keeps club direct and whitelist traffic in separate client groups", () => 
   assert.equal(nlDirect?.trafficLimitBytes, null);
   assert.equal(whitelist?.clientGroup, "whitelist");
   assert.equal(whitelist?.trafficLimitBytes, null);
+  assert.equal(whitelist?.trafficResetDays, 30);
 });
