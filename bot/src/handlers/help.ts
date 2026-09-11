@@ -10,6 +10,7 @@ function buildHelpText(role: Role): string {
   text += "/vpn — получить VPN-ключ\n";
   text += "/status — проверить статус VPN-ключа\n";
   text += "/ask <вопрос> — найти ответ в истории клуба\n";
+  text += "/web <вопрос> — найти свежую информацию в интернете\n";
 
   if (isAdmin) {
     text += "\nАдминистрирование пользователей:\n";

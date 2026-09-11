@@ -1,4 +1,9 @@
-import { ClubSearchRequestStatus, Prisma, type ClubSearchRequest } from "@prisma/client";
+import {
+  ClubSearchRequestMode,
+  ClubSearchRequestStatus,
+  Prisma,
+  type ClubSearchRequest,
+} from "@prisma/client";
 import { prisma } from "../database.js";
 
 export type CreateClubSearchRequestInput = {
@@ -6,6 +11,7 @@ export type CreateClubSearchRequestInput = {
   telegramChatId: bigint;
   progressMessageId: number;
   question: string;
+  mode: ClubSearchRequestMode;
 };
 
 export class ClubSearchRequestRepository {

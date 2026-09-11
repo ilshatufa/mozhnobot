@@ -1,3 +1,4 @@
+import { ClubSearchRequestMode } from "@prisma/client";
 import { type Telegram } from "telegraf";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
@@ -6,6 +7,7 @@ import { clubSearchRequestRepository } from "../repositories/club-search-request
 import { isBotBlockedError, isMessageNotModifiedError } from "../telegram-errors.js";
 import { eventLoggerService } from "./event-logger.service.js";
 import { buildSearchResultRichMarkdown } from "./club-search-result.js";
+import { buildWebSearchResultRichMarkdown } from "./web-search-result.js";
 
 const DELIVERY_INTERVAL_MS = 2_000;
 
@@ -48,7 +50,9 @@ export class ClubSearchDeliveryService {
           request.telegramChatId.toString(),
           request.progressMessageId,
           undefined,
-          "Сверяю найденные сообщения и их контекст…",
+          request.mode === ClubSearchRequestMode.WEB
+            ? "Проверяю источники и собираю ответ…"
+            : "Сверяю найденные сообщения и их контекст…",
         );
         await clubSearchRequestRepository.markProgressUpdated(request.id);
       } catch (error) {
@@ -65,15 +69,21 @@ export class ClubSearchDeliveryService {
     const requests = await clubSearchRequestRepository.findReadyForDelivery();
     for (const request of requests) {
       try {
-        const sourceMessages = await clubMessageIndexRepository.findPreviewsByTelegramMessageIds(
-          BigInt(config.clubGroupId),
-          request.sourceMessageIds,
-        );
+        const markdown = request.mode === ClubSearchRequestMode.WEB
+          ? buildWebSearchResultRichMarkdown(request)
+          : buildSearchResultRichMarkdown(
+            request,
+            await clubMessageIndexRepository.findPreviewsByTelegramMessageIds(
+              BigInt(config.clubGroupId),
+              request.sourceMessageIds,
+            ),
+            config.clubGroupId,
+          );
         await telegram.callApi("editMessageText", {
           chat_id: request.telegramChatId.toString(),
           message_id: request.progressMessageId,
           rich_message: {
-            markdown: buildSearchResultRichMarkdown(request, sourceMessages, config.clubGroupId),
+            markdown,
           },
           link_preview_options: { is_disabled: true },
         } as never);
