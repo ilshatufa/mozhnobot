@@ -28,6 +28,7 @@ import {
 } from "./handlers/admin.js";
 import { handleBotError } from "./error-handling.js";
 import { clubSearchHandler, webSearchHandler } from "./handlers/club-search.js";
+import { waitlistAdminHandler } from "./handlers/waitlist-admin.js";
 
 export function createBot(): Telegraf<AuthContext> {
   const bot = new Telegraf<AuthContext>(config.botToken);
@@ -54,6 +55,7 @@ export function createBot(): Telegraf<AuthContext> {
   bot.command("unban", adminOnly(), unbanHandler);
   bot.command("promote", adminOnly(), promoteHandler);
   bot.command("users", adminOnly(), usersHandler);
+  bot.command("waitlist", adminOnly(), waitlistAdminHandler);
   bot.command("stats", adminOnly(), statsHandler);
   bot.command("transcription_on", adminOnly(), transcriptionOnHandler);
   bot.command("transcription_off", adminOnly(), transcriptionOffHandler);

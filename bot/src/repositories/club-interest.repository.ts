@@ -1,5 +1,14 @@
 import { prisma } from "../database.js";
 
+export type WaitlistedClubUser = {
+  waitlistedAt: Date;
+  user: {
+    telegramId: bigint;
+    username: string | null;
+    firstName: string | null;
+  };
+};
+
 export class ClubInterestRepository {
   async recordOpened(userId: number): Promise<void> {
     await prisma.clubInterest.upsert({
@@ -24,6 +33,29 @@ export class ClubInterestRepository {
         data: { waitlistedAt: now },
       });
     });
+  }
+
+  async findAllWaitlisted(): Promise<WaitlistedClubUser[]> {
+    const entries = await prisma.clubInterest.findMany({
+      where: { waitlistedAt: { not: null } },
+      orderBy: { waitlistedAt: "desc" },
+      select: {
+        waitlistedAt: true,
+        user: {
+          select: {
+            telegramId: true,
+            username: true,
+            firstName: true,
+          },
+        },
+      },
+    });
+
+    return entries.flatMap((entry) =>
+      entry.waitlistedAt
+        ? [{ waitlistedAt: entry.waitlistedAt, user: entry.user }]
+        : [],
+    );
   }
 }
 

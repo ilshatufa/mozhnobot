@@ -16,6 +16,7 @@ function buildHelpText(role: Role): string {
   if (isAdmin) {
     text += "\nАдминистрирование пользователей:\n";
     text += "/users — список пользователей\n";
+    text += "/waitlist — все записавшиеся в МожноКлуб\n";
     text += "/block <id или @user> — заблокировать VPN пользователю\n";
     text += "/unblock <id или @user> — разблокировать VPN пользователю\n";
     text += "/ban <id или @user> — заблокировать пользователя в боте\n";
