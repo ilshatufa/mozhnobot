@@ -7,7 +7,7 @@ const envSchema = z.object({
   GROUP_ACCESS_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   GROUP_ACCESS_MANAGED_CHAT_IDS_JSON: z.string().optional().default("[]"),
   GROUP_ACCESS_GRACE_HOURS: z.coerce.number().int().positive().default(24),
-  GROUP_ACCESS_DUE_INTERVAL_MS: z.coerce.number().int().positive().default(300000),
+  GROUP_ACCESS_DUE_INTERVAL_MS: z.coerce.number().int().positive().default(86400000),
   VPN_BOT_TOKEN: z.string().optional().default(""),
   VPN_BOT_ADMIN_TELEGRAM_ID: z.union([z.string().regex(/^\d+$/), z.literal("")]).default(""),
 
