@@ -161,17 +161,22 @@ attempts += 1
 - если `attempts < MAX_ATTEMPTS`, вернуть `PENDING`;
 - иначе `FAILED`.
 
+`media-worker` отделен от основного процесса бота, чтобы скачивание файлов,
+`ffmpeg`, внешние API и повторные попытки не задерживали обработку Telegram updates
+и не перезапускали бота при сбое медиа. Это не отдельный контейнер Qwen или Whisper:
+Qwen вызывается из существующего worker по HTTPS, а `ffmpeg` уже входит в его образ.
+
 ## 6. Транскрибация
 
 После `DOWNLOADED`:
 
 1. Менять статус на `TRANSCRIBING`.
-2. Конвертировать файл в формат, поддерживаемый OpenAI Transcription API, если нужно.
-3. Передать файл в OpenAI Transcription API.
+2. Конвертировать файл в mono MP3 16 kHz и разбить на части до 290 секунд.
+3. Передать части в Qwen3 ASR через Alibaba Cloud Model Studio.
 4. Сохранить:
    - `transcriptRaw`;
    - `transcriptLanguage`;
-   - `transcriptSegments`, если OpenAI вернул сегменты.
+   - `transcriptSegments` с метаданными частей, если Qwen их вернул.
 5. Выполнить очистку текста.
 6. Сохранить `transcriptClean`.
 7. Поставить:
@@ -181,18 +186,21 @@ status = TRANSCRIBED
 processedAt = now()
 ```
 
-Транскрибация выполняется только через OpenAI. Другие провайдеры в MVP не используются.
+Транскрибация выполняется через Qwen в Singapore-регионе Alibaba Cloud Model Studio.
 
 Нужные env:
 
 ```env
-OPENAI_API_KEY=<ключ OpenAI API>
-OPENAI_TRANSCRIPTION_MODEL=gpt-4o-mini-transcribe
-OPENAI_TRANSCRIPTION_LANGUAGE=ru
-OPENAI_TRANSCRIPTION_MAX_FILE_SIZE_MB=25
+QWEN_API_KEY=<ключ Alibaba Cloud Model Studio>
+QWEN_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+QWEN_TRANSCRIPTION_MODEL=qwen3-asr-flash
+QWEN_TRANSCRIPTION_LANGUAGE=ru
+QWEN_TRANSCRIPTION_CHUNK_SECONDS=290
+QWEN_TRANSCRIPTION_MAX_FILE_SIZE_MB=7
+QWEN_TRANSCRIPT_CLEANUP_MODEL=qwen-max
 ```
 
-`OPENAI_TRANSCRIPTION_LANGUAGE` можно оставить пустым, если нужен автоопределитель языка.
+`QWEN_TRANSCRIPTION_LANGUAGE` можно оставить пустым, если нужен автоопределитель языка.
 
 ## 7. Очистка transcript
 

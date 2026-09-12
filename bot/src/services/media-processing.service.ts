@@ -8,7 +8,7 @@ import { clubMediaRepository } from "../repositories/club-media.repository.js";
 import { clubMessageIndexRepository } from "../repositories/club-message-index.repository.js";
 import { mediaProcessingJobRepository } from "../repositories/media-processing-job.repository.js";
 import { botSettingRepository } from "../repositories/bot-setting.repository.js";
-import { cleanTranscriptWithOpenAI } from "./transcript-cleaner.js";
+import { cleanTranscriptWithQwen } from "./transcript-cleaner.js";
 import { transcriptionProvider } from "./transcription-provider.js";
 
 type TelegramFileResult = {
@@ -23,13 +23,6 @@ const TRANSCRIBABLE_STATUSES = [MediaProcessingStatus.DOWNLOADED];
 const PUBLISHABLE_STATUSES = [MediaProcessingStatus.TRANSCRIBED];
 const TELEGRAM_MESSAGE_LIMIT = 4096;
 const TRANSCRIPT_HEADER = "<b>Расшифровка</b>";
-
-function cleanTranscript(text: string): string {
-  return text
-    .replace(/\s+/g, " ")
-    .replace(/\s+([,.!?;:])/g, "$1")
-    .trim();
-}
 
 function getFileExtension(filePath: string | undefined, mediaType: string): string {
   if (filePath) {
@@ -108,6 +101,8 @@ export class MediaProcessingService {
     logger.info("Media processing worker started", {
       intervalMs: config.media.workerIntervalMs,
       storageDir: config.media.storageDir,
+      transcriptionProvider: "qwen",
+      transcriptionModel: config.media.qwenTranscriptionModel,
       transcriptionConfigured: transcriptionProvider.isConfigured(),
     });
   }
@@ -245,7 +240,7 @@ export class MediaProcessingService {
 
     try {
       const result = await transcriptionProvider.transcribe(job.downloadedFilePath);
-      const transcriptClean = await cleanTranscriptWithOpenAI(result.text);
+      const transcriptClean = await cleanTranscriptWithQwen(result.text);
       await mediaProcessingJobRepository.markTranscribed(job.id, {
         transcriptRaw: result.text,
         transcriptClean,

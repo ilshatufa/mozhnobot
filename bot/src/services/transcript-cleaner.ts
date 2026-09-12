@@ -22,7 +22,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
     });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`OpenAI transcript cleanup request timed out after ${timeoutMs}ms`);
+      throw new Error(`Qwen transcript cleanup request timed out after ${timeoutMs}ms`);
     }
     throw error;
   } finally {
@@ -30,15 +30,15 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
   }
 }
 
-export async function cleanTranscriptWithOpenAI(rawTranscript: string): Promise<string> {
-  const response = await fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
+export async function cleanTranscriptWithQwen(rawTranscript: string): Promise<string> {
+  const response = await fetchWithTimeout(`${config.media.qwenBaseUrl}/chat/completions`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${config.media.openaiApiKey}`,
+      Authorization: `Bearer ${config.media.qwenApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: config.media.openaiTranscriptCleanupModel,
+      model: config.media.qwenTranscriptCleanupModel,
       temperature: 0,
       messages: [
         {
@@ -63,19 +63,19 @@ export async function cleanTranscriptWithOpenAI(rawTranscript: string): Promise<
         },
       ],
     }),
-  }, config.media.openaiTranscriptCleanupTimeoutMs);
+  }, config.media.qwenTranscriptCleanupTimeoutMs);
 
   const json = await response.json() as ChatCompletionResponse;
   if (!response.ok) {
     const message = typeof json.error?.message === "string"
       ? json.error.message
-      : `OpenAI transcript cleanup failed with HTTP ${response.status}`;
+      : `Qwen transcript cleanup failed with HTTP ${response.status}`;
     throw new Error(message);
   }
 
   const cleaned = json.choices?.[0]?.message?.content;
   if (typeof cleaned !== "string" || cleaned.trim().length === 0) {
-    throw new Error("OpenAI transcript cleanup response is empty");
+    throw new Error("Qwen transcript cleanup response is empty");
   }
 
   return cleaned.trim();
