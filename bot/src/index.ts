@@ -120,8 +120,8 @@ async function main(): Promise<void> {
     CLUB_GROUP_ID: config.clubGroupId,
     VPN_ACCESS: "unlimited",
   });
-  await launchBotWithRetry(bot);
   groupAccessService.start(bot.telegram);
+  await launchBotWithRetry(bot);
   logger.info("Bot started");
 }
 
