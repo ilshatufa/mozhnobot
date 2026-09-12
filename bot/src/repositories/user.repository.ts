@@ -183,6 +183,46 @@ export class UserRepository {
     });
   }
 
+  async setGroupRemovalExempt(telegramId: bigint, exempt: boolean): Promise<User> {
+    return prisma.user.update({
+      where: { telegramId },
+      data: {
+        groupRemovalExempt: exempt,
+        clearAccessGroupAt: exempt ? null : undefined,
+      },
+    });
+  }
+
+  async scheduleGroupAccessClearance(telegramId: bigint, clearAt: Date): Promise<boolean> {
+    const result = await prisma.user.updateMany({
+      where: {
+        telegramId,
+        groupRemovalExempt: false,
+        clearAccessGroupAt: null,
+      },
+      data: { clearAccessGroupAt: clearAt },
+    });
+    return result.count > 0;
+  }
+
+  async clearGroupAccessClearance(telegramId: bigint): Promise<void> {
+    await prisma.user.updateMany({
+      where: { telegramId },
+      data: { clearAccessGroupAt: null },
+    });
+  }
+
+  async findDueGroupAccessClearances(now: Date, limit = 100): Promise<User[]> {
+    return prisma.user.findMany({
+      where: {
+        groupRemovalExempt: false,
+        clearAccessGroupAt: { lte: now },
+      },
+      orderBy: { clearAccessGroupAt: "asc" },
+      take: limit,
+    });
+  }
+
   async hasAnyAdmin(): Promise<boolean> {
     const count = await prisma.user.count({ where: { role: Role.ADMIN } });
     return count > 0;

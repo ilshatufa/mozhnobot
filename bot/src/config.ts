@@ -4,6 +4,10 @@ const envSchema = z.object({
   BOT_TOKEN: z.string().min(1),
   CLUB_GROUP_ID: z.string().min(1),
   SEED_ADMIN_ID: z.string().min(1),
+  GROUP_ACCESS_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  GROUP_ACCESS_MANAGED_CHAT_IDS_JSON: z.string().optional().default("[]"),
+  GROUP_ACCESS_GRACE_HOURS: z.coerce.number().int().positive().default(24),
+  GROUP_ACCESS_DUE_INTERVAL_MS: z.coerce.number().int().positive().default(300000),
   VPN_BOT_TOKEN: z.string().optional().default(""),
   VPN_BOT_ADMIN_TELEGRAM_ID: z.union([z.string().regex(/^\d+$/), z.literal("")]).default(""),
 
@@ -149,11 +153,32 @@ function parseXuiServers(): XuiServerConfig[] {
 
 const xuiServers = parseXuiServers();
 const defaultXuiServer = xuiServers.find((server) => server.code === env.VPN_XUI_SERVER_CODE) ?? xuiServers[0];
+const groupAccessManagedChatIds = parseStringArrayEnv(
+  env.GROUP_ACCESS_MANAGED_CHAT_IDS_JSON,
+  [],
+  "GROUP_ACCESS_MANAGED_CHAT_IDS_JSON",
+);
+
+if (env.GROUP_ACCESS_ENABLED && groupAccessManagedChatIds.length === 0) {
+  throw new Error("GROUP_ACCESS_MANAGED_CHAT_IDS_JSON must not be empty when group access is enabled");
+}
+
+for (const chatId of groupAccessManagedChatIds) {
+  if (!/^-100\d+$/.test(chatId)) {
+    throw new Error(`Invalid managed Telegram supergroup id: ${chatId}`);
+  }
+}
 
 export const config = {
   botToken: env.BOT_TOKEN,
   clubGroupId: env.CLUB_GROUP_ID,
   seedAdminId: BigInt(env.SEED_ADMIN_ID),
+  groupAccess: {
+    enabled: env.GROUP_ACCESS_ENABLED,
+    managedChatIds: [...new Set(groupAccessManagedChatIds)],
+    graceHours: env.GROUP_ACCESS_GRACE_HOURS,
+    dueIntervalMs: env.GROUP_ACCESS_DUE_INTERVAL_MS,
+  },
   vpnBot: {
     token: env.VPN_BOT_TOKEN,
     adminTelegramId: env.VPN_BOT_ADMIN_TELEGRAM_ID

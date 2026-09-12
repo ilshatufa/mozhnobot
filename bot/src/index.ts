@@ -4,6 +4,7 @@ import { createBot } from "./bot.js";
 import { config } from "./config.js";
 import { registerProcessErrorHandlers } from "./error-handling.js";
 import { clubSearchDeliveryService } from "./services/club-search-delivery.service.js";
+import { groupAccessService } from "./services/group-access.service.js";
 
 const STARTUP_RETRY_CODES = new Set([
   "EAI_AGAIN",
@@ -107,6 +108,7 @@ async function main(): Promise<void> {
     logger.info(`${signal} received, shutting down...`);
     bot.stop(signal);
     clubSearchDeliveryService.stop();
+    groupAccessService.stop();
     await prisma.$disconnect();
     process.exit(0);
   };
@@ -119,6 +121,7 @@ async function main(): Promise<void> {
     VPN_ACCESS: "unlimited",
   });
   await launchBotWithRetry(bot);
+  groupAccessService.start(bot.telegram);
   logger.info("Bot started");
 }
 

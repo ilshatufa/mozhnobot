@@ -2,6 +2,7 @@ import { Telegraf } from "telegraf";
 import { config } from "./config.js";
 import { type AuthContext, authMiddleware, adminOnly } from "./middlewares/auth.js";
 import { eventLoggerMiddleware } from "./middlewares/event-logger.js";
+import { groupAccessMiddleware } from "./middlewares/group-access.js";
 import { startHandler } from "./handlers/start.js";
 import {
   CLUB_AVITO_GUIDE_ACTION,
@@ -38,6 +39,7 @@ export function createBot(): Telegraf<AuthContext> {
   });
 
   bot.use(eventLoggerMiddleware());
+  bot.use(groupAccessMiddleware());
   bot.use(authMiddleware());
 
   bot.command("start", startHandler);

@@ -99,6 +99,8 @@ model User {
   clubStatus   ClubMembershipStatus @default(UNKNOWN) @map("club_status")
   joinedAt     DateTime?            @map("joined_at") @db.Timestamptz()
   leftAt       DateTime?            @map("left_at") @db.Timestamptz()
+  groupRemovalExempt Boolean        @default(false) @map("group_removal_exempt")
+  clearAccessGroupAt DateTime?      @map("clear_access_group_at") @db.Timestamptz()
   botStatus    BotInteractionStatus @default(UNKNOWN) @map("bot_status")
   botStartedAt DateTime?            @map("bot_started_at") @db.Timestamptz()
   botBlockedAt DateTime?            @map("bot_blocked_at") @db.Timestamptz()
@@ -112,6 +114,7 @@ model User {
   clubInterest     ClubInterest?
 
   @@index([clubStatus])
+  @@index([groupRemovalExempt, clearAccessGroupAt])
   @@index([botStatus])
   @@index([lastSeenAt])
   @@map("users")
