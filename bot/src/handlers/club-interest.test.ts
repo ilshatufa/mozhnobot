@@ -42,7 +42,17 @@ test("waitlist confirmation preserves the original message and offers the Avito 
   assert.equal(callbackAnswered, true);
   assert.deepEqual(editedReplyMarkup, { inline_keyboard: [] });
   assert.equal(replyText, WAITLIST_CONFIRMATION_TEXT);
+  assert.equal(
+    replyText.replaceAll("<b>", "").replaceAll("</b>", ""),
+    [
+      "Спасибо! Бот всё записал ✏️",
+      "Он обязательно сообщит, как только откроется окно продаж.",
+      "",
+      "А пока лови БОНУС – методичку нашего клуба «Все фишки Авито»👋",
+    ].join("\n"),
+  );
   assert.deepEqual(JSON.parse(JSON.stringify(replyExtra)), {
+    parse_mode: "HTML",
     reply_markup: {
       inline_keyboard: [
         [

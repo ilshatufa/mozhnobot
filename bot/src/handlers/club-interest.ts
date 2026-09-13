@@ -7,9 +7,9 @@ export const CLUB_AVITO_GUIDE_ACTION = "club_avito_guide";
 
 export const WAITLIST_CONFIRMATION_TEXT = [
   "Спасибо! Бот всё записал ✏️",
-  "Он обязательно сообщит, как только откроется окно продаж.",
+  "<b>Он обязательно сообщит, как только откроется окно продаж.</b>",
   "",
-  "А пока лови БОНУС – методичку нашего клуба «Все фишки Авито»👋",
+  "<b>А пока лови БОНУС – методичку нашего клуба «Все фишки Авито»👋</b>",
 ].join("\n");
 
 export const AVITO_GUIDE_TEXT = [
@@ -53,9 +53,12 @@ export async function waitlistHandler(ctx: AuthContext): Promise<void> {
   await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
   await ctx.reply(
     WAITLIST_CONFIRMATION_TEXT,
-    Markup.inlineKeyboard([
-      Markup.button.callback("Получить", CLUB_AVITO_GUIDE_ACTION),
-    ]),
+    {
+      parse_mode: "HTML",
+      ...Markup.inlineKeyboard([
+        Markup.button.callback("Получить", CLUB_AVITO_GUIDE_ACTION),
+      ]),
+    },
   );
 }
 
