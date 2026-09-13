@@ -42,6 +42,7 @@ test("waitlist confirmation preserves the original message and offers the Avito 
   assert.equal(callbackAnswered, true);
   assert.deepEqual(editedReplyMarkup, { inline_keyboard: [] });
   assert.equal(replyText, WAITLIST_CONFIRMATION_TEXT);
+  assert.doesNotMatch(replyText, /<b>Он обязательно сообщит/);
   assert.equal(
     replyText.replaceAll("<b>", "").replaceAll("</b>", ""),
     [
