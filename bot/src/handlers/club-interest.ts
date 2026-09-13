@@ -5,6 +5,13 @@ import { clubInterestRepository } from "../repositories/club-interest.repository
 export const CLUB_WAITLIST_ACTION = "club_waitlist_join";
 export const CLUB_AVITO_GUIDE_ACTION = "club_avito_guide";
 
+export const WAITLIST_CONFIRMATION_TEXT = [
+  "Спасибо! Бот всё записал ✏️",
+  "Он обязательно сообщит, как только откроется окно продаж.",
+  "",
+  "А пока лови БОНУС – методичку нашего клуба «Все фишки Авито»👋",
+].join("\n");
+
 export const AVITO_GUIDE_TEXT = [
   "<b>Авито: стряхиваем пыль с приложения и достаем деньги из шкафов🔥</b>",
   "",
@@ -37,13 +44,15 @@ export async function waitlistHandler(ctx: AuthContext): Promise<void> {
   await ctx.answerCbQuery();
 
   if (ctx.isClubMember) {
-    await ctx.editMessageText("Вы уже участник клуба.");
+    await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
+    await ctx.reply("Вы уже участник клуба.");
     return;
   }
 
   await clubInterestRepository.recordWaitlisted(ctx.dbUser.id);
-  await ctx.editMessageText(
-    "Спасибо! Лови методичку 👋",
+  await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
+  await ctx.reply(
+    WAITLIST_CONFIRMATION_TEXT,
     Markup.inlineKeyboard([
       Markup.button.callback("Получить", CLUB_AVITO_GUIDE_ACTION),
     ]),
