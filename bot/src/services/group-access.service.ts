@@ -71,6 +71,29 @@ function isMemberAbsent(member: { status: string; is_member?: boolean }): boolea
   );
 }
 
+function isMemberNotFoundError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("response" in error)) return false;
+
+  const response = (error as {
+    response?: { error_code?: number; description?: string };
+  }).response;
+
+  return response?.error_code === 400 && response.description?.endsWith("member not found") === true;
+}
+
+async function getSourceMember(
+  telegram: GroupAccessTelegram,
+  sourceChatId: string,
+  userId: number,
+): Promise<{ status: string; is_member?: boolean }> {
+  try {
+    return await telegram.getChatMember(sourceChatId, userId);
+  } catch (error) {
+    if (isMemberNotFoundError(error)) return { status: "left" };
+    throw error;
+  }
+}
+
 export function isJoinTransition(update: ChatMemberUpdateLike): boolean {
   return isMemberAbsent(update.old_chat_member) && isMemberPresent(update.new_chat_member);
 }
@@ -144,7 +167,7 @@ export class GroupAccessService {
     }
 
     try {
-      const sourceMember = await telegram.getChatMember(this.settings.sourceChatId, user.id);
+      const sourceMember = await getSourceMember(telegram, this.settings.sourceChatId, user.id);
       if (isMemberPresent(sourceMember)) {
         await this.repository.clearGroupAccessClearance(telegramId);
         return;
@@ -222,7 +245,7 @@ export class GroupAccessService {
 
     const userId = toTelegramUserId(user.telegramId);
     try {
-      const sourceMember = await telegram.getChatMember(this.settings.sourceChatId, userId);
+      const sourceMember = await getSourceMember(telegram, this.settings.sourceChatId, userId);
       if (isMemberPresent(sourceMember)) {
         await this.repository.clearGroupAccessClearance(user.telegramId);
         logger.info("Due group access clearance cancelled; user is back in club", {

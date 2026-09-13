@@ -95,6 +95,25 @@ function telegram(sourceStatus: string, removalFails = false) {
   return { api, removed };
 }
 
+function memberNotFoundTelegram() {
+  const removed: Array<{ chatId: string | number; userId: number }> = [];
+  const api: GroupAccessTelegram = {
+    async getChatMember() {
+      throw {
+        response: {
+          error_code: 400,
+          description: "Bad Request: member not found",
+        },
+      };
+    },
+    async unbanChatMember(chatId, userId) {
+      removed.push({ chatId, userId });
+      return true;
+    },
+  };
+  return { api, removed };
+}
+
 test("club departure schedules clearance exactly 24 hours after the event", async () => {
   const repository = new FakeRepository();
   const service = new GroupAccessService(repository, settings());
@@ -153,6 +172,17 @@ test("non-club entrant is removed from Berlin with rejoin still allowed", async 
   ]);
 });
 
+test("member not found is treated as an absent club member on entry", async () => {
+  const repository = new FakeRepository();
+  const service = new GroupAccessService(repository, settings());
+  const { api, removed } = memberNotFoundTelegram();
+
+  await service.handleChatMember(update(BERLIN_CHAT_ID, "left", "member"), api);
+
+  assert.deepEqual(removed, [{ chatId: BERLIN_CHAT_ID, userId: USER_ID }]);
+  assert.equal(repository.scheduleCalls.length, 0);
+});
+
 test("failed immediate removal is queued for retry", async () => {
   const repository = new FakeRepository();
   const service = new GroupAccessService(repository, settings());
@@ -173,6 +203,18 @@ test("due clearance is cancelled when the user returned to the club", async () =
 
   assert.equal(repository.clearCalls, 1);
   assert.equal(removed.length, 0);
+});
+
+test("member not found completes a due clearance", async () => {
+  const repository = new FakeRepository();
+  repository.dueUsers = [repository.user];
+  const service = new GroupAccessService(repository, settings());
+  const { api, removed } = memberNotFoundTelegram();
+
+  await service.processDue(api);
+
+  assert.deepEqual(removed, [{ chatId: BERLIN_CHAT_ID, userId: USER_ID }]);
+  assert.equal(repository.clearCalls, 1);
 });
 
 test("Telegram failure keeps due clearance for the next retry", async () => {
