@@ -22,7 +22,6 @@ async function main(): Promise<void> {
   logger.info("Paid VPN bot database connected");
 
   const bot = createPaidVpnBot();
-  await configureCommands(bot);
   vpnTrialNotificationService.start(bot.telegram);
 
   const shutdown = async (signal: string) => {
@@ -39,6 +38,9 @@ async function main(): Promise<void> {
     allowedUpdates: ["message", "callback_query", "pre_checkout_query", "subscription"] as never,
   });
   logger.info("Paid VPN bot started");
+  void configureCommands(bot).catch((error) => {
+    logger.warn("Failed to configure paid VPN bot commands", { error });
+  });
 }
 
 registerProcessErrorHandlers();
