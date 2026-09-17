@@ -33,7 +33,7 @@ function supportUrl(): string {
 function offerKeyboard(salesAvailable: boolean, trialAvailable: boolean, amountStars: number) {
   const rows = [];
   if (trialAvailable) rows.push([Markup.button.callback("Начать бесплатно", "vpn_trial_start")]);
-  if (salesAvailable) rows.push([Markup.button.callback(`Оплатить ${amountStars} ⭐`, "vpn_buy")]);
+  if (salesAvailable) rows.push([Markup.button.callback(`30 дней — ${amountStars} ⭐`, "vpn_buy")]);
   if (config.vpnBot.payments.termsUrl) {
     rows.push([Markup.button.url("Условия", config.vpnBot.payments.termsUrl)]);
   }
@@ -55,7 +55,7 @@ function activeKeyboard(input: {
       Markup.button.url("Установить HAPP", HAPP_SETUP_GUIDE_URL),
     ],
     ...(input.canBuy
-      ? [[Markup.button.callback(`Оплатить ${input.amountStars} ⭐`, "vpn_buy")]]
+      ? [[Markup.button.callback(`30 дней — ${input.amountStars} ⭐`, "vpn_buy")]]
       : []),
     ...(input.canCancel
       ? [[Markup.button.callback("Отключить продление", "vpn_cancel")]]
