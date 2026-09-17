@@ -1,4 +1,4 @@
-import type { ApiMethods, InlineKeyboardMarkup, SuccessfulPayment } from "@telegraf/types";
+import type { ApiMethods, InlineKeyboardButton, InlineKeyboardMarkup, SuccessfulPayment } from "@telegraf/types";
 import { ClubMembershipStatus, VpnSubscriptionAccessOverride } from "@prisma/client";
 import { Markup } from "telegraf";
 import { config } from "../config.js";
@@ -8,7 +8,6 @@ import {
   buildPaidVpnCancelConfirmationText,
   buildPaidVpnConfirmationText,
   buildPaidVpnPaymentReadyText,
-  buildPaidVpnSupportText,
   buildPaidVpnTermsText,
   buildVpnReferralRewardText,
   PAID_VPN_INVOICE_SENT_TEXT,
@@ -26,6 +25,7 @@ import { vpnAccessGrantService } from "../services/vpn-access-grant.service.js";
 import { vpnTrialService } from "../services/vpn-trial.service.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { showPaidVpnScreen } from "./paid-vpn-screen.js";
+import { VPN_SUPPORT_ACTION } from "../paid-vpn-support-flow.js";
 
 interface BotSubscriptionUpdated {
   user: { id: number };
@@ -54,10 +54,6 @@ type TextExtra = {
 
 interface RawTelegramApi {
   callApi(method: string, payload: Record<string, unknown>): Promise<unknown>;
-}
-
-function supportUrl(): string {
-  return `https://t.me/${config.vpnBot.payments.supportUsername.slice(1)}`;
 }
 
 function salesAllowedFor(telegramId: number): boolean {
@@ -212,7 +208,7 @@ export async function paidVpnBuyConfirmHandler(ctx: PaidVpnContext): Promise<voi
     parse_mode: "HTML",
     ...Markup.inlineKeyboard([
       [Markup.button.callback("Проверить статус", "vpn_status")],
-      [Markup.button.url("Поддержка", supportUrl())],
+      [Markup.button.callback("Поддержка", VPN_SUPPORT_ACTION)],
     ]),
   });
 }
@@ -262,7 +258,7 @@ export async function paidVpnSuccessfulPaymentHandler(ctx: PaidVpnContext): Prom
     });
     await ctx.reply(PAID_VPN_PROVISIONING_ERROR_TEXT, {
       parse_mode: "HTML",
-      ...Markup.inlineKeyboard([[Markup.button.url("Поддержка", supportUrl())]]),
+      ...Markup.inlineKeyboard([[Markup.button.callback("Поддержка", VPN_SUPPORT_ACTION)]]),
     });
     return;
   }
@@ -367,7 +363,7 @@ export async function paidVpnSuccessfulPaymentHandler(ctx: PaidVpnContext): Prom
       parse_mode: "HTML",
       ...Markup.inlineKeyboard([
         [Markup.button.callback("Проверить снова", "vpn_status")],
-        [Markup.button.url("Поддержка", supportUrl())],
+        [Markup.button.callback("Поддержка", VPN_SUPPORT_ACTION)],
       ]),
     });
   }
@@ -413,7 +409,7 @@ export async function paidVpnSubscriptionUpdatedHandler(ctx: PaidVpnContext): Pr
         parse_mode: "HTML",
         ...Markup.inlineKeyboard([
           [Markup.button.callback("Проверить VPN", "vpn_status")],
-          [Markup.button.url("Поддержка", supportUrl())],
+          [Markup.button.callback("Поддержка", VPN_SUPPORT_ACTION)],
         ]),
       },
     );
@@ -466,18 +462,11 @@ export async function paidVpnCancelConfirmHandler(ctx: PaidVpnContext): Promise<
 }
 
 export async function paidVpnTermsHandler(ctx: PaidVpnContext): Promise<void> {
-  const rows = config.vpnBot.payments.termsUrl
+  const rows: InlineKeyboardButton[][] = config.vpnBot.payments.termsUrl
     ? [[Markup.button.url("Открыть условия", config.vpnBot.payments.termsUrl)]]
     : [];
-  rows.push([Markup.button.url("Поддержка", supportUrl())]);
+  rows.push([Markup.button.callback("Поддержка", VPN_SUPPORT_ACTION)]);
   await ctx.reply(buildPaidVpnTermsText(config.vpnBot.payments.termsUrl), {
     ...Markup.inlineKeyboard(rows),
-  });
-}
-
-export async function paidVpnSupportHandler(ctx: PaidVpnContext): Promise<void> {
-  await ctx.reply(buildPaidVpnSupportText(config.vpnBot.payments.supportUsername), {
-    parse_mode: "HTML",
-    ...Markup.inlineKeyboard([[Markup.button.url("Написать в поддержку", supportUrl())]]),
   });
 }

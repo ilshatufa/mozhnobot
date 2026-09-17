@@ -6,6 +6,8 @@ import {
   buildPaidVpnConfirmationText,
   buildPaidVpnClubAccessText,
   buildPaidVpnReferralText,
+  buildPaidVpnSupportAdminReplyPrompt,
+  buildPaidVpnSupportAdminText,
   buildPaidVpnFreeAccessText,
   buildPaidVpnOfferText,
   buildPaidVpnTrialActiveText,
@@ -17,6 +19,7 @@ import {
   PAID_VPN_PENDING_ACCESS_READY_TEXT,
   PAID_VPN_STARS_HELP_TEXT,
   PAID_VPN_START_TEXT,
+  PAID_VPN_SUPPORT_PROMPT_TEXT,
   parseAddUsername,
   parseGiftCommand,
   parseRemoveUsername,
@@ -95,6 +98,24 @@ test("Stars help explains the PremiumBot purchase and safe return", () => {
   assert.match(PAID_VPN_STARS_HELP_TEXT, /Купить звёзды/);
   assert.match(PAID_VPN_STARS_HELP_TEXT, /Вернись сюда/);
   assert.match(PAID_VPN_STARS_HELP_TEXT, /Не вводи пароль или код/);
+});
+
+test("in-bot support copy explains the conversation and preserves safe identity data", () => {
+  assert.match(PAID_VPN_SUPPORT_PROMPT_TEXT, /Ответ придёт сюда/);
+  assert.match(PAID_VPN_SUPPORT_PROMPT_TEXT, /скриншот или документ/);
+
+  const adminText = buildPaidVpnSupportAdminText({
+    firstName: "Ильшат <тест>",
+    username: "ilsh_at",
+    telegramId: 123456789n,
+    accessStatus: "оплачен до 17 октября",
+  });
+  assert.match(adminText, /Ильшат &lt;тест&gt;/);
+  assert.match(adminText, /@ilsh_at/);
+  assert.match(adminText, /123456789/);
+  assert.match(adminText, /оплачен до 17 октября/);
+
+  assert.match(buildPaidVpnSupportAdminReplyPrompt(123456789), /Telegram ID: <code>123456789<\/code>/);
 });
 
 test("paid VPN canceled state preserves the paid period and link", () => {

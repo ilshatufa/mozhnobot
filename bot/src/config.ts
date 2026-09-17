@@ -17,7 +17,6 @@ const envSchema = z.object({
     z.string().url().refine((value) => value.startsWith("https://"), "must use HTTPS"),
     z.literal(""),
   ]).default(""),
-  VPN_PAID_SUPPORT_USERNAME: z.string().regex(/^@[A-Za-z0-9_]{5,32}$/).default("@clubni_support"),
   VPN_TRIAL_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   VPN_TRIAL_NOTIFICATION_INTERVAL_MS: z.coerce.number().int().positive().default(300000),
 
@@ -215,7 +214,6 @@ export const config = {
       priceStars: env.VPN_PAID_PRICE_STARS,
       termsVersion: env.VPN_PAID_TERMS_VERSION,
       termsUrl: env.VPN_PAID_TERMS_URL,
-      supportUsername: env.VPN_PAID_SUPPORT_USERNAME,
     },
     trial: {
       enabled: env.VPN_TRIAL_ENABLED,

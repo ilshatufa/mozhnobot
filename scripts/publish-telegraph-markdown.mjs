@@ -123,7 +123,7 @@ const result = pagePath
 
 const published = await telegraph("getPage", { path: result.path, return_content: "true" });
 const publishedText = JSON.stringify(published.content ?? []);
-for (const marker of [termsVersion, "100 Telegram Stars", "@clubni_support"]) {
+for (const marker of [termsVersion, "100 Telegram Stars", "Поддержка по оплате"]) {
   if (!publishedText.includes(marker)) throw new Error(`Published page is missing marker: ${marker}`);
 }
 

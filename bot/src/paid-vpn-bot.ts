@@ -17,10 +17,14 @@ import {
   paidVpnStarsHelpHandler,
   paidVpnSubscriptionUpdatedHandler,
   paidVpnSuccessfulPaymentHandler,
-  paidVpnSupportHandler,
   paidVpnTermsHandler,
   paidVpnTrialStartHandler,
 } from "./handlers/paid-vpn-payments.js";
+import {
+  paidVpnSupportHandler,
+  paidVpnSupportMessageHandler,
+  paidVpnSupportReplyStartHandler,
+} from "./handlers/paid-vpn-support.js";
 import { showPaidVpnReferralScreen, showPaidVpnScreen } from "./handlers/paid-vpn-screen.js";
 import {
   type PaidVpnContext,
@@ -29,6 +33,7 @@ import {
 } from "./middlewares/paid-vpn-auth.js";
 import { logger } from "./logger.js";
 import { isBotBlockedError } from "./telegram-errors.js";
+import { VPN_SUPPORT_ACTION } from "./paid-vpn-support-flow.js";
 
 export function createPaidVpnBot(): Telegraf<PaidVpnContext> {
   if (!config.vpnBot.token) throw new Error("VPN_BOT_TOKEN is required");
@@ -62,7 +67,10 @@ export function createPaidVpnBot(): Telegraf<PaidVpnContext> {
   bot.action("vpn_buy_confirm", paidVpnBuyConfirmHandler);
   bot.action("vpn_cancel", paidVpnCancelHandler);
   bot.action("vpn_cancel_confirm", paidVpnCancelConfirmHandler);
+  bot.action(VPN_SUPPORT_ACTION, paidVpnSupportHandler);
+  bot.action(/^vpn_support_reply:\d+$/, paidVpnAdminOnly(), paidVpnSupportReplyStartHandler);
   bot.on("pre_checkout_query", paidVpnPreCheckoutHandler);
+  bot.on("message", paidVpnSupportMessageHandler);
   bot.on("message", paidVpnSuccessfulPaymentHandler);
   bot.use(async (ctx, next) => {
     if (extractBotSubscriptionUpdate(ctx)) {

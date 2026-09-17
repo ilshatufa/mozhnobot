@@ -1,3 +1,8 @@
+import {
+  VPN_SUPPORT_ADMIN_PROMPT_HEADING,
+  VPN_SUPPORT_USER_PROMPT_HEADING,
+} from "./paid-vpn-support-flow.js";
+
 export const PAID_VPN_START_TEXT = [
   "<b>МОЖНО VPN</b>",
   "",
@@ -280,12 +285,58 @@ export function buildPaidVpnTermsText(termsUrl: string): string {
     : "Условия ещё не опубликованы, поэтому оплата пока недоступна.";
 }
 
-export function buildPaidVpnSupportText(username: string): string {
+export const PAID_VPN_SUPPORT_PROMPT_TEXT = joinPaidVpnBlocks([
+  `<b>${VPN_SUPPORT_USER_PROMPT_HEADING}</b>`,
+  "Опиши проблему одним сообщением. Можно приложить скриншот или документ.",
+  "Ответ придёт сюда. Чтобы выйти, отправь /start.",
+]);
+
+export const PAID_VPN_SUPPORT_SENT_TEXT = joinPaidVpnBlocks([
+  "<b>Сообщение отправлено</b>",
+  "Ответ поддержки придёт в этот чат.",
+]);
+
+export const PAID_VPN_SUPPORT_UNSUPPORTED_TEXT = joinPaidVpnBlocks([
+  "<b>Не получилось отправить это сообщение</b>",
+  "Пришли текст, скриншот или документ ответом на сообщение поддержки.",
+]);
+
+export const PAID_VPN_SUPPORT_SEND_ERROR_TEXT = joinPaidVpnBlocks([
+  "<b>Не получилось отправить сообщение</b>",
+  "Попробуй ещё раз через несколько минут.",
+]);
+
+export function buildPaidVpnSupportAdminText(input: {
+  firstName?: string | null;
+  lastName?: string | null;
+  username?: string | null;
+  telegramId: bigint;
+  accessStatus: string;
+}): string {
+  const name = [input.firstName, input.lastName].filter(Boolean).join(" ");
+  const identity = [
+    name ? escapeHtml(name) : null,
+    input.username ? `@${escapeHtml(input.username)}` : null,
+  ].filter(Boolean).join(" · ") || "Имя не указано";
   return joinPaidVpnBlocks([
-    "<b>Поддержка МОЖНО VPN</b>",
-    `Напиши ${escapeHtml(username)} и укажи:\n• свой Telegram username\n• что именно не работает\n• дату и сумму, если вопрос об оплате`,
+    "<b>Новое обращение в МОЖНО VPN</b>",
+    identity,
+    `Telegram ID: <code>${input.telegramId.toString()}</code>`,
+    `Доступ: ${escapeHtml(input.accessStatus)}`,
   ]);
 }
+
+export function buildPaidVpnSupportAdminReplyPrompt(telegramId: number): string {
+  return joinPaidVpnBlocks([
+    `<b>${VPN_SUPPORT_ADMIN_PROMPT_HEADING}</b>\nTelegram ID: <code>${telegramId}</code>`,
+    "Напиши ответ одним сообщением. Можно приложить скриншот или документ.",
+    "Чтобы выйти, отправь /start.",
+  ]);
+}
+
+export const PAID_VPN_SUPPORT_RESPONSE_TEXT = "<b>Ответ поддержки</b>";
+export const PAID_VPN_SUPPORT_ADMIN_SENT_TEXT = "Ответ отправлен пользователю.";
+export const PAID_VPN_SUPPORT_ADMIN_DELIVERY_ERROR_TEXT = "Не получилось доставить ответ. Возможно, пользователь заблокировал бота.";
 
 export const PAID_VPN_PENDING_ACCESS_PROGRESS_TEXT = "Подключаю бесплатный доступ…";
 

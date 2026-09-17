@@ -22,13 +22,10 @@ import { vpnAccessGrantService } from "../services/vpn-access-grant.service.js";
 import { VPN_TRIAL_WHITELIST_LIMIT_BYTES } from "../services/vpn-entitlement.js";
 import { vpnTrialService } from "../services/vpn-trial.service.js";
 import { vpnService } from "../services/vpn.service.js";
+import { VPN_SUPPORT_ACTION } from "../paid-vpn-support-flow.js";
 
 const INCY_SETUP_GUIDE_URL = "https://telegra.ph/Kak-podklyuchit-MOZHNO-VPN-v-INCY-09-17";
 const HAPP_SETUP_GUIDE_URL = "https://telegra.ph/Kak-podklyuchit-MOZHNO-VPN-v-HAPP-09-17";
-
-function supportUrl(): string {
-  return `https://t.me/${config.vpnBot.payments.supportUsername.slice(1)}`;
-}
 
 function offerKeyboard(salesAvailable: boolean, trialAvailable: boolean, amountStars: number) {
   const rows = [];
@@ -38,7 +35,7 @@ function offerKeyboard(salesAvailable: boolean, trialAvailable: boolean, amountS
     rows.push([Markup.button.url("Условия", config.vpnBot.payments.termsUrl)]);
   }
   rows.push([Markup.button.callback("Пригласить друга", "vpn_referral")]);
-  rows.push([Markup.button.url("Поддержка", supportUrl())]);
+  rows.push([Markup.button.callback("Поддержка", VPN_SUPPORT_ACTION)]);
   return Markup.inlineKeyboard(rows);
 }
 
@@ -61,14 +58,14 @@ function activeKeyboard(input: {
       ? [[Markup.button.callback("Отключить продление", "vpn_cancel")]]
       : []),
     [Markup.button.callback("Пригласить друга", "vpn_referral")],
-    [Markup.button.url("Поддержка", supportUrl())],
+    [Markup.button.callback("Поддержка", VPN_SUPPORT_ACTION)],
   ]);
 }
 
 function retryKeyboard() {
   return Markup.inlineKeyboard([
     [Markup.button.callback("Проверить снова", "vpn_status")],
-    [Markup.button.url("Поддержка", supportUrl())],
+    [Markup.button.callback("Поддержка", VPN_SUPPORT_ACTION)],
   ]);
 }
 
@@ -114,7 +111,11 @@ export async function showPaidVpnScreen(
   }
 
   if (ctx.dbUser.vpnBlocked) {
-    await editOrReply(ctx, messageId, PAID_VPN_BLOCKED_TEXT, {});
+    await editOrReply(ctx, messageId, PAID_VPN_BLOCKED_TEXT, {
+      ...Markup.inlineKeyboard([[
+        Markup.button.callback("Поддержка", VPN_SUPPORT_ACTION),
+      ]]),
+    });
     return;
   }
 
