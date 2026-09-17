@@ -53,6 +53,7 @@ test("trial screen shows expiry, whitelist quota, and no charge", () => {
   assert.match(text, /Нидерланды, Германия и Латвия — без лимита/);
   assert.match(text, /Как подключиться/);
   assert.match(text, /30 дней за друга/);
+  assert.doesNotMatch(text, /Если кнопка не сработает/);
 });
 
 test("purchase during trial explains that unused trial time is preserved", () => {

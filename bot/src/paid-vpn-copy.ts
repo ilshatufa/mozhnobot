@@ -117,7 +117,6 @@ export function buildPaidVpnTrialActiveText(input: {
     `До ${formatPaidVpnDate(input.endsAt)}.\nОплата не нужна. Списаний не будет.`,
     `<b>Твои профили</b>\n• Нидерланды, Германия и Латвия — без лимита\n• Белые списки — ${usedMb} МБ из ${limitGb} ГБ`,
     "<b>Как подключиться</b>\nУстанови INCY или HAPP, затем нажми «Подключить VPN».",
-    "Если кнопка не сработает, скопируй ссылку в приложение:",
     `<pre>${escapeHtml(input.subscriptionUrl)}</pre>`,
     PAID_VPN_REFERRAL_PROMO,
   ]);
@@ -158,7 +157,6 @@ export function buildPaidVpnActiveText(input: {
     renewalText,
     "<b>Твои профили</b>\n• Нидерланды, Германия и Латвия — без лимита\n• Белые списки — 10 ГБ, лимит обновляется каждые 30 дней",
     "<b>Как подключиться</b>\nУстанови INCY или HAPP, затем нажми «Подключить VPN».",
-    "Если кнопка не сработает, скопируй ссылку в приложение:",
     `<pre>${escapeHtml(input.subscriptionUrl)}</pre>`,
     PAID_VPN_REFERRAL_PROMO,
   ]);
@@ -179,7 +177,6 @@ export function buildPaidVpnFreeAccessText(input: {
     ...(renewalNotice ? [renewalNotice] : []),
     "<b>Твои профили</b>\n• Нидерланды, Германия и Латвия — без лимита\n• Белые списки — 10 ГБ, лимит обновляется каждые 30 дней",
     "<b>Как подключиться</b>\nУстанови INCY или HAPP, затем нажми «Подключить VPN».",
-    "Если кнопка не сработает, скопируй ссылку в приложение:",
     `<pre>${escapeHtml(input.subscriptionUrl)}</pre>`,
     PAID_VPN_REFERRAL_PROMO,
   ]);
@@ -199,7 +196,6 @@ export function buildPaidVpnClubAccessText(input: {
     ...(renewalNotice ? [renewalNotice] : []),
     "<b>Твои профили</b>\n• Нидерланды, Германия и Латвия — без лимита\n• Белые списки — 10 ГБ, лимит обновляется каждые 30 дней",
     "<b>Как подключиться</b>\nУстанови INCY или HAPP, затем нажми «Подключить VPN».",
-    "Если кнопка не сработает, скопируй ссылку в приложение:",
     `<pre>${escapeHtml(input.subscriptionUrl)}</pre>`,
     PAID_VPN_REFERRAL_PROMO,
   ]);
