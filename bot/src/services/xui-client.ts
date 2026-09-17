@@ -690,6 +690,23 @@ export class XuiClient {
     throw new Error(`3X-UI ${server.code} traffic lookup failed: ${lastError}`);
   }
 
+  async resetClientTraffic(server: XuiServerConfig, email: string): Promise<void> {
+    const path = this.isClientsApi(server)
+      ? `/panel/api/clients/resetTraffic/${encodeURIComponent(email)}`
+      : `/panel/api/inbounds/${server.inboundId}/resetClientTraffic/${encodeURIComponent(email)}`;
+    const res = await this.request(server, path, { method: "POST" });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`3X-UI ${server.code} resetClientTraffic failed: ${res.status} ${body}`);
+    }
+    const data = await res.json() as XuiApiResponse;
+    if (!data.success) {
+      throw new Error(
+        `3X-UI ${server.code} resetClientTraffic returned success=false: ${data.msg ?? "unknown reason"}`,
+      );
+    }
+  }
+
   async fetchSubscriptionLinks(subscriptionUrl: string): Promise<string[]> {
     const res = await fetch(subscriptionUrl);
     if (!res.ok) {

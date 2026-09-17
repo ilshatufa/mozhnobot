@@ -40,11 +40,22 @@ export function buildPaidVpnOfferText(input: {
   amountStars: number;
   expiredAt?: Date | null;
   salesAvailable: boolean;
+  trialAvailable?: boolean;
+  trialExpiredAt?: Date | null;
   adminConfigurationMissing?: boolean;
 }): string {
-  const intro = input.expiredAt
+  const intro = input.trialExpiredAt
+    ? `Пробный период закончился ${formatPaidVpnDate(input.trialExpiredAt)}. Списаний не было, личная ссылка и профили сохранены.`
+    : input.expiredAt
     ? `Предыдущий оплаченный период закончился ${formatPaidVpnDate(input.expiredAt)}. Личная ссылка и профили сохранены.`
     : "Одна постоянная ссылка открывает четыре VPN-профиля: Нидерланды, Германия, Латвия и режим для белых списков.";
+  const trial = input.trialAvailable
+    ? [
+        RICH_SPACER,
+        "Первые 7 дней бесплатно: прямые профили без лимита, режим для белых списков — 1 ГБ на весь пробный период. Карта и оплата не нужны, автоматического списания не будет.",
+        "Нажимая «Начать бесплатно», ты принимаешь действующие условия.",
+      ]
+    : [];
   const sale = input.salesAvailable
     ? `${input.amountStars} ⭐ за 30 дней. Подписка продлевается автоматически — отключить продление можно в этом боте.`
     : input.adminConfigurationMissing
@@ -54,6 +65,7 @@ export function buildPaidVpnOfferText(input: {
     "<b>МОЖНО VPN</b>",
     RICH_SPACER,
     intro,
+    ...trial,
     RICH_SPACER,
     sale,
     RICH_SPACER,
@@ -62,16 +74,54 @@ export function buildPaidVpnOfferText(input: {
 
 export function buildPaidVpnConfirmationText(input: {
   amountStars: number;
+  trialActive?: boolean;
 }): string {
   return [
     "<b>Подтверждение подписки</b>",
     RICH_SPACER,
     `${input.amountStars} ⭐ спишутся сейчас, затем каждые 30 дней. VPN включится только после подтверждения оплаты Telegram.`,
+    ...(input.trialActive
+      ? [RICH_SPACER, "Оплаченные 30 дней начнутся сразу. Оставшиеся дни пробного периода не переносятся."]
+      : []),
     RICH_SPACER,
     "Нажимая «Принять и оплатить», ты принимаешь действующие условия. Продление можно отключить в боте, оплаченный срок при этом сохранится.",
     RICH_SPACER,
   ].join("\n\n");
 }
+
+export function buildPaidVpnTrialActiveText(input: {
+  subscriptionUrl: string;
+  endsAt: Date;
+  whitelistUsedBytes: bigint;
+  whitelistLimitBytes: bigint;
+}): string {
+  const usedMb = Number(input.whitelistUsedBytes / (1024n ** 2n));
+  const limitGb = Number(input.whitelistLimitBytes / (1024n ** 3n));
+  return [
+    "<b>Пробный период МОЖНО VPN</b>",
+    RICH_SPACER,
+    `Работает до ${formatPaidVpnDate(input.endsAt)}. Списаний не будет.`,
+    `Белые списки: ${usedMb} МБ из ${limitGb} ГБ. Прямые профили — без лимита.`,
+    RICH_SPACER,
+    "Личная ссылка для INCY или HAPP:",
+    `<pre>${escapeHtml(input.subscriptionUrl)}</pre>`,
+    RICH_SPACER,
+  ].join("\n\n");
+}
+
+export const PAID_VPN_TRIAL_PROVISIONING_TEXT = [
+  "<b>Подключаю пробный период</b>",
+  RICH_SPACER,
+  "Профили пока настраиваются. Семь дней ещё не начались — проверь доступ через несколько минут.",
+  RICH_SPACER,
+].join("\n\n");
+
+export const PAID_VPN_TRIAL_STATUS_ERROR_TEXT = [
+  "<b>Пробный период подключён</b>",
+  RICH_SPACER,
+  "Не получилось проверить расход белых списков. Попробуй снова через несколько минут или напиши в поддержку.",
+  RICH_SPACER,
+].join("\n\n");
 
 export const PAID_VPN_INVOICE_SENT_TEXT = [
   "<b>Счёт отправлен</b>",

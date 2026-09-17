@@ -9,6 +9,7 @@ import { vpnKeyRepository } from "../repositories/vpn-key.repository.js";
 import type { VpnSubscriptionForSync } from "../repositories/vpn-subscription.repository.js";
 import { xuiClient } from "./xui-client.js";
 import type { VpnAccessSyncPlan } from "./vpn-access-sync-plan.js";
+import { VPN_TRIAL_WHITELIST_LIMIT_BYTES } from "./vpn-entitlement.js";
 import {
   resolveVpnTrafficLimitBytes,
   resolveVpnTrafficResetDays,
@@ -38,7 +39,7 @@ export class VpnAccessProvisioner {
     plan: VpnAccessSyncPlan,
   ): Promise<VpnAccessProvisioningResult> {
     const errors = plan.eligible
-      ? await this.ensureEligibleSubscription(subscription)
+      ? await this.ensureEligibleSubscription(subscription, plan)
       : await this.disableIneligibleSubscription(subscription);
     const now = new Date();
 
@@ -59,7 +60,10 @@ export class VpnAccessProvisioner {
     return { success: errors.length === 0, errors };
   }
 
-  private async ensureEligibleSubscription(subscription: VpnSubscriptionForSync): Promise<string[]> {
+  private async ensureEligibleSubscription(
+    subscription: VpnSubscriptionForSync,
+    plan: VpnAccessSyncPlan,
+  ): Promise<string[]> {
     const desiredInboundIds = new Set(
       subscription.product.inbounds
         .filter((item) => item.inbound.isActive)
@@ -123,6 +127,7 @@ export class VpnAccessProvisioner {
             clientGroup,
             groupInbounds,
             existingKey,
+            plan,
           );
           ensuredKeys.set(clientGroup, ensuredKey);
           if (!serverKeys.some((key) => key.id === ensuredKey.id)) serverKeys.push(ensuredKey);
@@ -214,12 +219,15 @@ export class VpnAccessProvisioner {
     clientGroup: string,
     desired: VpnSubscriptionForSync["product"]["inbounds"],
     existingKey: VpnKey | null,
+    plan: VpnAccessSyncPlan,
   ): Promise<VpnKey> {
     const desiredProviderIds = desired.map((item) => item.inbound.providerInboundId);
     const trafficLimits = new Set(desired.map((item) =>
       resolveVpnTrafficLimitBytes(
         clientGroup,
         item.trafficLimitBytes,
+        plan.entitlement.kind,
+        VPN_TRIAL_WHITELIST_LIMIT_BYTES,
       )?.toString() ?? "unlimited"));
     const trafficResetDays = new Set(desired.map((item) => item.trafficResetDays));
     if (trafficLimits.size !== 1 || trafficResetDays.size !== 1) {
@@ -230,14 +238,21 @@ export class VpnAccessProvisioner {
     const trafficLimitBytes = resolveVpnTrafficLimitBytes(
       clientGroup,
       desired[0]?.trafficLimitBytes ?? null,
+      plan.entitlement.kind,
+      VPN_TRIAL_WHITELIST_LIMIT_BYTES,
     );
     const resetDays = resolveVpnTrafficResetDays(
       subscription.product.accessPolicy,
       clientGroup,
       desired[0]?.trafficResetDays ?? 0,
-      subscription.expiresAt,
+      plan.entitlement.expiresAt,
+      new Date(),
+      plan.entitlement.kind,
     );
-    const expiryTime = subscription.expiresAt?.getTime() ?? 0;
+    const effectiveExpiresAt = plan.entitlement.kind === "FREE_UNLIMITED"
+      ? null
+      : plan.entitlement.expiresAt ?? subscription.expiresAt;
+    const expiryTime = effectiveExpiresAt?.getTime() ?? 0;
     let key = existingKey;
 
     if (!key) {
@@ -266,7 +281,7 @@ export class VpnAccessProvisioner {
         providerPeerId: created.clientId,
         subId: created.subId,
         subscriptionUrl: xuiClient.getSubscriptionUrl(serverConfig, created.subId),
-        expiresAt: subscription.expiresAt,
+        expiresAt: effectiveExpiresAt,
       });
       return key;
     }
@@ -289,7 +304,7 @@ export class VpnAccessProvisioner {
       trafficLimitBytes,
       resetDays,
     );
-    await vpnKeyRepository.setActive(key.id, true);
+    await vpnKeyRepository.setAccessState(key.id, true, effectiveExpiresAt);
     return key;
   }
 

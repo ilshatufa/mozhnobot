@@ -31,6 +31,7 @@ const vpnSubscriptionForSync = {
       },
     },
   },
+  trial: true,
 } satisfies Prisma.VpnSubscriptionInclude;
 
 export type VpnSubscriptionForSync = Prisma.VpnSubscriptionGetPayload<{

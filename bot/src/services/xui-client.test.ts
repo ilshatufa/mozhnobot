@@ -129,3 +129,30 @@ test("reads generated links for one client without using a shared subscription",
     globalThis.fetch = originalFetch;
   }
 });
+
+test("resets traffic for exactly one clients-API record", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ url: string; method: string }> = [];
+  globalThis.fetch = async (input, init) => {
+    requests.push({ url: String(input), method: init?.method ?? "GET" });
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const { XuiClient } = await import("./xui-client.js");
+    const client = new XuiClient();
+    await client.resetClientTraffic(
+      { ...server([]), apiToken: "test-token" },
+      "trial+whitelist@example.test",
+    );
+    assert.deepEqual(requests, [{
+      url: "https://panel.example.test/panel/api/clients/resetTraffic/trial%2Bwhitelist%40example.test",
+      method: "POST",
+    }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

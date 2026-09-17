@@ -85,6 +85,10 @@ export class VpnKeyRepository {
     await prisma.vpnKey.update({ where: { id }, data: { isActive } });
   }
 
+  async setAccessState(id: number, isActive: boolean, expiresAt: Date | null): Promise<void> {
+    await prisma.vpnKey.update({ where: { id }, data: { isActive, expiresAt } });
+  }
+
   async updateSubscription(id: number, subId: string, subscriptionUrl: string): Promise<VpnKey> {
     return prisma.vpnKey.update({
       where: { id },

@@ -5,6 +5,7 @@ import {
   VpnPaymentStatus,
   VpnSubscriptionAccessOverride,
   VpnSubscriptionStatus,
+  VpnTrialStatus,
   type VpnBillingSubscription,
   type VpnPayment,
   type VpnSubscription,
@@ -359,6 +360,16 @@ export class VpnBillingService {
               expiresAt: effectiveExpiration,
             },
           });
+          await tx.vpnTrial.updateMany({
+            where: {
+              vpnSubscriptionId: billingSubscription.vpnSubscriptionId,
+              status: { in: [VpnTrialStatus.PROVISIONING, VpnTrialStatus.ACTIVE] },
+            },
+            data: {
+              status: VpnTrialStatus.CONVERTED,
+              convertedAt: input.paidAt,
+            },
+          });
           return {
             payment,
             subscription,
@@ -441,6 +452,31 @@ export class VpnBillingService {
         status: VpnBillingSubscriptionStatus.CANCELED,
         stateUpdatedAt: occurredAt,
       },
+    });
+  }
+
+  async findPendingQuotaResets(vpnSubscriptionId: number): Promise<VpnPayment[]> {
+    return prisma.vpnPayment.findMany({
+      where: {
+        billingSubscription: { vpnSubscriptionId },
+        status: VpnPaymentStatus.PAID,
+        quotaResetAt: null,
+      },
+      orderBy: { paidAt: "asc" },
+    });
+  }
+
+  async markQuotaReset(paymentId: number, resetAt = new Date()): Promise<void> {
+    await prisma.vpnPayment.update({
+      where: { id: paymentId },
+      data: { quotaResetAt: resetAt, quotaResetError: null },
+    });
+  }
+
+  async markQuotaResetFailed(paymentId: number, error: string): Promise<void> {
+    await prisma.vpnPayment.update({
+      where: { id: paymentId },
+      data: { quotaResetError: error },
     });
   }
 }

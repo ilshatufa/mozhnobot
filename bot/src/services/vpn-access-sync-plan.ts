@@ -6,6 +6,7 @@ import {
   VpnSubscriptionInboundStatus,
   VpnSubscriptionStatus,
 } from "@prisma/client";
+import type { VpnEntitlement } from "./vpn-entitlement.js";
 
 export type VpnAccessDecisionReason =
   | "ELIGIBLE"
@@ -15,12 +16,14 @@ export type VpnAccessDecisionReason =
   | "USER_BLOCKED"
   | "USER_BANNED"
   | "FREE_UNLIMITED"
+  | "TRIAL"
+  | "TRIAL_PROVISIONING"
   | "CLUB_MEMBERSHIP_REQUIRED"
   | "PAID_ACCESS_REQUIRED";
 
 export interface VpnAccessSyncPlanInput {
   now: Date;
-  paidAccess: boolean;
+  entitlement: VpnEntitlement;
   user: {
     role: Role;
     clubStatus: ClubMembershipStatus;
@@ -61,6 +64,7 @@ export interface VpnAccessSyncPlan {
   targetRevision: number;
   actions: VpnAccessSyncAction[];
   fullyApplied: boolean;
+  entitlement: VpnEntitlement;
 }
 
 function accessDecision(input: VpnAccessSyncPlanInput): {
@@ -86,9 +90,12 @@ function accessDecision(input: VpnAccessSyncPlanInput): {
         ? { eligible: true, reason: "ELIGIBLE" }
         : { eligible: false, reason: "CLUB_MEMBERSHIP_REQUIRED" };
     case VpnProductAccessPolicy.PAID_BALANCE:
-      return input.paidAccess
-        ? { eligible: true, reason: "ELIGIBLE" }
-        : { eligible: false, reason: "PAID_ACCESS_REQUIRED" };
+      if (input.entitlement.kind === "PAID") return { eligible: true, reason: "ELIGIBLE" };
+      if (input.entitlement.kind === "TRIAL") return { eligible: true, reason: "TRIAL" };
+      if (input.entitlement.kind === "TRIAL_PROVISIONING") {
+        return { eligible: true, reason: "TRIAL_PROVISIONING" };
+      }
+      return { eligible: false, reason: "PAID_ACCESS_REQUIRED" };
     case VpnProductAccessPolicy.MANUAL:
       return { eligible: true, reason: "ELIGIBLE" };
   }
@@ -131,5 +138,6 @@ export function buildVpnAccessSyncPlan(input: VpnAccessSyncPlanInput): VpnAccess
     actions,
     fullyApplied:
       actions.length === 0 && input.subscription.appliedRevision === input.product.revision,
+    entitlement: input.entitlement,
   };
 }

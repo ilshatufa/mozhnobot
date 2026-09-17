@@ -17,6 +17,7 @@ import {
   paidVpnSuccessfulPaymentHandler,
   paidVpnSupportHandler,
   paidVpnTermsHandler,
+  paidVpnTrialStartHandler,
 } from "./handlers/paid-vpn-payments.js";
 import { showPaidVpnScreen } from "./handlers/paid-vpn-screen.js";
 import {
@@ -52,6 +53,7 @@ export function createPaidVpnBot(): Telegraf<PaidVpnContext> {
   bot.command("remove", paidVpnAdminOnly(), paidVpnRemoveHandler);
   bot.action("vpn_status", async (ctx) => showPaidVpnScreen(ctx));
   bot.action("vpn_buy", paidVpnBuyHandler);
+  bot.action("vpn_trial_start", paidVpnTrialStartHandler);
   bot.action("vpn_buy_confirm", paidVpnBuyConfirmHandler);
   bot.action("vpn_cancel", paidVpnCancelHandler);
   bot.action("vpn_cancel_confirm", paidVpnCancelConfirmHandler);

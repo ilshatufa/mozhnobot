@@ -3,6 +3,7 @@ import { prisma } from "./database.js";
 import { registerProcessErrorHandlers } from "./error-handling.js";
 import { logger } from "./logger.js";
 import { createPaidVpnBot } from "./paid-vpn-bot.js";
+import { vpnTrialNotificationService } from "./services/vpn-trial-notification.service.js";
 
 async function configureCommands(bot: ReturnType<typeof createPaidVpnBot>): Promise<void> {
   await bot.telegram.setMyCommands([
@@ -22,10 +23,12 @@ async function main(): Promise<void> {
 
   const bot = createPaidVpnBot();
   await configureCommands(bot);
+  vpnTrialNotificationService.start(bot.telegram);
 
   const shutdown = async (signal: string) => {
     logger.info(`Paid VPN bot received ${signal}, shutting down`);
     bot.stop(signal);
+    vpnTrialNotificationService.stop();
     await prisma.$disconnect();
     process.exit(0);
   };

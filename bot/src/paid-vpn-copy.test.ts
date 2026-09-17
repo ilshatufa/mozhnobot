@@ -6,6 +6,7 @@ import {
   buildPaidVpnConfirmationText,
   buildPaidVpnFreeAccessText,
   buildPaidVpnOfferText,
+  buildPaidVpnTrialActiveText,
   buildPaidVpnAccessRemovedText,
   buildPendingAccessSavedText,
   buildPendingAccessRemovedText,
@@ -26,10 +27,31 @@ test("paid VPN offer shows price, period, and automatic renewal before payment",
   const text = buildPaidVpnOfferText({
     amountStars: 100,
     salesAvailable: true,
+    trialAvailable: true,
   });
   assert.match(text, /100 ⭐/);
   assert.match(text, /30 дней/);
   assert.match(text, /продлевается автоматически/);
+  assert.match(text, /7 дней бесплатно/);
+  assert.match(text, /автоматического списания не будет/);
+});
+
+test("trial screen shows expiry, whitelist quota, and no charge", () => {
+  const text = buildPaidVpnTrialActiveText({
+    subscriptionUrl: "https://vpn.example.com/sub/private-token",
+    endsAt: new Date("2026-09-24T12:00:00Z"),
+    whitelistUsedBytes: 128n * 1024n ** 2n,
+    whitelistLimitBytes: 1024n ** 3n,
+  });
+  assert.match(text, /Списаний не будет/);
+  assert.match(text, /128 МБ из 1 ГБ/);
+  assert.match(text, /Прямые профили — без лимита/);
+});
+
+test("purchase during trial explains that paid time starts immediately", () => {
+  const text = buildPaidVpnConfirmationText({ amountStars: 100, trialActive: true });
+  assert.match(text, /30 дней начнутся сразу/);
+  assert.match(text, /не переносятся/);
 });
 
 test("paid VPN confirmation explains current and recurring charge", () => {

@@ -1,5 +1,6 @@
 import {
   Prisma,
+  VpnProductAccessPolicy,
   VpnProvider,
   VpnSubscriptionInboundStatus,
   VpnSubscriptionStatus,
@@ -13,6 +14,7 @@ import { logger } from "../logger.js";
 import { vpnKeyRepository } from "../repositories/vpn-key.repository.js";
 import { xuiClient } from "./xui-client.js";
 import { renderVpnInboundProfile } from "./vpn-public-profile.js";
+import { resolveVpnEntitlement } from "./vpn-entitlement.js";
 
 type XuiKeyWithServer = VpnKey & {
   server: VpnServer | null;
@@ -38,6 +40,7 @@ const renderableSubscriptionInclude = {
     orderBy: { createdAt: "asc" },
   },
   inboundStates: true,
+  trial: true,
 } satisfies Prisma.VpnSubscriptionInclude;
 
 type RenderableSubscription = Prisma.VpnSubscriptionGetPayload<{
@@ -427,6 +430,7 @@ export class XraySubscriptionService {
     if (
       !subscription ||
       !this.isUserAllowed(subscription.user) ||
+      !this.isSubscriptionEntitled(subscription) ||
       !hasCompleteRequiredInbounds(subscription)
     ) {
       return null;
@@ -576,7 +580,6 @@ export class XraySubscriptionService {
         token,
         status: VpnSubscriptionStatus.ACTIVE,
         product: { isActive: true },
-        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
       },
       include: renderableSubscriptionInclude,
     });
@@ -584,6 +587,16 @@ export class XraySubscriptionService {
 
   private isUserAllowed(user: User): boolean {
     return !user.vpnBlocked && !user.isBanned;
+  }
+
+  private isSubscriptionEntitled(subscription: RenderableSubscription, now = new Date()): boolean {
+    if (subscription.product.accessPolicy === VpnProductAccessPolicy.PAID_BALANCE) {
+      const entitlement = resolveVpnEntitlement(subscription, now);
+      return entitlement.kind === "FREE_UNLIMITED" ||
+        entitlement.kind === "PAID" ||
+        entitlement.kind === "TRIAL";
+    }
+    return subscription.expiresAt === null || subscription.expiresAt > now;
   }
 
   private async collectLinks(

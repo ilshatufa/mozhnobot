@@ -16,7 +16,7 @@ import {
 function input(overrides: Partial<VpnAccessSyncPlanInput> = {}): VpnAccessSyncPlanInput {
   const base: VpnAccessSyncPlanInput = {
     now: new Date("2026-09-10T00:00:00Z"),
-    paidAccess: false,
+    entitlement: { kind: "NONE", expiresAt: null },
     user: {
       role: Role.USER,
       clubStatus: ClubMembershipStatus.MEMBER,
@@ -122,7 +122,10 @@ test("free unlimited override preserves access after an old paid period expires"
 
 test("active paid period grants paid product access", () => {
   const plan = buildVpnAccessSyncPlan(input({
-    paidAccess: true,
+    entitlement: {
+      kind: "PAID",
+      expiresAt: new Date("2026-10-01T00:00:00Z"),
+    },
     product: { accessPolicy: VpnProductAccessPolicy.PAID_BALANCE } as VpnAccessSyncPlanInput["product"],
     subscription: {
       expiresAt: new Date("2026-10-01T00:00:00Z"),
@@ -133,9 +136,21 @@ test("active paid period grants paid product access", () => {
   assert.equal(plan.reason, "ELIGIBLE");
 });
 
+test("active trial grants paid product access without a paid expiry", () => {
+  const trialEndsAt = new Date("2026-09-17T00:00:00Z");
+  const plan = buildVpnAccessSyncPlan(input({
+    entitlement: { kind: "TRIAL", expiresAt: trialEndsAt },
+    product: { accessPolicy: VpnProductAccessPolicy.PAID_BALANCE } as VpnAccessSyncPlanInput["product"],
+  }));
+
+  assert.equal(plan.eligible, true);
+  assert.equal(plan.reason, "TRIAL");
+  assert.equal(plan.entitlement.expiresAt, trialEndsAt);
+});
+
 test("expired paid period does not grant access", () => {
   const plan = buildVpnAccessSyncPlan(input({
-    paidAccess: true,
+    entitlement: { kind: "NONE", expiresAt: null },
     product: { accessPolicy: VpnProductAccessPolicy.PAID_BALANCE } as VpnAccessSyncPlanInput["product"],
     subscription: {
       expiresAt: new Date("2026-09-01T00:00:00Z"),

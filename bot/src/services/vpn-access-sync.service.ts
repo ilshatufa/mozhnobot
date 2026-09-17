@@ -1,4 +1,3 @@
-import { VpnProductAccessPolicy } from "@prisma/client";
 import {
   vpnSubscriptionRepository,
   type VpnSubscriptionForSync,
@@ -11,22 +10,7 @@ import {
   vpnAccessProvisioner,
   type VpnAccessProvisioningResult,
 } from "./vpn-access-provisioner.js";
-
-export interface PaidVpnAccessProvider {
-  hasAccess(subscription: VpnSubscriptionForSync, now: Date): Promise<boolean>;
-}
-
-class DenyUnavailablePaidVpnAccessProvider implements PaidVpnAccessProvider {
-  async hasAccess(): Promise<boolean> {
-    return false;
-  }
-}
-
-class SubscriptionExpiryPaidVpnAccessProvider implements PaidVpnAccessProvider {
-  async hasAccess(subscription: VpnSubscriptionForSync, now: Date): Promise<boolean> {
-    return subscription.expiresAt !== null && subscription.expiresAt > now;
-  }
-}
+import { resolveVpnEntitlement } from "./vpn-entitlement.js";
 
 export interface PlannedVpnSubscriptionSync {
   subscriptionId: number;
@@ -37,10 +21,6 @@ export interface PlannedVpnSubscriptionSync {
 }
 
 export class VpnAccessSyncService {
-  constructor(
-    private readonly paidAccessProvider: PaidVpnAccessProvider = new DenyUnavailablePaidVpnAccessProvider(),
-  ) {}
-
   async buildPlan(filters: {
     subscriptionId?: number;
     userId?: number;
@@ -51,9 +31,7 @@ export class VpnAccessSyncService {
     const result: PlannedVpnSubscriptionSync[] = [];
 
     for (const subscription of subscriptions) {
-      const paidAccess = subscription.product.accessPolicy === VpnProductAccessPolicy.PAID_BALANCE
-        ? await this.paidAccessProvider.hasAccess(subscription, now)
-        : false;
+      const entitlement = resolveVpnEntitlement(subscription, now);
 
       result.push({
         subscriptionId: subscription.id,
@@ -61,7 +39,7 @@ export class VpnAccessSyncService {
         productCode: subscription.product.code,
         plan: buildVpnAccessSyncPlan({
           now,
-          paidAccess,
+          entitlement,
           user: subscription.user,
           product: subscription.product,
           subscription,
@@ -104,6 +82,4 @@ export class VpnAccessSyncService {
   }
 }
 
-export const vpnAccessSyncService = new VpnAccessSyncService(
-  new SubscriptionExpiryPaidVpnAccessProvider(),
-);
+export const vpnAccessSyncService = new VpnAccessSyncService();

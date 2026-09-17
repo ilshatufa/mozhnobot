@@ -7,6 +7,8 @@ import {
   resolveVpnTrafficResetDays,
 } from "./vpn-traffic-policy.js";
 
+const ONE_GIB = 1024n ** 3n;
+
 test("defaults an unset whitelist limit to 10 GiB", () => {
   assert.equal(
     resolveVpnTrafficLimitBytes("whitelist", null),
@@ -26,6 +28,11 @@ test("keeps an unset non-whitelist limit unlimited", () => {
 test("preserves an explicit per-inbound limit including unlimited", () => {
   assert.equal(resolveVpnTrafficLimitBytes("whitelist", 25n), 25n);
   assert.equal(resolveVpnTrafficLimitBytes("whitelist", 0n), 0n);
+});
+
+test("limits only the trial whitelist group to one GiB", () => {
+  assert.equal(resolveVpnTrafficLimitBytes("whitelist", 10n * ONE_GIB, "TRIAL"), ONE_GIB);
+  assert.equal(resolveVpnTrafficLimitBytes("direct", null, "TRIAL"), null);
 });
 
 test("resets paid whitelist traffic only during an active paid period", () => {
@@ -57,8 +64,23 @@ test("resets paid whitelist traffic only during an active paid period", () => {
       30,
       new Date("2026-10-10T12:00:00Z"),
       now,
+      "PAID",
     ),
     30,
+  );
+});
+
+test("never schedules periodic whitelist resets during a trial", () => {
+  assert.equal(
+    resolveVpnTrafficResetDays(
+      VpnProductAccessPolicy.PAID_BALANCE,
+      "whitelist",
+      30,
+      new Date("2026-10-10T12:00:00Z"),
+      new Date("2026-09-11T12:00:00Z"),
+      "TRIAL",
+    ),
+    0,
   );
 });
 

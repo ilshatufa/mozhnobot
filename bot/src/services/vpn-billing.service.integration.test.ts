@@ -5,6 +5,7 @@ import {
   VpnBillingSubscriptionStatus,
   VpnProductAccessPolicy,
   VpnSubscriptionAccessOverride,
+  VpnTrialStatus,
 } from "@prisma/client";
 import { prisma } from "../database.js";
 import { vpnSubscriptionRepository } from "../repositories/vpn-subscription.repository.js";
@@ -108,9 +109,26 @@ test("records Stars payments, trusts Telegram expiration, and preserves paid tim
       subscriptionExpirationDate: expiresAt,
       paidAt,
     };
+    await prisma.vpnTrial.create({
+      data: {
+        vpnSubscriptionId: vpnSubscription.id,
+        status: VpnTrialStatus.ACTIVE,
+        termsVersion: "trial-v1",
+        termsAcceptedAt: new Date("2026-09-17T07:00:00Z"),
+        startedAt: new Date("2026-09-17T07:00:00Z"),
+        endsAt: new Date("2026-09-24T07:00:00Z"),
+      },
+    });
     const recorded = await vpnBillingService.recordSuccessfulPayment(paymentInput);
     assert.equal(recorded.duplicate, false);
     assert.equal(recorded.subscription.expiresAt?.toISOString(), expiresAt.toISOString());
+    assert.equal(
+      (await prisma.vpnTrial.findUniqueOrThrow({
+        where: { vpnSubscriptionId: vpnSubscription.id },
+      })).status,
+      VpnTrialStatus.CONVERTED,
+    );
+    assert.equal((await vpnBillingService.findPendingQuotaResets(vpnSubscription.id)).length, 1);
     assert.equal(
       (await prisma.vpnBillingSubscription.findUniqueOrThrow({
         where: { id: replacementInvoice.billingSubscription.id },
@@ -214,6 +232,7 @@ test("records Stars payments, trusts Telegram expiration, and preserves paid tim
         where: { billingSubscriptionId: { in: billingIds.map((item) => item.id) } },
       });
       await prisma.vpnBillingSubscription.deleteMany({ where: { vpnSubscriptionId: subscriptionId } });
+      await prisma.vpnTrial.deleteMany({ where: { vpnSubscriptionId: subscriptionId } });
       await prisma.vpnSubscription.deleteMany({ where: { id: subscriptionId } });
     }
     if (userId !== null) await prisma.user.deleteMany({ where: { id: userId } });

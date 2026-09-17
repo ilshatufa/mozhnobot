@@ -1,10 +1,12 @@
 import { VpnProvider, type User, type VpnKey, type VpnServer } from "@prisma/client";
 import { config, type XuiServerConfig } from "../config.js";
+import { prisma } from "../database.js";
 import { logger } from "../logger.js";
 import { vpnKeyRepository } from "../repositories/vpn-key.repository.js";
 import { vpnServerRepository } from "../repositories/vpn-server.repository.js";
 import { vpnSubscriptionRepository } from "../repositories/vpn-subscription.repository.js";
 import { vpnAccessSyncService } from "./vpn-access-sync.service.js";
+import { vpnBillingService } from "./vpn-billing.service.js";
 import { xuiClient } from "./xui-client.js";
 
 export interface VpnKeyResult {
@@ -32,7 +34,42 @@ export class VpnService {
     const subscription = await vpnSubscriptionRepository.findByUserAndProduct(user.id, "paid");
     if (!subscription) return null;
     const key = await this.syncSubscriptionKey(subscription.id, subscription.token);
+    if (key) await this.ensurePaidWhitelistQuotaReset(subscription.id);
     return key ? { key, alreadyExisted: true } : null;
+  }
+
+  private async ensurePaidWhitelistQuotaReset(subscriptionId: number): Promise<void> {
+    const pending = await vpnBillingService.findPendingQuotaResets(subscriptionId);
+    if (pending.length === 0) return;
+
+    const keys = await prisma.vpnKey.findMany({
+      where: {
+        subscriptionId,
+        clientGroup: { startsWith: "whitelist" },
+        serverId: { not: null },
+        providerClientId: { not: null },
+      },
+      include: { server: true },
+    });
+    if (keys.length === 0) throw new Error(`VPN subscription ${subscriptionId} has no whitelist client`);
+
+    for (const payment of pending) {
+      try {
+        for (const key of keys) {
+          if (!key.server || !key.providerClientId) {
+            throw new Error(`VPN whitelist key ${key.id} has no server or provider client`);
+          }
+          const server = this.requireXuiServerConfig(key.server.code);
+          await xuiClient.resetClientTraffic(server, key.providerClientId);
+          await vpnKeyRepository.updateTraffic(key.id, 0n);
+        }
+        await vpnBillingService.markQuotaReset(payment.id);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await vpnBillingService.markQuotaResetFailed(payment.id, message);
+        throw error;
+      }
+    }
   }
 
   async grantFreeUnlimitedPaidAccess(user: User): Promise<{ alreadyGranted: boolean }> {

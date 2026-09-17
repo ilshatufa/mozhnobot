@@ -19,6 +19,7 @@ import {
   vpnBillingService,
 } from "../services/vpn-billing.service.js";
 import { vpnService } from "../services/vpn.service.js";
+import { vpnTrialService } from "../services/vpn-trial.service.js";
 import { showPaidVpnScreen } from "./paid-vpn-screen.js";
 
 interface BotSubscriptionUpdated {
@@ -30,7 +31,16 @@ interface BotSubscriptionUpdated {
 type SendInvoiceRequest = Parameters<ApiMethods<unknown>["sendInvoice"]>[0] & {
   subscription_period: number;
 };
-type EditUserStarSubscriptionRequest = Parameters<ApiMethods<unknown>["editUserStarSubscription"]>[0];
+interface EditUserStarSubscriptionRequest {
+  user_id: number;
+  telegram_payment_charge_id: string;
+  is_canceled: boolean;
+}
+type RecurringSuccessfulPayment = SuccessfulPayment & {
+  subscription_expiration_date?: number;
+  is_recurring?: boolean;
+  is_first_recurring?: boolean;
+};
 type TextExtra = {
   parse_mode?: "HTML";
   link_preview_options?: { is_disabled?: boolean };
@@ -89,9 +99,14 @@ export async function paidVpnBuyHandler(ctx: PaidVpnContext): Promise<void> {
     return;
   }
 
+  const trial = await vpnTrialService.findTrial(ctx.dbUser.id);
+  const trialActive = trial?.status === "ACTIVE" && trial.endsAt !== null && trial.endsAt > new Date();
   await editCallbackMessage(
     ctx,
-    buildPaidVpnConfirmationText({ amountStars: config.vpnBot.payments.priceStars }),
+    buildPaidVpnConfirmationText({
+      amountStars: config.vpnBot.payments.priceStars,
+      trialActive,
+    }),
     {
       parse_mode: "HTML",
       ...Markup.inlineKeyboard([
@@ -101,6 +116,30 @@ export async function paidVpnBuyHandler(ctx: PaidVpnContext): Promise<void> {
       ]),
     },
   );
+}
+
+export async function paidVpnTrialStartHandler(ctx: PaidVpnContext): Promise<void> {
+  await ctx.answerCbQuery();
+  const configured = paymentsConfigured();
+  const allowed = config.vpnBot.trial.enabled || ctx.isPaidVpnAdmin;
+  if (!configured || !allowed || ctx.dbUser.vpnBlocked || ctx.dbUser.isBanned) {
+    await showPaidVpnScreen(ctx, { answerCallback: false });
+    return;
+  }
+
+  await editCallbackMessage(ctx, "Подключаю четыре профиля…", {});
+  const result = await vpnTrialService.startTrial({
+    user: ctx.dbUser,
+    termsVersion: config.vpnBot.payments.termsVersion,
+    acceptedAt: new Date(),
+  });
+  if (result.status === "PROVISIONING") {
+    logger.warn("Paid VPN trial provisioning is incomplete", {
+      userId: ctx.dbUser.id,
+      errors: result.errors,
+    });
+  }
+  await showPaidVpnScreen(ctx, { answerCallback: false });
 }
 
 export async function paidVpnBuyConfirmHandler(ctx: PaidVpnContext): Promise<void> {
@@ -198,7 +237,7 @@ export async function paidVpnPreCheckoutHandler(ctx: PaidVpnContext): Promise<vo
 export async function paidVpnSuccessfulPaymentHandler(ctx: PaidVpnContext): Promise<void> {
   const message = ctx.message;
   if (!message || !("successful_payment" in message)) return;
-  const successfulPayment = message.successful_payment as SuccessfulPayment;
+  const successfulPayment = message.successful_payment as RecurringSuccessfulPayment;
   if (!successfulPayment.subscription_expiration_date) {
     logger.error("Paid VPN Stars payment has no subscription expiration", {
       userId: ctx.dbUser.id,

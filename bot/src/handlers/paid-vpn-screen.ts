@@ -1,4 +1,4 @@
-import { VpnBillingSubscriptionStatus, VpnSubscriptionAccessOverride } from "@prisma/client";
+import { VpnBillingSubscriptionStatus, VpnSubscriptionAccessOverride, VpnTrialStatus } from "@prisma/client";
 import { Markup } from "telegraf";
 import type { InlineKeyboardMarkup } from "telegraf/types";
 import { config } from "../config.js";
@@ -8,12 +8,17 @@ import {
   buildPaidVpnActiveText,
   buildPaidVpnFreeAccessText,
   buildPaidVpnOfferText,
+  buildPaidVpnTrialActiveText,
   PAID_VPN_BLOCKED_TEXT,
   PAID_VPN_FREE_PROVISIONING_ERROR_TEXT,
   PAID_VPN_PROGRESS_TEXT,
   PAID_VPN_PROVISIONING_ERROR_TEXT,
+  PAID_VPN_TRIAL_PROVISIONING_TEXT,
+  PAID_VPN_TRIAL_STATUS_ERROR_TEXT,
 } from "../paid-vpn-copy.js";
 import { vpnBillingService } from "../services/vpn-billing.service.js";
+import { VPN_TRIAL_WHITELIST_LIMIT_BYTES } from "../services/vpn-entitlement.js";
+import { vpnTrialService } from "../services/vpn-trial.service.js";
 import { vpnService } from "../services/vpn.service.js";
 
 const INCY_SETUP_GUIDE_URL = "https://telegra.ph/Kak-podklyuchit-MOZHNO-VPN-v-INCY-09-07";
@@ -23,8 +28,9 @@ function supportUrl(): string {
   return `https://t.me/${config.vpnBot.payments.supportUsername.slice(1)}`;
 }
 
-function offerKeyboard(salesAvailable: boolean) {
+function offerKeyboard(salesAvailable: boolean, trialAvailable: boolean) {
   const rows = [];
+  if (trialAvailable) rows.push([Markup.button.callback("Начать бесплатно", "vpn_trial_start")]);
   if (salesAvailable) rows.push([Markup.button.callback("Оплатить", "vpn_buy")]);
   if (config.vpnBot.payments.termsUrl) {
     rows.push([Markup.button.url("Условия", config.vpnBot.payments.termsUrl)]);
@@ -36,6 +42,7 @@ function offerKeyboard(salesAvailable: boolean) {
 function activeKeyboard(input: {
   subscriptionUrl: string;
   canCancel: boolean;
+  canBuy?: boolean;
 }) {
   return Markup.inlineKeyboard([
     [Markup.button.url("Открыть подписку", input.subscriptionUrl)],
@@ -43,6 +50,7 @@ function activeKeyboard(input: {
       Markup.button.url("INCY", INCY_SETUP_GUIDE_URL),
       Markup.button.url("HAPP", HAPP_SETUP_GUIDE_URL),
     ],
+    ...(input.canBuy ? [[Markup.button.callback("Оплатить", "vpn_buy")]] : []),
     ...(input.canCancel
       ? [[Markup.button.callback("Отключить продление", "vpn_cancel")]]
       : []),
@@ -115,8 +123,29 @@ export async function showPaidVpnScreen(
   const now = new Date();
   const freeAccess = subscription?.accessOverride === VpnSubscriptionAccessOverride.FREE_UNLIMITED;
   const paidAccess = subscription?.expiresAt !== null && subscription?.expiresAt !== undefined && subscription.expiresAt > now;
+  let trialOverview;
+  try {
+    trialOverview = await vpnTrialService.getOverview(ctx.dbUser.id, now);
+  } catch (error) {
+    logger.error("Failed to read paid VPN trial usage", { userId: ctx.dbUser.id, error });
+    await editOrReply(ctx, progressMessageId, PAID_VPN_TRIAL_STATUS_ERROR_TEXT, {
+      parse_mode: "HTML",
+      ...retryKeyboard(),
+    });
+    return;
+  }
+  const activeTrial = trialOverview.trial?.status === VpnTrialStatus.ACTIVE &&
+    trialOverview.trial.endsAt !== null && trialOverview.trial.endsAt > now &&
+    !freeAccess && !paidAccess;
 
-  if (freeAccess || paidAccess) {
+  const paymentsConfigured = Boolean(
+    config.vpnBot.payments.termsUrl && config.vpnBot.payments.termsVersion,
+  );
+  const salesAvailable = paymentsConfigured && (
+    config.vpnBot.payments.enabled || ctx.isPaidVpnAdmin
+  );
+
+  if (freeAccess || paidAccess || activeTrial) {
     try {
       const result = await vpnService.getPaidKey(ctx.dbUser);
       if (!result || !subscription) throw new Error("Paid VPN key is unavailable");
@@ -129,7 +158,14 @@ export async function showPaidVpnScreen(
             paidExpiresAt: subscription.expiresAt,
             renewalActive: canCancel,
           })
-        : buildPaidVpnActiveText({
+        : activeTrial
+          ? buildPaidVpnTrialActiveText({
+              subscriptionUrl: result.key.subscriptionUrl,
+              endsAt: trialOverview.trial?.endsAt as Date,
+              whitelistUsedBytes: trialOverview.whitelistUsedBytes as bigint,
+              whitelistLimitBytes: VPN_TRIAL_WHITELIST_LIMIT_BYTES,
+            })
+          : buildPaidVpnActiveText({
             subscriptionUrl: result.key.subscriptionUrl,
             expiresAt: subscription.expiresAt as Date,
             renewalState: renewalState(billingSubscription?.status),
@@ -144,6 +180,7 @@ export async function showPaidVpnScreen(
           ...activeKeyboard({
             subscriptionUrl: result.key.subscriptionUrl,
             canCancel,
+            canBuy: activeTrial && salesAvailable,
           }),
         },
       );
@@ -156,7 +193,11 @@ export async function showPaidVpnScreen(
       await editOrReply(
         ctx,
         progressMessageId,
-        freeAccess ? PAID_VPN_FREE_PROVISIONING_ERROR_TEXT : PAID_VPN_PROVISIONING_ERROR_TEXT,
+        freeAccess
+          ? PAID_VPN_FREE_PROVISIONING_ERROR_TEXT
+          : activeTrial
+            ? PAID_VPN_TRIAL_PROVISIONING_TEXT
+            : PAID_VPN_PROVISIONING_ERROR_TEXT,
         {
         parse_mode: "HTML",
         ...retryKeyboard(),
@@ -166,20 +207,31 @@ export async function showPaidVpnScreen(
     }
   }
 
-  const paymentsConfigured = Boolean(
-    config.vpnBot.payments.termsUrl && config.vpnBot.payments.termsVersion,
-  );
-  const salesAvailable = paymentsConfigured && (
-    config.vpnBot.payments.enabled || ctx.isPaidVpnAdmin
-  );
+  if (trialOverview.trial?.status === VpnTrialStatus.PROVISIONING) {
+    await editOrReply(ctx, progressMessageId, PAID_VPN_TRIAL_PROVISIONING_TEXT, {
+      parse_mode: "HTML",
+      ...retryKeyboard(),
+    });
+    return;
+  }
+
+  const trialAvailable = paymentsConfigured &&
+    (config.vpnBot.trial.enabled || ctx.isPaidVpnAdmin) &&
+    trialOverview.trial === null &&
+    !subscription?.expiresAt &&
+    !freeAccess;
   const text = buildPaidVpnOfferText({
     amountStars: config.vpnBot.payments.priceStars,
     expiredAt: subscription?.expiresAt,
     salesAvailable,
+    trialAvailable,
+    trialExpiredAt: trialOverview.trial?.status === VpnTrialStatus.EXPIRED
+      ? trialOverview.trial.endsAt
+      : null,
     adminConfigurationMissing: ctx.isPaidVpnAdmin && !paymentsConfigured,
   });
   await editOrReply(ctx, progressMessageId, text, {
     parse_mode: "HTML",
-    ...offerKeyboard(salesAvailable),
+    ...offerKeyboard(salesAvailable, trialAvailable),
   });
 }
