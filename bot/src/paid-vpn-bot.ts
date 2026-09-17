@@ -13,6 +13,7 @@ import {
   paidVpnCancelConfirmHandler,
   paidVpnCancelHandler,
   paidVpnPreCheckoutHandler,
+  paidVpnStarsHelpHandler,
   paidVpnSubscriptionUpdatedHandler,
   paidVpnSuccessfulPaymentHandler,
   paidVpnSupportHandler,
@@ -53,6 +54,7 @@ export function createPaidVpnBot(): Telegraf<PaidVpnContext> {
   bot.command("remove", paidVpnAdminOnly(), paidVpnRemoveHandler);
   bot.action("vpn_status", async (ctx) => showPaidVpnScreen(ctx));
   bot.action("vpn_buy", paidVpnBuyHandler);
+  bot.action("vpn_stars_help", paidVpnStarsHelpHandler);
   bot.action("vpn_trial_start", paidVpnTrialStartHandler);
   bot.action("vpn_buy_confirm", paidVpnBuyConfirmHandler);
   bot.action("vpn_cancel", paidVpnCancelHandler);

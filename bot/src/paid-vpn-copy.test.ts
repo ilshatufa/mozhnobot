@@ -13,6 +13,7 @@ import {
   PAID_VPN_NO_ACCESS_TEXT,
   PAID_VPN_PENDING_ACCESS_ERROR_TEXT,
   PAID_VPN_PENDING_ACCESS_READY_TEXT,
+  PAID_VPN_STARS_HELP_TEXT,
   PAID_VPN_START_TEXT,
   parseAddUsername,
   parseRemoveUsername,
@@ -60,6 +61,13 @@ test("paid VPN confirmation explains current and recurring charge", () => {
   assert.match(text, /спишется сейчас/);
   assert.match(text, /каждые 30 дней/);
   assert.match(text, /Принять и оплатить/);
+});
+
+test("Stars help explains the PremiumBot purchase and safe return", () => {
+  assert.match(PAID_VPN_STARS_HELP_TEXT, /@PremiumBot/);
+  assert.match(PAID_VPN_STARS_HELP_TEXT, /Купить звёзды/);
+  assert.match(PAID_VPN_STARS_HELP_TEXT, /Вернись сюда/);
+  assert.match(PAID_VPN_STARS_HELP_TEXT, /Не вводи пароль или код/);
 });
 
 test("paid VPN canceled state preserves the paid period and link", () => {

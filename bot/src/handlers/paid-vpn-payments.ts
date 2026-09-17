@@ -12,6 +12,7 @@ import {
   buildPaidVpnTermsText,
   PAID_VPN_INVOICE_SENT_TEXT,
   PAID_VPN_PROVISIONING_ERROR_TEXT,
+  PAID_VPN_STARS_HELP_TEXT,
 } from "../paid-vpn-copy.js";
 import {
   VPN_STARS_CURRENCY,
@@ -111,11 +112,23 @@ export async function paidVpnBuyHandler(ctx: PaidVpnContext): Promise<void> {
       parse_mode: "HTML",
       ...Markup.inlineKeyboard([
         [Markup.button.callback("Принять и оплатить", "vpn_buy_confirm")],
+        [Markup.button.callback("Как купить Stars", "vpn_stars_help")],
         [Markup.button.url("Условия", config.vpnBot.payments.termsUrl)],
         [Markup.button.callback("Назад", "vpn_status")],
       ]),
     },
   );
+}
+
+export async function paidVpnStarsHelpHandler(ctx: PaidVpnContext): Promise<void> {
+  await ctx.answerCbQuery();
+  await editCallbackMessage(ctx, PAID_VPN_STARS_HELP_TEXT, {
+    parse_mode: "HTML",
+    ...Markup.inlineKeyboard([
+      [Markup.button.url("Открыть @PremiumBot", "https://t.me/PremiumBot")],
+      [Markup.button.callback("Назад к оплате", "vpn_buy")],
+    ]),
+  });
 }
 
 export async function paidVpnTrialStartHandler(ctx: PaidVpnContext): Promise<void> {
