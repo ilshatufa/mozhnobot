@@ -22,6 +22,7 @@
     "sync:vpn-access": "tsx src/scripts/sync-vpn-access.ts",
     "bootstrap:vpn-catalog": "tsx src/scripts/bootstrap-vpn-catalog.ts",
     "backfill:vpn-subscriptions": "tsx src/scripts/backfill-vpn-subscriptions.ts",
+    "backfill:vpn-access-pauses": "tsx src/scripts/backfill-vpn-access-pauses.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",

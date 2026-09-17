@@ -1,5 +1,5 @@
 import type { ApiMethods, InlineKeyboardMarkup, SuccessfulPayment } from "@telegraf/types";
-import { VpnSubscriptionAccessOverride } from "@prisma/client";
+import { ClubMembershipStatus, VpnSubscriptionAccessOverride } from "@prisma/client";
 import { Markup } from "telegraf";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
@@ -10,7 +10,9 @@ import {
   buildPaidVpnPaymentReadyText,
   buildPaidVpnSupportText,
   buildPaidVpnTermsText,
+  buildVpnReferralRewardText,
   PAID_VPN_INVOICE_SENT_TEXT,
+  PAID_VPN_PAYMENT_BANKED_TEXT,
   PAID_VPN_PROVISIONING_ERROR_TEXT,
   PAID_VPN_STARS_HELP_TEXT,
 } from "../paid-vpn-copy.js";
@@ -20,7 +22,9 @@ import {
   vpnBillingService,
 } from "../services/vpn-billing.service.js";
 import { vpnService } from "../services/vpn.service.js";
+import { vpnAccessGrantService } from "../services/vpn-access-grant.service.js";
 import { vpnTrialService } from "../services/vpn-trial.service.js";
+import { userRepository } from "../repositories/user.repository.js";
 import { showPaidVpnScreen } from "./paid-vpn-screen.js";
 
 interface BotSubscriptionUpdated {
@@ -275,6 +279,47 @@ export async function paidVpnSuccessfulPaymentHandler(ctx: PaidVpnContext): Prom
     subscriptionExpirationDate: new Date(successfulPayment.subscription_expiration_date * 1000),
     paidAt: new Date(message.date * 1000),
   });
+  let referralReward;
+  try {
+    referralReward = await vpnAccessGrantService.rewardReferralForPayment(
+      result.payment.id,
+      result.payment.paidAt,
+    );
+  } catch (error) {
+    logger.error("Failed to apply paid VPN referral reward", {
+      userId: ctx.dbUser.id,
+      paymentId: result.payment.id,
+      error,
+    });
+  }
+  if (referralReward) {
+    if (!referralReward.pending) {
+      try {
+        const inviter = await userRepository.findByTelegramId(referralReward.inviterTelegramId);
+        if (inviter) await vpnService.getPaidKey(inviter);
+      } catch (error) {
+        logger.error("Failed to provision paid VPN referral reward", {
+          referralId: referralReward.referralId,
+          error,
+        });
+      }
+    }
+    try {
+      await ctx.telegram.sendMessage(
+        Number(referralReward.inviterTelegramId),
+        buildVpnReferralRewardText(referralReward.pending),
+        {
+          parse_mode: "HTML",
+          ...Markup.inlineKeyboard([[Markup.button.callback("Открыть VPN", "vpn_status")]]),
+        },
+      );
+    } catch (error) {
+      logger.warn("Failed to notify paid VPN referral inviter", {
+        referralId: referralReward.referralId,
+        error,
+      });
+    }
+  }
   if (result.duplicate) {
     logger.info("Duplicate paid VPN Stars payment ignored", {
       userId: ctx.dbUser.id,
@@ -289,12 +334,22 @@ export async function paidVpnSuccessfulPaymentHandler(ctx: PaidVpnContext): Prom
     billingSubscriptionId: result.billingSubscription.id,
     isFirstRecurring: result.payment.isFirstRecurring,
   });
+  if (
+    result.subscription.accessOverride === VpnSubscriptionAccessOverride.FREE_UNLIMITED ||
+    ctx.dbUser.clubStatus === ClubMembershipStatus.MEMBER
+  ) {
+    await ctx.reply(PAID_VPN_PAYMENT_BANKED_TEXT, {
+      parse_mode: "HTML",
+      ...Markup.inlineKeyboard([[Markup.button.callback("Открыть VPN", "vpn_status")]]),
+    });
+    return;
+  }
   try {
     const key = await vpnService.getPaidKey(ctx.dbUser);
     if (!key) throw new Error("Paid VPN key was not provisioned");
     await ctx.reply(
       buildPaidVpnPaymentReadyText(
-        result.payment.subscriptionExpirationDate,
+        result.subscription.expiresAt ?? result.payment.subscriptionExpirationDate,
         !result.payment.isFirstRecurring,
       ),
       {

@@ -21,6 +21,7 @@ export const VPN_TRIAL_WHITELIST_LIMIT_BYTES = 1n * 1024n ** 3n;
 interface EntitlementSubscription {
   accessOverride: VpnSubscriptionAccessOverride;
   expiresAt: Date | null;
+  accessPausedAt?: Date | null;
   trial?: {
     status: VpnTrialStatus;
     endsAt: Date | null;
@@ -37,6 +38,7 @@ export function resolveVpnEntitlement(
   if (subscription.accessOverride === VpnSubscriptionAccessOverride.FREE_UNLIMITED) {
     return { kind: "FREE_UNLIMITED", expiresAt: null };
   }
+  if (subscription.accessPausedAt) return { kind: "NONE", expiresAt: null };
   if (subscription.expiresAt && subscription.expiresAt > now) {
     return { kind: "PAID", expiresAt: subscription.expiresAt };
   }

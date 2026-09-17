@@ -3,6 +3,7 @@ import { config } from "./config.js";
 import {
   paidVpnAccessHandler,
   paidVpnAddHandler,
+  paidVpnGiftHandler,
   paidVpnRemoveHandler,
   paidVpnStartHandler,
 } from "./handlers/paid-vpn.js";
@@ -20,7 +21,7 @@ import {
   paidVpnTermsHandler,
   paidVpnTrialStartHandler,
 } from "./handlers/paid-vpn-payments.js";
-import { showPaidVpnScreen } from "./handlers/paid-vpn-screen.js";
+import { showPaidVpnReferralScreen, showPaidVpnScreen } from "./handlers/paid-vpn-screen.js";
 import {
   type PaidVpnContext,
   paidVpnAdminOnly,
@@ -52,7 +53,9 @@ export function createPaidVpnBot(): Telegraf<PaidVpnContext> {
   bot.command("paysupport", paidVpnSupportHandler);
   bot.command("add", paidVpnAdminOnly(), paidVpnAddHandler);
   bot.command("remove", paidVpnAdminOnly(), paidVpnRemoveHandler);
+  bot.command("gift", paidVpnAdminOnly(), paidVpnGiftHandler);
   bot.action("vpn_status", async (ctx) => showPaidVpnScreen(ctx));
+  bot.action("vpn_referral", showPaidVpnReferralScreen);
   bot.action("vpn_buy", paidVpnBuyHandler);
   bot.action("vpn_stars_help", paidVpnStarsHelpHandler);
   bot.action("vpn_trial_start", paidVpnTrialStartHandler);

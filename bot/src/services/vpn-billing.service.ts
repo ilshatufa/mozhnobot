@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import {
+  ClubMembershipStatus,
   Prisma,
   VpnBillingSubscriptionStatus,
   VpnPaymentStatus,
@@ -289,7 +290,7 @@ export class VpnBillingService {
           const billingSubscription = await tx.vpnBillingSubscription.findUnique({
             where: { invoicePayload: input.invoicePayload },
             include: {
-              vpnSubscription: { include: { user: true, product: true } },
+              vpnSubscription: { include: { user: true, product: true, trial: true } },
             },
           });
           if (!billingSubscription) throw new Error("Unknown VPN invoice payload");
@@ -349,15 +350,27 @@ export class VpnBillingService {
               stateUpdatedAt: effectiveStateAt,
             },
           });
+          const paidDurationMs = input.subscriptionExpirationDate.getTime() - input.paidAt.getTime();
           const existingExpiration = billingSubscription.vpnSubscription.expiresAt;
-          const effectiveExpiration = existingExpiration && existingExpiration > input.subscriptionExpirationDate
-            ? existingExpiration
-            : input.subscriptionExpirationDate;
+          const activeTrialEnd = billingSubscription.vpnSubscription.trial?.status === VpnTrialStatus.ACTIVE
+            ? billingSubscription.vpnSubscription.trial.endsAt
+            : null;
+          const priorityAccessActive =
+            billingSubscription.vpnSubscription.accessOverride === VpnSubscriptionAccessOverride.FREE_UNLIMITED ||
+            billingSubscription.vpnSubscription.user.clubStatus === ClubMembershipStatus.MEMBER;
+          const effectivePausedAt = priorityAccessActive
+            ? billingSubscription.vpnSubscription.accessPausedAt ?? input.paidAt
+            : null;
+          const base = [effectivePausedAt ?? input.paidAt, existingExpiration, activeTrialEnd]
+            .filter((value): value is Date => value instanceof Date)
+            .reduce((latest, value) => value > latest ? value : latest, input.paidAt);
+          const effectiveExpiration = new Date(base.getTime() + paidDurationMs);
           const subscription = await tx.vpnSubscription.update({
             where: { id: billingSubscription.vpnSubscriptionId },
             data: {
               status: VpnSubscriptionStatus.ACTIVE,
               expiresAt: effectiveExpiration,
+              accessPausedAt: effectivePausedAt,
             },
           });
           await tx.vpnTrial.updateMany({

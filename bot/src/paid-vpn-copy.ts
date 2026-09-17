@@ -53,6 +53,7 @@ export function buildPaidVpnOfferText(input: {
   trialAvailable?: boolean;
   trialExpiredAt?: Date | null;
   adminConfigurationMissing?: boolean;
+  referralAccepted?: boolean;
 }): string {
   const status = input.trialExpiredAt
     ? `<b>Пробный период закончился</b>\n${formatPaidVpnDate(input.trialExpiredAt)}. Списаний не было. Личная ссылка сохранена.`
@@ -74,6 +75,9 @@ export function buildPaidVpnOfferText(input: {
     : null;
   return joinPaidVpnBlocks([
     "<b>МОЖНО VPN</b>",
+    ...(input.referralAccepted
+      ? ["<b>Приглашение принято</b>\nНачни 7 дней бесплатно. Друг получит награду только после твоей первой оплаты."]
+      : []),
     status,
     trial,
     sale,
@@ -90,7 +94,7 @@ export function buildPaidVpnConfirmationText(input: {
     `${input.amountStars} ⭐ спишется сейчас. Затем — столько же каждые 30 дней.`,
     "<b>Что будет доступно</b>\n• Нидерланды, Германия и Латвия — без лимита\n• Белые списки — 10 ГБ каждые 30 дней",
     ...(input.trialActive
-      ? ["Оплаченные 30 дней начнутся сразу. Остаток бесплатной недели не перенесётся."]
+      ? ["Полный доступ включится сразу. Неиспользованный остаток бесплатной недели сохранится и добавится к 30 оплаченным дням."]
       : []),
     "Продление можно отключить в боте. Уже оплаченный срок сохранится.",
     "Нажимая «Принять и оплатить», ты принимаешь условия.",
@@ -135,10 +139,11 @@ export const PAID_VPN_INVOICE_SENT_TEXT = joinPaidVpnBlocks([
 export function buildPaidVpnActiveText(input: {
   subscriptionUrl: string;
   expiresAt: Date;
+  nextChargeAt?: Date | null;
   renewalState: "active" | "canceled" | "failed" | "unknown";
 }): string {
   const renewalText = input.renewalState === "active"
-    ? `Оплачено до ${formatPaidVpnDate(input.expiresAt)}. В этот день подписка продлится автоматически.`
+    ? `Доступ работает до ${formatPaidVpnDate(input.expiresAt)}.${input.nextChargeAt ? ` Следующее списание — ${formatPaidVpnDate(input.nextChargeAt)}.` : " Продление включено."}`
     : input.renewalState === "canceled"
       ? `Оплачено до ${formatPaidVpnDate(input.expiresAt)}. Автопродление отключено.`
       : input.renewalState === "failed"
@@ -157,14 +162,34 @@ export function buildPaidVpnActiveText(input: {
 export function buildPaidVpnFreeAccessText(input: {
   subscriptionUrl: string;
   paidExpiresAt?: Date | null;
+  nextChargeAt?: Date | null;
   renewalActive: boolean;
 }): string {
-  const renewalNotice = input.renewalActive && input.paidExpiresAt
-    ? `Важно: у прежней подписки осталось автопродление. Следующее списание — ${formatPaidVpnDate(input.paidExpiresAt)}. Если оно не нужно, отключи продление ниже.`
+  const renewalNotice = input.renewalActive
+    ? `Важно: у прежней подписки осталось автопродление.${input.nextChargeAt ? ` Следующее списание — ${formatPaidVpnDate(input.nextChargeAt)}.` : ""} Если оно не нужно, отключи продление ниже.`
     : null;
   return joinPaidVpnBlocks([
     "<b>МОЖНО VPN работает</b>",
     "У тебя бесплатный доступ без срока. Платить не нужно.",
+    ...(renewalNotice ? [renewalNotice] : []),
+    "<b>Твои профили</b>\n• Нидерланды, Германия и Латвия — без лимита\n• Белые списки — 10 ГБ, лимит обновляется каждые 30 дней",
+    "<b>Как подключиться</b>\nУстанови INCY или HAPP, затем нажми «Подключить VPN».",
+    "Если кнопка не сработает, скопируй ссылку в приложение:",
+    `<pre>${escapeHtml(input.subscriptionUrl)}</pre>`,
+  ]);
+}
+
+export function buildPaidVpnClubAccessText(input: {
+  subscriptionUrl: string;
+  renewalActive: boolean;
+  nextChargeAt?: Date | null;
+}): string {
+  const renewalNotice = input.renewalActive
+    ? `Важно: платная подписка всё ещё продлевается.${input.nextChargeAt ? ` Следующее списание — ${formatPaidVpnDate(input.nextChargeAt)}.` : ""} Если она не нужна, отключи продление ниже.`
+    : null;
+  return joinPaidVpnBlocks([
+    "<b>МОЖНО VPN работает</b>",
+    "Доступ входит в клуб. Отдельно платить за VPN не нужно.",
     ...(renewalNotice ? [renewalNotice] : []),
     "<b>Твои профили</b>\n• Нидерланды, Германия и Латвия — без лимита\n• Белые списки — 10 ГБ, лимит обновляется каждые 30 дней",
     "<b>Как подключиться</b>\nУстанови INCY или HAPP, затем нажми «Подключить VPN».",
@@ -190,6 +215,51 @@ export function buildPaidVpnPaymentReadyText(expiresAt: Date, renewal: boolean):
     renewal ? "<b>МОЖНО VPN продлён</b>" : "<b>МОЖНО VPN оплачен</b>",
     `VPN работает до ${formatPaidVpnDate(expiresAt)}.`,
     "Личная ссылка и четыре профиля уже готовы. Нажми «Открыть VPN».",
+  ]);
+}
+
+export const PAID_VPN_PAYMENT_BANKED_TEXT = joinPaidVpnBlocks([
+  "<b>Оплата получена</b>",
+  "30 дней сохранены. Они начнутся после бесплатного или клубного доступа.",
+  "Повторно платить не нужно.",
+]);
+
+export function buildPaidVpnReferralText(input: {
+  referralUrl: string;
+  invited: number;
+  rewarded: number;
+}): string {
+  const stats = input.invited === 0
+    ? "Пока никто не перешёл по твоей ссылке."
+    : `Перешли по ссылке: ${input.invited}. Оплатили впервые: ${input.rewarded}.`;
+  return joinPaidVpnBlocks([
+    "<b>Пригласи друга — получи 30 дней</b>",
+    "Друг получит 7 дней бесплатно. После его первой оплаты тебе добавятся 30 дней полного доступа.",
+    "Награда действует только за нового пользователя: раньше у него не должно быть пробного периода или оплат МОЖНО VPN.",
+    "Если у тебя сейчас бесплатный или клубный доступ, 30 дней сохранятся и начнутся после него.",
+    stats,
+    "Твоя ссылка:",
+    `<pre>${escapeHtml(input.referralUrl)}</pre>`,
+  ]);
+}
+
+export function buildVpnGiftReceivedText(input: { days: number; pending: boolean }): string {
+  return joinPaidVpnBlocks([
+    "<b>Тебе подарили МОЖНО VPN</b>",
+    input.pending
+      ? `${input.days} дней сохранены. Они начнутся после бесплатного или клубного доступа.`
+      : `${input.days} дней полного доступа уже добавлены.`,
+    "Открой VPN, чтобы увидеть актуальный срок и подключить профили.",
+  ]);
+}
+
+export function buildVpnReferralRewardText(pending: boolean): string {
+  return joinPaidVpnBlocks([
+    "<b>Друг оплатил МОЖНО VPN</b>",
+    pending
+      ? "30 дней награды сохранены. Они начнутся после бесплатного или клубного доступа."
+      : "Тебе добавлены 30 дней полного доступа.",
+    "Спасибо за рекомендацию.",
   ]);
 }
 
@@ -265,4 +335,18 @@ export function parseAddUsername(text: string): UsernameCommandParseResult {
 
 export function parseRemoveUsername(text: string): UsernameCommandParseResult {
   return parseUsernameCommand(text, "remove");
+}
+
+export type GiftCommandParseResult =
+  | { ok: true; username: string; days: number }
+  | { ok: false };
+
+export function parseGiftCommand(text: string): GiftCommandParseResult {
+  const match = text.trim().match(
+    /^\/gift(?:@\w+)?\s+@([A-Za-z0-9_]{5,32})\s+(\d{1,4})$/i,
+  );
+  if (!match) return { ok: false };
+  const days = Number(match[2]);
+  if (!Number.isInteger(days) || days < 1 || days > 3650) return { ok: false };
+  return { ok: true, username: match[1], days };
 }

@@ -1,4 +1,4 @@
-import { VpnBillingSubscriptionStatus, VpnSubscriptionAccessOverride, VpnTrialStatus } from "@prisma/client";
+import { ClubMembershipStatus, VpnBillingSubscriptionStatus, VpnSubscriptionAccessOverride, VpnTrialStatus } from "@prisma/client";
 import { Markup } from "telegraf";
 import type { InlineKeyboardMarkup } from "telegraf/types";
 import { config } from "../config.js";
@@ -6,8 +6,10 @@ import { logger } from "../logger.js";
 import { type PaidVpnContext } from "../middlewares/paid-vpn-auth.js";
 import {
   buildPaidVpnActiveText,
+  buildPaidVpnClubAccessText,
   buildPaidVpnFreeAccessText,
   buildPaidVpnOfferText,
+  buildPaidVpnReferralText,
   buildPaidVpnTrialActiveText,
   PAID_VPN_BLOCKED_TEXT,
   PAID_VPN_FREE_PROVISIONING_ERROR_TEXT,
@@ -16,6 +18,7 @@ import {
   PAID_VPN_TRIAL_PROVISIONING_TEXT,
 } from "../paid-vpn-copy.js";
 import { vpnBillingService } from "../services/vpn-billing.service.js";
+import { vpnAccessGrantService } from "../services/vpn-access-grant.service.js";
 import { VPN_TRIAL_WHITELIST_LIMIT_BYTES } from "../services/vpn-entitlement.js";
 import { vpnTrialService } from "../services/vpn-trial.service.js";
 import { vpnService } from "../services/vpn.service.js";
@@ -34,6 +37,7 @@ function offerKeyboard(salesAvailable: boolean, trialAvailable: boolean, amountS
   if (config.vpnBot.payments.termsUrl) {
     rows.push([Markup.button.url("Условия", config.vpnBot.payments.termsUrl)]);
   }
+  rows.push([Markup.button.callback("Пригласить друга", "vpn_referral")]);
   rows.push([Markup.button.url("Поддержка", supportUrl())]);
   return Markup.inlineKeyboard(rows);
 }
@@ -56,6 +60,7 @@ function activeKeyboard(input: {
     ...(input.canCancel
       ? [[Markup.button.callback("Отключить продление", "vpn_cancel")]]
       : []),
+    [Markup.button.callback("Пригласить друга", "vpn_referral")],
     [Markup.button.url("Поддержка", supportUrl())],
   ]);
 }
@@ -99,7 +104,7 @@ function renewalState(status: VpnBillingSubscriptionStatus | undefined): "active
 
 export async function showPaidVpnScreen(
   ctx: PaidVpnContext,
-  options: { answerCallback?: boolean } = {},
+  options: { answerCallback?: boolean; referralAccepted?: boolean } = {},
 ): Promise<void> {
   if (ctx.callbackQuery && options.answerCallback !== false) await ctx.answerCbQuery();
 
@@ -116,10 +121,22 @@ export async function showPaidVpnScreen(
   let overview;
   let trialOverview;
   try {
+    if (ctx.dbUser.clubStatus === ClubMembershipStatus.MEMBER) {
+      await vpnAccessGrantService.pauseTimedAccessForUser(ctx.dbUser.id);
+    } else {
+      await vpnAccessGrantService.activatePendingForUser(ctx.dbUser.id);
+    }
     [overview, trialOverview] = await Promise.all([
       vpnBillingService.getOverview(ctx.dbUser.id),
       vpnTrialService.getOverview(ctx.dbUser.id, new Date()),
     ]);
+    if (
+      overview.subscription?.accessOverride === VpnSubscriptionAccessOverride.FREE_UNLIMITED &&
+      !overview.subscription.accessPausedAt
+    ) {
+      await vpnAccessGrantService.pauseTimedAccessForUser(ctx.dbUser.id);
+      overview = await vpnBillingService.getOverview(ctx.dbUser.id);
+    }
   } catch (error) {
     logger.error("Failed to read paid VPN status", { userId: ctx.dbUser.id, error });
     await editOrReply(ctx, messageId, PAID_VPN_STATUS_ERROR_TEXT, {
@@ -131,6 +148,7 @@ export async function showPaidVpnScreen(
   const subscription = overview.subscription;
   const billingSubscription = overview.billingSubscription;
   const now = new Date();
+  const clubAccess = ctx.dbUser.clubStatus === ClubMembershipStatus.MEMBER;
   const freeAccess = subscription?.accessOverride === VpnSubscriptionAccessOverride.FREE_UNLIMITED;
   const paidAccess = subscription?.expiresAt !== null && subscription?.expiresAt !== undefined && subscription.expiresAt > now;
   const activeTrial = trialOverview.trial?.status === VpnTrialStatus.ACTIVE &&
@@ -144,20 +162,29 @@ export async function showPaidVpnScreen(
     config.vpnBot.payments.enabled || ctx.isPaidVpnAdmin
   );
 
-  if (freeAccess || paidAccess || activeTrial) {
+  if (clubAccess || freeAccess || paidAccess || activeTrial) {
     try {
-      let result = subscription
-        ? await vpnService.getExistingPaidKey(subscription)
-        : null;
-      if (!result) result = await vpnService.getPaidKey(ctx.dbUser);
-      if (!result || !subscription) throw new Error("Paid VPN key is unavailable");
+      let result = clubAccess
+        ? await vpnService.getOrCreateKey(ctx.dbUser)
+        : subscription
+          ? await vpnService.getExistingPaidKey(subscription)
+          : null;
+      if (!result && !clubAccess) result = await vpnService.getPaidKey(ctx.dbUser);
+      if (!result || (!clubAccess && !subscription)) throw new Error("VPN key is unavailable");
       const canCancel =
         billingSubscription?.status === VpnBillingSubscriptionStatus.ACTIVE &&
         Boolean(billingSubscription.telegramSubscriptionChargeId);
-      const text = freeAccess
+      const text = clubAccess
+        ? buildPaidVpnClubAccessText({
+            subscriptionUrl: result.key.subscriptionUrl,
+            renewalActive: canCancel,
+            nextChargeAt: billingSubscription?.payments[0]?.subscriptionExpirationDate,
+          })
+        : freeAccess
         ? buildPaidVpnFreeAccessText({
             subscriptionUrl: result.key.subscriptionUrl,
-            paidExpiresAt: subscription.expiresAt,
+            paidExpiresAt: subscription!.expiresAt,
+            nextChargeAt: billingSubscription?.payments[0]?.subscriptionExpirationDate,
             renewalActive: canCancel,
           })
         : activeTrial
@@ -169,7 +196,8 @@ export async function showPaidVpnScreen(
             })
           : buildPaidVpnActiveText({
             subscriptionUrl: result.key.subscriptionUrl,
-            expiresAt: subscription.expiresAt as Date,
+            expiresAt: subscription!.expiresAt as Date,
+            nextChargeAt: billingSubscription?.payments[0]?.subscriptionExpirationDate,
             renewalState: renewalState(billingSubscription?.status),
           });
       await editOrReply(
@@ -182,7 +210,7 @@ export async function showPaidVpnScreen(
           ...activeKeyboard({
             subscriptionUrl: result.key.subscriptionUrl,
             canCancel,
-            canBuy: activeTrial && salesAvailable,
+            canBuy: !clubAccess && activeTrial && salesAvailable,
             amountStars: config.vpnBot.payments.priceStars,
           }),
         },
@@ -196,7 +224,7 @@ export async function showPaidVpnScreen(
       await editOrReply(
         ctx,
         messageId,
-        freeAccess
+        clubAccess || freeAccess
           ? PAID_VPN_FREE_PROVISIONING_ERROR_TEXT
           : activeTrial
             ? PAID_VPN_TRIAL_PROVISIONING_TEXT
@@ -232,9 +260,40 @@ export async function showPaidVpnScreen(
       ? trialOverview.trial.endsAt
       : null,
     adminConfigurationMissing: ctx.isPaidVpnAdmin && !paymentsConfigured,
+    referralAccepted: options.referralAccepted,
   });
   await editOrReply(ctx, messageId, text, {
     parse_mode: "HTML",
     ...offerKeyboard(salesAvailable, trialAvailable, config.vpnBot.payments.priceStars),
   });
+}
+
+export async function showPaidVpnReferralScreen(ctx: PaidVpnContext): Promise<void> {
+  await ctx.answerCbQuery();
+  if (ctx.dbUser.vpnBlocked) {
+    await showPaidVpnScreen(ctx, { answerCallback: false });
+    return;
+  }
+  const [code, stats] = await Promise.all([
+    vpnAccessGrantService.ensureReferralCode(ctx.dbUser.id),
+    vpnAccessGrantService.getReferralStats(ctx.dbUser.id),
+  ]);
+  const botUsername = ctx.botInfo.username;
+  const referralUrl = `https://t.me/${botUsername}?start=ref_${code}`;
+  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralUrl)}&text=${encodeURIComponent("7 дней МОЖНО VPN бесплатно")}`;
+  await editOrReply(
+    ctx,
+    ctx.callbackQuery && "message" in ctx.callbackQuery && ctx.callbackQuery.message
+      ? ctx.callbackQuery.message.message_id
+      : null,
+    buildPaidVpnReferralText({ referralUrl, ...stats }),
+    {
+      parse_mode: "HTML",
+      link_preview_options: { is_disabled: true },
+      ...Markup.inlineKeyboard([
+        [Markup.button.url("Поделиться ссылкой", shareUrl)],
+        [Markup.button.callback("Назад", "vpn_status")],
+      ]),
+    },
+  );
 }

@@ -9,6 +9,8 @@ import { clubTopicRepository } from "../repositories/club-topic.repository.js";
 import { botSettingRepository } from "../repositories/bot-setting.repository.js";
 import { mediaProcessingJobRepository } from "../repositories/media-processing-job.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
+import { vpnAccessGrantService } from "./vpn-access-grant.service.js";
+import { vpnAccessSyncService } from "./vpn-access-sync.service.js";
 
 type TelegramUserLike = {
   id: number;
@@ -440,7 +442,8 @@ export class EventLoggerService {
     if (message.new_chat_members) {
       for (const member of message.new_chat_members) {
         await this.upsertUser(member, occurredAt);
-        await userRepository.markClubStatus(BigInt(member.id), ClubMembershipStatus.MEMBER, occurredAt);
+        const user = await userRepository.markClubStatus(BigInt(member.id), ClubMembershipStatus.MEMBER, occurredAt);
+        await this.pauseTimedVpnAccess(user.id, occurredAt);
         await clubEventRepository.createIfNotExists({
           telegramUpdateId: BigInt(updateId),
           dedupeKey: dedupeKey(updateId, "member_joined", String(member.id)),
@@ -456,11 +459,12 @@ export class EventLoggerService {
 
     if (message.left_chat_member) {
       await this.upsertUser(message.left_chat_member, occurredAt);
-      await userRepository.markClubStatus(
+      const user = await userRepository.markClubStatus(
         BigInt(message.left_chat_member.id),
         ClubMembershipStatus.LEFT,
         occurredAt,
       );
+      await this.activatePendingVpnDays(user.id, occurredAt);
       await clubEventRepository.createIfNotExists({
         telegramUpdateId: BigInt(updateId),
         dedupeKey: dedupeKey(updateId, "member_left", String(message.left_chat_member.id)),
@@ -588,7 +592,12 @@ export class EventLoggerService {
     }
 
     if (clubStatus) {
-      await userRepository.markClubStatus(BigInt(member.id), clubStatus, occurredAt);
+      const user = await userRepository.markClubStatus(BigInt(member.id), clubStatus, occurredAt);
+      if (clubStatus === ClubMembershipStatus.MEMBER) {
+        await this.pauseTimedVpnAccess(user.id, occurredAt);
+      } else if (clubStatus === ClubMembershipStatus.LEFT || clubStatus === ClubMembershipStatus.REMOVED) {
+        await this.activatePendingVpnDays(user.id, occurredAt);
+      }
     } else {
       await userRepository.markSeen(BigInt(member.id), occurredAt);
     }
@@ -603,6 +612,34 @@ export class EventLoggerService {
       occurredAt,
       payload: toJson({ oldStatus, newStatus }),
     });
+  }
+
+  private async activatePendingVpnDays(userId: number, now: Date): Promise<void> {
+    try {
+      const activated = await vpnAccessGrantService.activatePendingForUser(userId, now);
+      if ((!activated.resumed && activated.appliedCount === 0) || !activated.subscription) return;
+      await vpnAccessSyncService.sync({ subscriptionId: activated.subscription.id, now });
+      logger.info("Pending paid VPN days activated after club access ended", {
+        userId,
+        appliedCount: activated.appliedCount,
+        subscriptionId: activated.subscription.id,
+      });
+    } catch (error) {
+      logger.error("Failed to activate pending paid VPN days after club access ended", {
+        userId,
+        error,
+      });
+    }
+  }
+
+  private async pauseTimedVpnAccess(userId: number, now: Date): Promise<void> {
+    try {
+      const paused = await vpnAccessGrantService.pauseTimedAccessForUser(userId, now);
+      if (!paused.paused || paused.subscriptionId === null) return;
+      await vpnAccessSyncService.sync({ subscriptionId: paused.subscriptionId, now });
+    } catch (error) {
+      logger.error("Failed to pause timed paid VPN access for club member", { userId, error });
+    }
   }
 
   private async logJoinRequest(updateId: number, joinRequest: ChatJoinRequestLike): Promise<void> {

@@ -45,7 +45,8 @@ export class VpnTrialService {
     if (
       trial.status === VpnTrialStatus.ACTIVE &&
       trial.endsAt &&
-      trial.endsAt <= now
+      trial.endsAt <= now &&
+      !subscription.accessPausedAt
     ) {
       trial = await prisma.vpnTrial.update({
         where: { id: trial.id },

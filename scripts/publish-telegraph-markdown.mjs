@@ -100,6 +100,8 @@ if (!sourcePath || !tokenFile) {
 const markdown = await readFile(sourcePath, "utf8");
 const title = markdown.match(/^#\s+(.+)$/m)?.[1]?.trim();
 if (!title) throw new Error("The source must start with a level-one title");
+const termsVersion = markdown.match(/^Версия:\s*(\S+)$/m)?.[1]?.trim();
+if (!termsVersion) throw new Error("The source must contain a terms version");
 
 const content = JSON.stringify(markdownToNodes(markdown));
 if (Buffer.byteLength(content, "utf8") > 64 * 1024) {
@@ -121,7 +123,7 @@ const result = pagePath
 
 const published = await telegraph("getPage", { path: result.path, return_content: "true" });
 const publishedText = JSON.stringify(published.content ?? []);
-for (const marker of ["vpn-terms-2026-09-17-v1", "100 Telegram Stars", "@clubni_support"]) {
+for (const marker of [termsVersion, "100 Telegram Stars", "@clubni_support"]) {
   if (!publishedText.includes(marker)) throw new Error(`Published page is missing marker: ${marker}`);
 }
 

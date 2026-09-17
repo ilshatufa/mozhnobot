@@ -13,6 +13,7 @@ import { vpnKeyRepository } from "../repositories/vpn-key.repository.js";
 import { vpnServerRepository } from "../repositories/vpn-server.repository.js";
 import { vpnSubscriptionRepository } from "../repositories/vpn-subscription.repository.js";
 import { vpnAccessSyncService } from "./vpn-access-sync.service.js";
+import { vpnAccessGrantService } from "./vpn-access-grant.service.js";
 import { vpnBillingService } from "./vpn-billing.service.js";
 import { xuiClient } from "./xui-client.js";
 
@@ -38,6 +39,7 @@ export class VpnService {
   }
 
   async getPaidKey(user: User): Promise<VpnKeyResult | null> {
+    await vpnAccessGrantService.activatePendingForUser(user.id);
     const subscription = await vpnSubscriptionRepository.findByUserAndProduct(user.id, "paid");
     if (!subscription) return null;
     const key = await this.syncSubscriptionKey(subscription.id, subscription.token);
@@ -49,12 +51,16 @@ export class VpnService {
     subscription: Pick<VpnSubscription, "id" | "token">,
   ): Promise<VpnKeyResult | null> {
     const key = await this.readSubscriptionKey(subscription.id, subscription.token);
+    if (key) await this.ensurePaidWhitelistQuotaReset(subscription.id);
     return key ? { key, alreadyExisted: true } : null;
   }
 
   private async ensurePaidWhitelistQuotaReset(subscriptionId: number): Promise<void> {
-    const pending = await vpnBillingService.findPendingQuotaResets(subscriptionId);
-    if (pending.length === 0) return;
+    const [pendingPayments, pendingGrants] = await Promise.all([
+      vpnBillingService.findPendingQuotaResets(subscriptionId),
+      vpnAccessGrantService.findPendingQuotaResets(subscriptionId),
+    ]);
+    if (pendingPayments.length === 0 && pendingGrants.length === 0) return;
 
     const keys = await prisma.vpnKey.findMany({
       where: {
@@ -67,22 +73,26 @@ export class VpnService {
     });
     if (keys.length === 0) throw new Error(`VPN subscription ${subscriptionId} has no whitelist client`);
 
-    for (const payment of pending) {
-      try {
-        for (const key of keys) {
-          if (!key.server || !key.providerClientId) {
-            throw new Error(`VPN whitelist key ${key.id} has no server or provider client`);
-          }
-          const server = this.requireXuiServerConfig(key.server.code);
-          await xuiClient.resetClientTraffic(server, key.providerClientId);
-          await vpnKeyRepository.updateTraffic(key.id, 0n);
+    try {
+      for (const key of keys) {
+        if (!key.server || !key.providerClientId) {
+          throw new Error(`VPN whitelist key ${key.id} has no server or provider client`);
         }
-        await vpnBillingService.markQuotaReset(payment.id);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        await vpnBillingService.markQuotaResetFailed(payment.id, message);
-        throw error;
+        const server = this.requireXuiServerConfig(key.server.code);
+        await xuiClient.resetClientTraffic(server, key.providerClientId);
+        await vpnKeyRepository.updateTraffic(key.id, 0n);
       }
+      await Promise.all([
+        ...pendingPayments.map((payment) => vpnBillingService.markQuotaReset(payment.id)),
+        vpnAccessGrantService.markQuotaReset(pendingGrants.map((grant) => grant.id)),
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await Promise.all([
+        ...pendingPayments.map((payment) => vpnBillingService.markQuotaResetFailed(payment.id, message)),
+        vpnAccessGrantService.markQuotaResetFailed(pendingGrants.map((grant) => grant.id), message),
+      ]);
+      throw error;
     }
   }
 
@@ -92,6 +102,7 @@ export class VpnService {
       "paid",
       xuiClient.generateSubId(),
     );
+    await vpnAccessGrantService.pauseTimedAccessForUser(user.id);
     const key = await this.syncSubscriptionKey(subscription.id, subscription.token);
     if (!key) throw new Error(`VPN access is not allowed for subscription ${subscription.id}`);
     return { alreadyGranted };
@@ -105,6 +116,8 @@ export class VpnService {
       "paid",
     );
     if (!subscription) return { hadSubscription: false, wasGranted: false };
+
+    await vpnAccessGrantService.activatePendingForUser(user.id);
 
     const [syncResult] = await vpnAccessSyncService.sync({ subscriptionId: subscription.id });
     if (!syncResult) throw new Error(`VPN subscription ${subscription.id} was not found during synchronization`);

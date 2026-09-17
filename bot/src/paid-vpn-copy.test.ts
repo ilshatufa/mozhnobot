@@ -4,6 +4,8 @@ import {
   buildNoRemovableAccessText,
   buildPaidVpnActiveText,
   buildPaidVpnConfirmationText,
+  buildPaidVpnClubAccessText,
+  buildPaidVpnReferralText,
   buildPaidVpnFreeAccessText,
   buildPaidVpnOfferText,
   buildPaidVpnTrialActiveText,
@@ -16,6 +18,7 @@ import {
   PAID_VPN_STARS_HELP_TEXT,
   PAID_VPN_START_TEXT,
   parseAddUsername,
+  parseGiftCommand,
   parseRemoveUsername,
 } from "./paid-vpn-copy.js";
 
@@ -50,10 +53,31 @@ test("trial screen shows expiry, whitelist quota, and no charge", () => {
   assert.match(text, /Как подключиться/);
 });
 
-test("purchase during trial explains that paid time starts immediately", () => {
+test("purchase during trial explains that unused trial time is preserved", () => {
   const text = buildPaidVpnConfirmationText({ amountStars: 100, trialActive: true });
-  assert.match(text, /30 дней начнутся сразу/);
-  assert.match(text, /не перенесётся/);
+  assert.match(text, /Полный доступ включится сразу/);
+  assert.match(text, /остаток.*сохранится/i);
+});
+
+test("referral screen states the 30 day reward and new-user condition", () => {
+  const text = buildPaidVpnReferralText({
+    referralUrl: "https://t.me/mozhno_vpn_bot?start=ref_example12",
+    invited: 2,
+    rewarded: 1,
+  });
+  assert.match(text, /30 дней/);
+  assert.match(text, /нового пользователя/);
+  assert.match(text, /Перешли по ссылке: 2/);
+});
+
+test("/gift parser accepts a username and bounded day count", () => {
+  assert.deepEqual(parseGiftCommand("/gift @ilsh_at 30"), {
+    ok: true,
+    username: "ilsh_at",
+    days: 30,
+  });
+  assert.deepEqual(parseGiftCommand("/gift @ilsh_at 0"), { ok: false });
+  assert.deepEqual(parseGiftCommand("/gift @ilsh_at 3651"), { ok: false });
 });
 
 test("paid VPN confirmation explains current and recurring charge", () => {
@@ -74,6 +98,7 @@ test("paid VPN canceled state preserves the paid period and link", () => {
   const text = buildPaidVpnActiveText({
     subscriptionUrl: "https://vpn.example.com/sub/private-token",
     expiresAt: new Date("2026-10-17T12:00:00Z"),
+    nextChargeAt: new Date("2026-10-10T12:00:00Z"),
     renewalState: "canceled",
   });
   assert.match(text, /Автопродление отключено/);
@@ -86,12 +111,24 @@ test("free VPN access still exposes an active paid renewal", () => {
   const text = buildPaidVpnFreeAccessText({
     subscriptionUrl: "https://vpn.example.com/sub/private-token",
     paidExpiresAt: new Date("2026-10-17T12:00:00Z"),
+    nextChargeAt: new Date("2026-10-10T12:00:00Z"),
     renewalActive: true,
   });
   assert.match(text, /бесплатный доступ/);
   assert.match(text, /осталось автопродление/);
   assert.match(text, /отключи продление/);
   assert.match(text, /лимит обновляется каждые 30 дней/);
+});
+
+test("club access warns about a paid renewal that is still active", () => {
+  const text = buildPaidVpnClubAccessText({
+    subscriptionUrl: "https://vpn.example.com/sub/club-token",
+    renewalActive: true,
+    nextChargeAt: new Date("2026-10-10T12:00:00Z"),
+  });
+  assert.match(text, /входит в клуб/);
+  assert.match(text, /подписка всё ещё продлевается/);
+  assert.match(text, /Следующее списание/);
 });
 
 test("paid VPN no-access text gives the next action", () => {

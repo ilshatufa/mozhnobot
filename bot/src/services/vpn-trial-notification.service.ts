@@ -40,6 +40,7 @@ export class VpnTrialNotificationService {
         status: VpnTrialStatus.ACTIVE,
         endsAt: { gt: now, lte: new Date(now.getTime() + ENDING_SOON_WINDOW_MS) },
         endingSoonNotifiedAt: null,
+        vpnSubscription: { accessPausedAt: null },
       },
       include: { vpnSubscription: { include: { user: true } } },
       orderBy: { endsAt: "asc" },
@@ -47,7 +48,12 @@ export class VpnTrialNotificationService {
     });
     for (const trial of soon) {
       const claimed = await prisma.vpnTrial.updateMany({
-        where: { id: trial.id, endingSoonNotifiedAt: null, status: VpnTrialStatus.ACTIVE },
+        where: {
+          id: trial.id,
+          endingSoonNotifiedAt: null,
+          status: VpnTrialStatus.ACTIVE,
+          vpnSubscription: { accessPausedAt: null },
+        },
         data: { endingSoonNotifiedAt: now },
       });
       if (claimed.count !== 1 || !trial.endsAt) continue;
@@ -80,6 +86,7 @@ export class VpnTrialNotificationService {
         status: { in: [VpnTrialStatus.ACTIVE, VpnTrialStatus.EXPIRED] },
         endsAt: { lte: now },
         expiredNotifiedAt: null,
+        vpnSubscription: { accessPausedAt: null },
       },
       include: { vpnSubscription: { include: { user: true } } },
       orderBy: { endsAt: "asc" },
@@ -92,6 +99,7 @@ export class VpnTrialNotificationService {
           expiredNotifiedAt: null,
           status: { in: [VpnTrialStatus.ACTIVE, VpnTrialStatus.EXPIRED] },
           endsAt: { lte: now },
+          vpnSubscription: { accessPausedAt: null },
         },
         data: { status: VpnTrialStatus.EXPIRED, expiredNotifiedAt: now },
       });

@@ -14,10 +14,11 @@ import {
   VPN_SUBSCRIPTION_PERIOD_SECONDS,
   vpnBillingService,
 } from "./vpn-billing.service.js";
+import { vpnAccessGrantService } from "./vpn-access-grant.service.js";
 
 const integrationDatabaseUrl = process.env.VPN_ACCESS_INTEGRATION_DATABASE_URL;
 
-test("records Stars payments, trusts Telegram expiration, and preserves paid time across free access", {
+test("records Stars payments and appends paid time after trial and existing access", {
   skip: integrationDatabaseUrl ? false : "VPN access integration database is not configured",
 }, async () => {
   await prisma.$connect();
@@ -121,7 +122,8 @@ test("records Stars payments, trusts Telegram expiration, and preserves paid tim
     });
     const recorded = await vpnBillingService.recordSuccessfulPayment(paymentInput);
     assert.equal(recorded.duplicate, false);
-    assert.equal(recorded.subscription.expiresAt?.toISOString(), expiresAt.toISOString());
+    const firstEffectiveExpiration = new Date("2026-10-24T07:00:00Z");
+    assert.equal(recorded.subscription.expiresAt?.toISOString(), firstEffectiveExpiration.toISOString());
     assert.equal(
       (await prisma.vpnTrial.findUniqueOrThrow({
         where: { vpnSubscriptionId: vpnSubscription.id },
@@ -157,6 +159,12 @@ test("records Stars payments, trusts Telegram expiration, and preserves paid tim
       subscriptionExpirationDate: renewedExpiration,
       paidAt: new Date("2026-10-17T08:05:00Z"),
     });
+    const expirationAfterRenewal = new Date("2026-11-24T07:00:00Z");
+    assert.equal(
+      (await prisma.vpnSubscription.findUniqueOrThrow({ where: { id: vpnSubscription.id } }))
+        .expiresAt?.toISOString(),
+      expirationAfterRenewal.toISOString(),
+    );
     await vpnBillingService.recordSuccessfulPayment({
       ...paymentInput,
       telegramPaymentChargeId: `charge_${randomUUID()}`,
@@ -167,7 +175,7 @@ test("records Stars payments, trusts Telegram expiration, and preserves paid tim
     assert.equal(
       (await prisma.vpnSubscription.findUniqueOrThrow({ where: { id: vpnSubscription.id } }))
         .expiresAt?.toISOString(),
-      renewedExpiration.toISOString(),
+      new Date("2026-12-24T07:00:00Z").toISOString(),
     );
 
     const checkoutAfterPayment = await vpnBillingService.validateCheckout({
@@ -202,7 +210,7 @@ test("records Stars payments, trusts Telegram expiration, and preserves paid tim
     assert.equal(
       (await prisma.vpnSubscription.findUniqueOrThrow({ where: { id: vpnSubscription.id } }))
         .expiresAt?.toISOString(),
-      renewedExpiration.toISOString(),
+      new Date("2026-12-24T07:00:00Z").toISOString(),
     );
 
     const granted = await vpnSubscriptionRepository.grantFreeUnlimited(
@@ -211,7 +219,23 @@ test("records Stars payments, trusts Telegram expiration, and preserves paid tim
       randomUUID(),
     );
     assert.equal(granted.subscription.accessOverride, VpnSubscriptionAccessOverride.FREE_UNLIMITED);
-    assert.equal(granted.subscription.expiresAt?.toISOString(), renewedExpiration.toISOString());
+    assert.equal(granted.subscription.expiresAt?.toISOString(), new Date("2026-12-24T07:00:00Z").toISOString());
+    await prisma.vpnSubscription.update({
+      where: { id: vpnSubscription.id },
+      data: { accessPausedAt: new Date("2026-12-01T08:05:00Z") },
+    });
+    await vpnBillingService.recordSuccessfulPayment({
+      ...paymentInput,
+      telegramPaymentChargeId: `charge_${randomUUID()}`,
+      isFirstRecurring: false,
+      subscriptionExpirationDate: new Date("2027-01-23T07:00:00Z"),
+      paidAt: new Date("2026-12-24T07:00:00Z"),
+    });
+    assert.equal(
+      (await prisma.vpnSubscription.findUniqueOrThrow({ where: { id: vpnSubscription.id } }))
+        .expiresAt?.toISOString(),
+      new Date("2027-01-23T07:00:00Z").toISOString(),
+    );
     const invoiceWhileFree = await vpnBillingService.createInvoice({
       userId: user.id,
       amountStars: 100,
@@ -221,7 +245,13 @@ test("records Stars payments, trusts Telegram expiration, and preserves paid tim
     });
     assert.equal(invoiceWhileFree.accessAlreadyAvailable, true);
     const revoked = await vpnSubscriptionRepository.revokeFreeUnlimited(user.id, "paid");
-    assert.equal(revoked.subscription?.expiresAt?.toISOString(), renewedExpiration.toISOString());
+    assert.equal(revoked.subscription?.expiresAt?.toISOString(), new Date("2027-01-23T07:00:00Z").toISOString());
+    const resumed = await vpnAccessGrantService.activatePendingForUser(
+      user.id,
+      new Date("2027-01-01T08:05:00Z"),
+    );
+    assert.equal(resumed.resumed, true);
+    assert.equal(resumed.subscription?.expiresAt?.toISOString(), new Date("2027-02-23T07:00:00Z").toISOString());
   } finally {
     if (subscriptionId !== null) {
       const billingIds = await prisma.vpnBillingSubscription.findMany({

@@ -1,7 +1,9 @@
 import { logger } from "../logger.js";
+import { Markup } from "telegraf";
 import { type PaidVpnContext } from "../middlewares/paid-vpn-auth.js";
 import {
   buildNoRemovableAccessText,
+  buildVpnGiftReceivedText,
   buildPaidVpnAccessRemovedText,
   buildPendingAccessSavedText,
   buildPendingAccessRemovedText,
@@ -9,15 +11,18 @@ import {
   PAID_VPN_PENDING_ACCESS_PROGRESS_TEXT,
   PAID_VPN_PENDING_ACCESS_READY_TEXT,
   parseAddUsername,
+  parseGiftCommand,
   parseRemoveUsername,
 } from "../paid-vpn-copy.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { vpnPendingAccessGrantRepository } from "../repositories/vpn-pending-access-grant.repository.js";
 import { vpnService } from "../services/vpn.service.js";
+import { vpnAccessGrantService } from "../services/vpn-access-grant.service.js";
 import { showPaidVpnScreen } from "./paid-vpn-screen.js";
 
 const ADD_USAGE_TEXT = "Использование: /add @username";
 const REMOVE_USAGE_TEXT = "Использование: /remove @username";
+const GIFT_USAGE_TEXT = "Использование: /gift @username 30";
 const ADD_PROGRESS_TEXT = "Подключаю бесплатный доступ…";
 const REMOVE_PROGRESS_TEXT = "Отключаю бесплатный доступ…";
 
@@ -37,6 +42,7 @@ export async function paidVpnStartHandler(ctx: PaidVpnContext): Promise<void> {
           { command: "paysupport", description: "Помощь с оплатой и доступом" },
           { command: "add", description: "Выдать бесплатный доступ" },
           { command: "remove", description: "Убрать бесплатный доступ" },
+          { command: "gift", description: "Подарить дни VPN" },
         ],
         { scope: { type: "chat", chat_id: ctx.chat.id } },
       );
@@ -46,6 +52,21 @@ export async function paidVpnStartHandler(ctx: PaidVpnContext): Promise<void> {
         error,
       });
     }
+  }
+
+  const message = ctx.message;
+  const startPayload = message && "text" in message
+    ? message.text.trim().match(/^\/start(?:@\w+)?(?:\s+(.+))?$/i)?.[1]
+    : undefined;
+  const registration = await vpnAccessGrantService.registerStart(
+    ctx.dbUser.id,
+    startPayload,
+  );
+  if (registration.status === "REFERRAL_ACCEPTED") {
+    logger.info("Paid VPN referral accepted", {
+      invitedUserId: ctx.dbUser.id,
+      inviterUserId: registration.inviterUserId,
+    });
   }
 
   const username = ctx.dbUser.username;
@@ -79,7 +100,80 @@ export async function paidVpnStartHandler(ctx: PaidVpnContext): Promise<void> {
     return;
   }
 
-  await showPaidVpnScreen(ctx);
+  await showPaidVpnScreen(ctx, {
+    referralAccepted: registration.status === "REFERRAL_ACCEPTED",
+  });
+}
+
+export async function paidVpnGiftHandler(ctx: PaidVpnContext): Promise<void> {
+  const message = ctx.message;
+  if (!message || !("text" in message)) {
+    await ctx.reply(GIFT_USAGE_TEXT);
+    return;
+  }
+  const parsed = parseGiftCommand(message.text);
+  if (!parsed.ok) {
+    await ctx.reply(GIFT_USAGE_TEXT);
+    return;
+  }
+  const matches = await userRepository.findManyByUsername(parsed.username);
+  if (matches.length === 0) {
+    await ctx.reply(`@${parsed.username} ещё не запускал бот. Попроси пользователя отправить /start, затем повтори команду.`);
+    return;
+  }
+  if (matches.length > 1) {
+    await ctx.reply(`Нашлось несколько пользователей с именем @${parsed.username}. Попроси нужного пользователя отправить /start и повтори команду.`);
+    return;
+  }
+  const target = matches[0];
+  if (target.isBanned || target.vpnBlocked) {
+    await ctx.reply(`Для @${parsed.username} действует блокировка. Подарок не выдан.`);
+    return;
+  }
+
+  const progress = await ctx.reply(`Добавляю ${parsed.days} дней…`);
+  try {
+    const result = await vpnAccessGrantService.grantAdminGift({
+      userId: target.id,
+      days: parsed.days,
+      grantedByTelegramId: ctx.dbUser.telegramId,
+    });
+    let provisioningWarning = false;
+    if (!result.pending) {
+      try {
+        const key = await vpnService.getPaidKey(target);
+        if (!key) provisioningWarning = true;
+      } catch (error) {
+        provisioningWarning = true;
+        logger.error("Gifted VPN access provisioning failed", { targetUserId: target.id, error });
+      }
+    }
+    const adminText = result.pending
+      ? `${parsed.days} дней для @${parsed.username} сохранены и начнутся после бесплатного или клубного доступа.`
+      : provisioningWarning
+        ? `${parsed.days} дней для @${parsed.username} добавлены. Профили ещё создаются; повторно начислять дни не нужно.`
+        : `${parsed.days} дней для @${parsed.username} добавлены.`;
+    await editProgress(ctx, progress.message_id, adminText);
+    try {
+      await ctx.telegram.sendMessage(
+        Number(target.telegramId),
+        buildVpnGiftReceivedText({ days: parsed.days, pending: result.pending }),
+        {
+          parse_mode: "HTML",
+          ...Markup.inlineKeyboard([[Markup.button.callback("Открыть VPN", "vpn_status")]]),
+        },
+      );
+    } catch (error) {
+      logger.warn("Failed to notify VPN gift recipient", { targetUserId: target.id, error });
+    }
+  } catch (error) {
+    logger.error("paidVpnGiftHandler failed", {
+      adminUserId: ctx.dbUser.id,
+      targetUserId: target.id,
+      error,
+    });
+    await editProgress(ctx, progress.message_id, "Не удалось добавить дни. Ничего повторно не начисляй: сначала проверь журнал ошибки.");
+  }
 }
 
 export async function paidVpnAccessHandler(ctx: PaidVpnContext): Promise<void> {

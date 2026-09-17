@@ -23,6 +23,12 @@ test("entitlement priority is free, paid, active trial, then none", () => {
   }, now).kind, "PAID");
   assert.equal(resolveVpnEntitlement({
     accessOverride: VpnSubscriptionAccessOverride.NONE,
+    expiresAt: new Date("2026-10-17T12:00:00Z"),
+    accessPausedAt: now,
+    trial,
+  }, now).kind, "NONE");
+  assert.equal(resolveVpnEntitlement({
+    accessOverride: VpnSubscriptionAccessOverride.NONE,
     expiresAt: null,
     trial,
   }, now).kind, "TRIAL");

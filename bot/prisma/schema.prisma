@@ -93,6 +93,23 @@ enum VpnTrialStatus {
   CONVERTED
 }
 
+enum VpnAccessGrantType {
+  ADMIN_GIFT
+  REFERRAL_REWARD
+}
+
+enum VpnAccessGrantStatus {
+  PENDING
+  APPLIED
+  REVOKED
+}
+
+enum VpnReferralStatus {
+  PENDING
+  REWARDED
+  REJECTED
+}
+
 enum ClubSearchRequestStatus {
   PENDING
   PROCESSING
@@ -124,6 +141,8 @@ model User {
   botStatus    BotInteractionStatus @default(UNKNOWN) @map("bot_status")
   botStartedAt DateTime?            @map("bot_started_at") @db.Timestamptz()
   botBlockedAt DateTime?            @map("bot_blocked_at") @db.Timestamptz()
+  paidVpnStartedAt DateTime?        @map("paid_vpn_started_at") @db.Timestamptz()
+  paidVpnReferralCode String?       @unique @map("paid_vpn_referral_code") @db.VarChar(24)
   firstSeenAt  DateTime?            @map("first_seen_at") @db.Timestamptz()
   lastSeenAt   DateTime?            @map("last_seen_at") @db.Timestamptz()
   createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz()
@@ -131,6 +150,8 @@ model User {
 
   vpnKeys          VpnKey[]
   vpnSubscriptions VpnSubscription[]
+  invitedVpnReferrals VpnReferral[] @relation("VpnReferralInviter")
+  acceptedVpnReferral VpnReferral?  @relation("VpnReferralInvited")
   clubInterest     ClubInterest?
 
   @@index([clubStatus])
@@ -264,6 +285,7 @@ model VpnSubscription {
   status          VpnSubscriptionStatus         @default(ACTIVE)
   accessOverride  VpnSubscriptionAccessOverride @default(NONE) @map("access_override")
   expiresAt       DateTime?                     @map("expires_at") @db.Timestamptz()
+  accessPausedAt  DateTime?                     @map("access_paused_at") @db.Timestamptz()
   appliedRevision Int                           @default(0) @map("applied_revision")
   lastSyncedAt    DateTime?                     @map("last_synced_at") @db.Timestamptz()
   lastError       String?                       @map("last_error") @db.Text
@@ -276,6 +298,7 @@ model VpnSubscription {
   inboundStates VpnSubscriptionInboundState[]
   billingSubscriptions VpnBillingSubscription[]
   trial         VpnTrial?
+  accessGrants  VpnAccessGrant[]
 
   @@unique([userId, productId])
   @@index([productId, status])
@@ -347,10 +370,59 @@ model VpnPayment {
   updatedAt                  DateTime           @updatedAt @map("updated_at") @db.Timestamptz()
 
   billingSubscription VpnBillingSubscription @relation(fields: [billingSubscriptionId], references: [id], onDelete: Restrict)
+  qualifyingReferral  VpnReferral?
 
   @@index([billingSubscriptionId, paidAt])
   @@index([status, paidAt])
   @@map("vpn_payments")
+}
+
+model VpnAccessGrant {
+  id                    Int                  @id @default(autoincrement())
+  vpnSubscriptionId     Int                  @map("vpn_subscription_id")
+  type                  VpnAccessGrantType
+  status                VpnAccessGrantStatus @default(APPLIED)
+  durationSeconds       Int                  @map("duration_seconds")
+  startsAt              DateTime?            @map("starts_at") @db.Timestamptz()
+  endsAt                DateTime?            @map("ends_at") @db.Timestamptz()
+  idempotencyKey        String                @unique @map("idempotency_key") @db.VarChar(160)
+  sourceReferralId      Int?                  @unique @map("source_referral_id")
+  grantedByTelegramId   BigInt?               @map("granted_by_telegram_id")
+  quotaResetRequired    Boolean               @default(false) @map("quota_reset_required")
+  quotaResetAt          DateTime?             @map("quota_reset_at") @db.Timestamptz()
+  quotaResetError       String?               @map("quota_reset_error") @db.Text
+  revokedAt             DateTime?             @map("revoked_at") @db.Timestamptz()
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz()
+
+  vpnSubscription VpnSubscription @relation(fields: [vpnSubscriptionId], references: [id], onDelete: Restrict)
+  sourceReferral  VpnReferral?     @relation(fields: [sourceReferralId], references: [id], onDelete: Restrict)
+
+  @@index([vpnSubscriptionId, status])
+  @@index([status, createdAt])
+  @@map("vpn_access_grants")
+}
+
+model VpnReferral {
+  id                   Int               @id @default(autoincrement())
+  inviterUserId        Int               @map("inviter_user_id")
+  invitedUserId        Int               @unique @map("invited_user_id")
+  status               VpnReferralStatus @default(PENDING)
+  qualifyingPaymentId  Int?              @unique @map("qualifying_payment_id")
+  qualifiedAt          DateTime?         @map("qualified_at") @db.Timestamptz()
+  rewardedAt           DateTime?         @map("rewarded_at") @db.Timestamptz()
+  rejectedAt           DateTime?         @map("rejected_at") @db.Timestamptz()
+  createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt            DateTime          @updatedAt @map("updated_at") @db.Timestamptz()
+
+  inviter           User            @relation("VpnReferralInviter", fields: [inviterUserId], references: [id], onDelete: Restrict)
+  invited           User            @relation("VpnReferralInvited", fields: [invitedUserId], references: [id], onDelete: Restrict)
+  qualifyingPayment VpnPayment?     @relation(fields: [qualifyingPaymentId], references: [id], onDelete: Restrict)
+  rewardGrant       VpnAccessGrant?
+
+  @@index([inviterUserId, status])
+  @@index([status, createdAt])
+  @@map("vpn_referrals")
 }
 
 model VpnSubscriptionInboundState {
