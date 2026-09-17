@@ -21,8 +21,8 @@ import { VPN_TRIAL_WHITELIST_LIMIT_BYTES } from "../services/vpn-entitlement.js"
 import { vpnTrialService } from "../services/vpn-trial.service.js";
 import { vpnService } from "../services/vpn.service.js";
 
-const INCY_SETUP_GUIDE_URL = "https://telegra.ph/Kak-podklyuchit-MOZHNO-VPN-v-INCY-09-07";
-const HAPP_SETUP_GUIDE_URL = "https://telegra.ph/Kak-podklyuchit-MOZHNO-VPN-v-HAPP-09-07";
+const INCY_SETUP_GUIDE_URL = "https://telegra.ph/Kak-podklyuchit-MOZHNO-VPN-v-INCY-09-17";
+const HAPP_SETUP_GUIDE_URL = "https://telegra.ph/Kak-podklyuchit-MOZHNO-VPN-v-HAPP-09-17";
 
 function supportUrl(): string {
   return `https://t.me/${config.vpnBot.payments.supportUsername.slice(1)}`;

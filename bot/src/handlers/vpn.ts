@@ -2,8 +2,8 @@ import { logger } from "../logger.js";
 import { type AuthContext } from "../middlewares/auth.js";
 import { vpnService } from "../services/vpn.service.js";
 
-const INCY_SETUP_GUIDE_URL = "https://telegra.ph/Kak-podklyuchit-MOZHNO-VPN-v-INCY-09-07";
-const HAPP_SETUP_GUIDE_URL = "https://telegra.ph/Kak-podklyuchit-MOZHNO-VPN-v-HAPP-09-07";
+const INCY_SETUP_GUIDE_URL = "https://telegra.ph/Kak-podklyuchit-MOZHNO-VPN-v-INCY-09-17";
+const HAPP_SETUP_GUIDE_URL = "https://telegra.ph/Kak-podklyuchit-MOZHNO-VPN-v-HAPP-09-17";
 
 function escapeHtml(value: string): string {
   return value
