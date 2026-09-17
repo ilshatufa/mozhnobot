@@ -36,10 +36,11 @@ async function main(): Promise<void> {
 
   await bot.launch({
     allowedUpdates: ["message", "callback_query", "pre_checkout_query", "subscription"] as never,
-  });
-  logger.info("Paid VPN bot started");
-  void configureCommands(bot).catch((error) => {
-    logger.warn("Failed to configure paid VPN bot commands", { error });
+  }, () => {
+    logger.info("Paid VPN bot started");
+    void configureCommands(bot).catch((error) => {
+      logger.warn("Failed to configure paid VPN bot commands", { error });
+    });
   });
 }
 
