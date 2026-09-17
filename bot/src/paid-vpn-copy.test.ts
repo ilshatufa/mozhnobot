@@ -38,6 +38,7 @@ test("paid VPN offer shows price, period, and automatic renewal before payment",
   assert.match(text, /автоматически/);
   assert.match(text, /7 дней бесплатно/);
   assert.match(text, /списаний не будет/);
+  assert.match(text, /30 дней за друга/);
 });
 
 test("trial screen shows expiry, whitelist quota, and no charge", () => {
@@ -51,6 +52,7 @@ test("trial screen shows expiry, whitelist quota, and no charge", () => {
   assert.match(text, /128 МБ из 1 ГБ/);
   assert.match(text, /Нидерланды, Германия и Латвия — без лимита/);
   assert.match(text, /Как подключиться/);
+  assert.match(text, /30 дней за друга/);
 });
 
 test("purchase during trial explains that unused trial time is preserved", () => {
@@ -105,6 +107,7 @@ test("paid VPN canceled state preserves the paid period and link", () => {
   assert.match(text, /Оплачено до/);
   assert.match(text, /лимит обновляется каждые 30 дней/);
   assert.match(text, /https:\/\/vpn\.example\.com\/sub\/private-token/);
+  assert.match(text, /30 дней за друга/);
 });
 
 test("free VPN access still exposes an active paid renewal", () => {
@@ -118,6 +121,7 @@ test("free VPN access still exposes an active paid renewal", () => {
   assert.match(text, /осталось автопродление/);
   assert.match(text, /отключи продление/);
   assert.match(text, /лимит обновляется каждые 30 дней/);
+  assert.match(text, /30 дней за друга/);
 });
 
 test("club access warns about a paid renewal that is still active", () => {
@@ -129,6 +133,7 @@ test("club access warns about a paid renewal that is still active", () => {
   assert.match(text, /входит в клуб/);
   assert.match(text, /подписка всё ещё продлевается/);
   assert.match(text, /Следующее списание/);
+  assert.match(text, /30 дней за друга/);
 });
 
 test("paid VPN no-access text gives the next action", () => {

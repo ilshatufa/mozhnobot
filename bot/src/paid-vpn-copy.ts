@@ -21,6 +21,8 @@ function joinPaidVpnBlocks(blocks: string[]): string {
   return `${blocks.join(`\n${RICH_SPACER}\n`)}\n${RICH_SPACER}`;
 }
 
+const PAID_VPN_REFERRAL_PROMO = "<b>30 дней за друга</b>\nПригласи нового пользователя — после его первой оплаты тебе добавятся 30 дней.";
+
 export const PAID_VPN_STARS_HELP_TEXT = joinPaidVpnBlocks([
   "<b>Как купить Telegram Stars</b>",
   "1. Открой официальный @PremiumBot с синей галочкой.\n2. Нажми «Запустить» и выбери «Купить звёзды».\n3. Укажи количество Stars и оплати покупку.\n4. Вернись сюда и продолжи оплату VPN.",
@@ -82,6 +84,7 @@ export function buildPaidVpnOfferText(input: {
     trial,
     sale,
     ...(acceptance ? [acceptance] : []),
+    PAID_VPN_REFERRAL_PROMO,
   ]);
 }
 
@@ -116,6 +119,7 @@ export function buildPaidVpnTrialActiveText(input: {
     "<b>Как подключиться</b>\nУстанови INCY или HAPP, затем нажми «Подключить VPN».",
     "Если кнопка не сработает, скопируй ссылку в приложение:",
     `<pre>${escapeHtml(input.subscriptionUrl)}</pre>`,
+    PAID_VPN_REFERRAL_PROMO,
   ]);
 }
 
@@ -156,6 +160,7 @@ export function buildPaidVpnActiveText(input: {
     "<b>Как подключиться</b>\nУстанови INCY или HAPP, затем нажми «Подключить VPN».",
     "Если кнопка не сработает, скопируй ссылку в приложение:",
     `<pre>${escapeHtml(input.subscriptionUrl)}</pre>`,
+    PAID_VPN_REFERRAL_PROMO,
   ]);
 }
 
@@ -176,6 +181,7 @@ export function buildPaidVpnFreeAccessText(input: {
     "<b>Как подключиться</b>\nУстанови INCY или HAPP, затем нажми «Подключить VPN».",
     "Если кнопка не сработает, скопируй ссылку в приложение:",
     `<pre>${escapeHtml(input.subscriptionUrl)}</pre>`,
+    PAID_VPN_REFERRAL_PROMO,
   ]);
 }
 
@@ -195,6 +201,7 @@ export function buildPaidVpnClubAccessText(input: {
     "<b>Как подключиться</b>\nУстанови INCY или HAPP, затем нажми «Подключить VPN».",
     "Если кнопка не сработает, скопируй ссылку в приложение:",
     `<pre>${escapeHtml(input.subscriptionUrl)}</pre>`,
+    PAID_VPN_REFERRAL_PROMO,
   ]);
 }
 
