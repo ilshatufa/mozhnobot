@@ -54,8 +54,17 @@ export class VpnTrialNotificationService {
       try {
         await telegram.sendMessage(
           trial.vpnSubscription.user.telegramId.toString(),
-          `Пробный период МОЖНО VPN закончится ${formatPaidVpnDate(trial.endsAt)}. Списаний не будет. Можно оплатить 30 дней сейчас или продолжить до конца пробного срока.`,
-          Markup.inlineKeyboard([[Markup.button.callback("Открыть VPN", "vpn_status")]]),
+          [
+            "<b>Пробный период закончится завтра</b>",
+            "",
+            `VPN работает до ${formatPaidVpnDate(trial.endsAt)}. Списаний не будет.`,
+            "",
+            "Открой VPN, чтобы посмотреть доступные варианты.",
+          ].join("\n"),
+          {
+            parse_mode: "HTML",
+            ...Markup.inlineKeyboard([[Markup.button.callback("Открыть VPN", "vpn_status")]]),
+          },
         );
       } catch (error) {
         await prisma.vpnTrial.update({
@@ -97,8 +106,17 @@ export class VpnTrialNotificationService {
         }
         await telegram.sendMessage(
           trial.vpnSubscription.user.telegramId.toString(),
-          "Пробный период МОЖНО VPN закончился. Списаний не было. Личная ссылка и профили сохранены — оплатить 30 дней можно в боте.",
-          Markup.inlineKeyboard([[Markup.button.callback("Открыть VPN", "vpn_status")]]),
+          [
+            "<b>Пробный период закончился</b>",
+            "",
+            "Списаний не было. Личная ссылка сохранена.",
+            "",
+            "Открой VPN, чтобы посмотреть доступные варианты.",
+          ].join("\n"),
+          {
+            parse_mode: "HTML",
+            ...Markup.inlineKeyboard([[Markup.button.callback("Открыть VPN", "vpn_status")]]),
+          },
         );
       } catch (error) {
         await prisma.vpnTrial.update({

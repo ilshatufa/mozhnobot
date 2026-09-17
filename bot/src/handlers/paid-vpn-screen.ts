@@ -28,10 +28,10 @@ function supportUrl(): string {
   return `https://t.me/${config.vpnBot.payments.supportUsername.slice(1)}`;
 }
 
-function offerKeyboard(salesAvailable: boolean, trialAvailable: boolean) {
+function offerKeyboard(salesAvailable: boolean, trialAvailable: boolean, amountStars: number) {
   const rows = [];
   if (trialAvailable) rows.push([Markup.button.callback("Начать бесплатно", "vpn_trial_start")]);
-  if (salesAvailable) rows.push([Markup.button.callback("Оплатить", "vpn_buy")]);
+  if (salesAvailable) rows.push([Markup.button.callback(`Оплатить ${amountStars} ⭐`, "vpn_buy")]);
   if (config.vpnBot.payments.termsUrl) {
     rows.push([Markup.button.url("Условия", config.vpnBot.payments.termsUrl)]);
   }
@@ -43,14 +43,17 @@ function activeKeyboard(input: {
   subscriptionUrl: string;
   canCancel: boolean;
   canBuy?: boolean;
+  amountStars: number;
 }) {
   return Markup.inlineKeyboard([
-    [Markup.button.url("Открыть подписку", input.subscriptionUrl)],
+    [Markup.button.url("Подключить VPN", input.subscriptionUrl)],
     [
-      Markup.button.url("INCY", INCY_SETUP_GUIDE_URL),
-      Markup.button.url("HAPP", HAPP_SETUP_GUIDE_URL),
+      Markup.button.url("Установить INCY", INCY_SETUP_GUIDE_URL),
+      Markup.button.url("Установить HAPP", HAPP_SETUP_GUIDE_URL),
     ],
-    ...(input.canBuy ? [[Markup.button.callback("Оплатить", "vpn_buy")]] : []),
+    ...(input.canBuy
+      ? [[Markup.button.callback(`Оплатить ${input.amountStars} ⭐`, "vpn_buy")]]
+      : []),
     ...(input.canCancel
       ? [[Markup.button.callback("Отключить продление", "vpn_cancel")]]
       : []),
@@ -60,7 +63,7 @@ function activeKeyboard(input: {
 
 function retryKeyboard() {
   return Markup.inlineKeyboard([
-    [Markup.button.callback("Проверить доступ", "vpn_status")],
+    [Markup.button.callback("Проверить снова", "vpn_status")],
     [Markup.button.url("Поддержка", supportUrl())],
   ]);
 }
@@ -181,6 +184,7 @@ export async function showPaidVpnScreen(
             subscriptionUrl: result.key.subscriptionUrl,
             canCancel,
             canBuy: activeTrial && salesAvailable,
+            amountStars: config.vpnBot.payments.priceStars,
           }),
         },
       );
@@ -232,6 +236,6 @@ export async function showPaidVpnScreen(
   });
   await editOrReply(ctx, progressMessageId, text, {
     parse_mode: "HTML",
-    ...offerKeyboard(salesAvailable, trialAvailable),
+    ...offerKeyboard(salesAvailable, trialAvailable, config.vpnBot.payments.priceStars),
   });
 }

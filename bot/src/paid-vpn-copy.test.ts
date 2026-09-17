@@ -19,8 +19,8 @@ import {
 } from "./paid-vpn-copy.js";
 
 test("paid VPN start text explains payment and access purpose", () => {
-  assert.match(PAID_VPN_START_TEXT, /оплатить подписку/);
-  assert.match(PAID_VPN_START_TEXT, /личную ссылку/);
+  assert.match(PAID_VPN_START_TEXT, /личная ссылка/);
+  assert.match(PAID_VPN_START_TEXT, /пробный период/);
 });
 
 test("paid VPN offer shows price, period, and automatic renewal before payment", () => {
@@ -31,9 +31,9 @@ test("paid VPN offer shows price, period, and automatic renewal before payment",
   });
   assert.match(text, /100 ⭐/);
   assert.match(text, /30 дней/);
-  assert.match(text, /продлевается автоматически/);
+  assert.match(text, /автоматически/);
   assert.match(text, /7 дней бесплатно/);
-  assert.match(text, /автоматического списания не будет/);
+  assert.match(text, /списаний не будет/);
 });
 
 test("trial screen shows expiry, whitelist quota, and no charge", () => {
@@ -45,18 +45,19 @@ test("trial screen shows expiry, whitelist quota, and no charge", () => {
   });
   assert.match(text, /Списаний не будет/);
   assert.match(text, /128 МБ из 1 ГБ/);
-  assert.match(text, /Прямые профили — без лимита/);
+  assert.match(text, /Нидерланды, Германия и Латвия — без лимита/);
+  assert.match(text, /Как подключиться/);
 });
 
 test("purchase during trial explains that paid time starts immediately", () => {
   const text = buildPaidVpnConfirmationText({ amountStars: 100, trialActive: true });
   assert.match(text, /30 дней начнутся сразу/);
-  assert.match(text, /не переносятся/);
+  assert.match(text, /не перенесётся/);
 });
 
 test("paid VPN confirmation explains current and recurring charge", () => {
   const text = buildPaidVpnConfirmationText({ amountStars: 100 });
-  assert.match(text, /спишутся сейчас/);
+  assert.match(text, /спишется сейчас/);
   assert.match(text, /каждые 30 дней/);
   assert.match(text, /Принять и оплатить/);
 });
@@ -68,7 +69,8 @@ test("paid VPN canceled state preserves the paid period and link", () => {
     renewalState: "canceled",
   });
   assert.match(text, /Автопродление отключено/);
-  assert.match(text, /VPN работает до/);
+  assert.match(text, /Оплачено до/);
+  assert.match(text, /лимит обновляется каждые 30 дней/);
   assert.match(text, /https:\/\/vpn\.example\.com\/sub\/private-token/);
 });
 
@@ -79,12 +81,13 @@ test("free VPN access still exposes an active paid renewal", () => {
     renewalActive: true,
   });
   assert.match(text, /бесплатный доступ/);
-  assert.match(text, /включено автопродление/);
+  assert.match(text, /осталось автопродление/);
   assert.match(text, /отключи продление/);
+  assert.match(text, /лимит обновляется каждые 30 дней/);
 });
 
 test("paid VPN no-access text gives the next action", () => {
-  assert.match(PAID_VPN_NO_ACCESS_TEXT, /напиши администратору/);
+  assert.match(PAID_VPN_NO_ACCESS_TEXT, /напиши в поддержку/);
 });
 
 test("pending grant copy explains automatic first-start activation", () => {

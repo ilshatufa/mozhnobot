@@ -110,9 +110,9 @@ export async function paidVpnBuyHandler(ctx: PaidVpnContext): Promise<void> {
     {
       parse_mode: "HTML",
       ...Markup.inlineKeyboard([
-        [Markup.button.callback("Назад", "vpn_status")],
         [Markup.button.callback("Принять и оплатить", "vpn_buy_confirm")],
         [Markup.button.url("Условия", config.vpnBot.payments.termsUrl)],
+        [Markup.button.callback("Назад", "vpn_status")],
       ]),
     },
   );
@@ -127,7 +127,7 @@ export async function paidVpnTrialStartHandler(ctx: PaidVpnContext): Promise<voi
     return;
   }
 
-  await editCallbackMessage(ctx, "Подключаю четыре профиля…", {});
+  await editCallbackMessage(ctx, "Готовлю четыре VPN-профиля…", {});
   const result = await vpnTrialService.startTrial({
     user: ctx.dbUser,
     termsVersion: config.vpnBot.payments.termsVersion,
@@ -174,7 +174,7 @@ export async function paidVpnBuyConfirmHandler(ctx: PaidVpnContext): Promise<voi
   const invoice: SendInvoiceRequest = {
     chat_id: chatId,
     title: "МОЖНО VPN — 30 дней",
-    description: "Четыре VPN-профиля и одна постоянная ссылка. Подписка продлевается автоматически каждые 30 дней.",
+    description: "Нидерланды, Германия и Латвия без лимита; белые списки — 10 ГБ. Автопродление каждые 30 дней.",
     payload: created.billingSubscription.invoicePayload,
     provider_token: "",
     currency: VPN_STARS_CURRENCY,
@@ -298,7 +298,7 @@ export async function paidVpnSuccessfulPaymentHandler(ctx: PaidVpnContext): Prom
     await ctx.reply(PAID_VPN_PROVISIONING_ERROR_TEXT, {
       parse_mode: "HTML",
       ...Markup.inlineKeyboard([
-        [Markup.button.callback("Проверить доступ", "vpn_status")],
+        [Markup.button.callback("Проверить снова", "vpn_status")],
         [Markup.button.url("Поддержка", supportUrl())],
       ]),
     });
@@ -334,11 +334,20 @@ export async function paidVpnSubscriptionUpdatedHandler(ctx: PaidVpnContext): Pr
   if (update.state === "failed" && !ctx.dbUser.isBanned && !ctx.dbUser.vpnBlocked) {
     await ctx.telegram.sendMessage(
       update.user.id,
-      "Автопродление МОЖНО VPN не прошло. Текущий оплаченный срок сохраняется — открой /vpn, чтобы проверить дату и доступ.",
-      Markup.inlineKeyboard([
-        [Markup.button.callback("Проверить VPN", "vpn_status")],
-        [Markup.button.url("Поддержка", supportUrl())],
-      ]),
+      [
+        "<b>Не прошло продление МОЖНО VPN</b>",
+        "",
+        "Новых списаний не было. VPN работает до конца уже оплаченного срока.",
+        "",
+        "Открой VPN, чтобы проверить дату и доступ.",
+      ].join("\n"),
+      {
+        parse_mode: "HTML",
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback("Проверить VPN", "vpn_status")],
+          [Markup.button.url("Поддержка", supportUrl())],
+        ]),
+      },
     );
   }
 }
@@ -356,7 +365,7 @@ export async function paidVpnCancelHandler(ctx: PaidVpnContext): Promise<void> {
     {
       parse_mode: "HTML",
       ...Markup.inlineKeyboard([
-        [Markup.button.callback("Не отключать", "vpn_status")],
+        [Markup.button.callback("Оставить продление", "vpn_status")],
         [Markup.button.callback("Отключить продление", "vpn_cancel_confirm")],
       ]),
     },

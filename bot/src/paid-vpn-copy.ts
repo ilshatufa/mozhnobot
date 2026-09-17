@@ -1,22 +1,26 @@
 export const PAID_VPN_START_TEXT = [
   "<b>МОЖНО VPN</b>",
   "",
-  "Сервис для безопасного и стабильного доступа к интернету.",
+  "Одна личная ссылка — четыре VPN-профиля.",
   "",
-  "Здесь можно оплатить подписку, получить личную ссылку и проверить доступ.",
+  "Здесь можно включить пробный период, оплатить подписку и подключить VPN.",
 ].join("\n");
 
 export const PAID_VPN_NO_ACCESS_TEXT = [
-  "Доступ к МОЖНО VPN пока не подключён.",
+  "МОЖНО VPN пока не подключён.",
   "",
-  "Если тебе уже выдали доступ, напиши администратору.",
+  "Если тебе уже выдали бесплатный доступ, напиши в поддержку.",
 ].join("\n");
 
-export const PAID_VPN_BLOCKED_TEXT = "Доступ к МОЖНО VPN заблокирован. Напиши администратору.";
-export const PAID_VPN_BANNED_TEXT = "Доступ к боту заблокирован. Напиши администратору.";
-export const PAID_VPN_PROGRESS_TEXT = "Проверяю подписку и доступ…";
+export const PAID_VPN_BLOCKED_TEXT = "МОЖНО VPN заблокирован. Чтобы узнать причину, напиши в поддержку.";
+export const PAID_VPN_BANNED_TEXT = "Бот для тебя недоступен. Чтобы узнать причину, напиши в поддержку.";
+export const PAID_VPN_PROGRESS_TEXT = "Проверяю доступ…";
 
 const RICH_SPACER = "⠀";
+
+function joinPaidVpnBlocks(blocks: string[]): string {
+  return `${blocks.join(`\n${RICH_SPACER}\n`)}\n${RICH_SPACER}`;
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -44,49 +48,47 @@ export function buildPaidVpnOfferText(input: {
   trialExpiredAt?: Date | null;
   adminConfigurationMissing?: boolean;
 }): string {
-  const intro = input.trialExpiredAt
-    ? `Пробный период закончился ${formatPaidVpnDate(input.trialExpiredAt)}. Списаний не было, личная ссылка и профили сохранены.`
+  const status = input.trialExpiredAt
+    ? `<b>Пробный период закончился</b>\n${formatPaidVpnDate(input.trialExpiredAt)}. Списаний не было. Личная ссылка сохранена.`
     : input.expiredAt
-    ? `Предыдущий оплаченный период закончился ${formatPaidVpnDate(input.expiredAt)}. Личная ссылка и профили сохранены.`
-    : "Одна постоянная ссылка открывает четыре VPN-профиля: Нидерланды, Германия, Латвия и режим для белых списков.";
+      ? `<b>Оплаченный период закончился</b>\n${formatPaidVpnDate(input.expiredAt)}. Личная ссылка сохранена.`
+      : "Одна личная ссылка — четыре VPN-профиля.";
   const trial = input.trialAvailable
-    ? [
-        RICH_SPACER,
-        "Первые 7 дней бесплатно: прямые профили без лимита, режим для белых списков — 1 ГБ на весь пробный период. Карта и оплата не нужны, автоматического списания не будет.",
-        "Нажимая «Начать бесплатно», ты принимаешь действующие условия.",
-      ]
-    : [];
+    ? "<b>7 дней бесплатно</b>\n• Нидерланды, Германия и Латвия — без лимита\n• Белые списки — 1 ГБ на всю неделю\n\nОплата не нужна. После пробного периода списаний не будет."
+    : "<b>Что входит в подписку</b>\n• Нидерланды, Германия и Латвия — без лимита\n• Белые списки — 10 ГБ каждые 30 дней";
   const sale = input.salesAvailable
-    ? `${input.amountStars} ⭐ за 30 дней. Подписка продлевается автоматически — отключить продление можно в этом боте.`
+    ? `<b>${input.trialAvailable ? "После пробного периода" : "Подписка"}</b>\n${input.amountStars} ⭐ за 30 дней. Продление включается автоматически, но его можно отключить в боте.`
     : input.adminConfigurationMissing
-      ? "Перед тестовой оплатой нужно опубликовать условия и указать их версию в настройках бота."
-      : "Продажи пока не открыты. Если доступ нужен сейчас, напиши в поддержку.";
-  return [
+      ? "Тестовая оплата пока недоступна: добавь ссылку и версию условий в настройки бота."
+      : input.trialAvailable
+        ? "Оплата пока закрыта. Бесплатный период уже доступен."
+        : "Оплата пока закрыта. Если доступ нужен сейчас, напиши в поддержку.";
+  const acceptance = input.trialAvailable
+    ? "Нажимая «Начать бесплатно», ты принимаешь условия."
+    : null;
+  return joinPaidVpnBlocks([
     "<b>МОЖНО VPN</b>",
-    RICH_SPACER,
-    intro,
-    ...trial,
-    RICH_SPACER,
+    status,
+    trial,
     sale,
-    RICH_SPACER,
-  ].join("\n\n");
+    ...(acceptance ? [acceptance] : []),
+  ]);
 }
 
 export function buildPaidVpnConfirmationText(input: {
   amountStars: number;
   trialActive?: boolean;
 }): string {
-  return [
-    "<b>Подтверждение подписки</b>",
-    RICH_SPACER,
-    `${input.amountStars} ⭐ спишутся сейчас, затем каждые 30 дней. VPN включится только после подтверждения оплаты Telegram.`,
+  return joinPaidVpnBlocks([
+    "<b>Подписка на МОЖНО VPN</b>",
+    `${input.amountStars} ⭐ спишется сейчас. Затем — столько же каждые 30 дней.`,
+    "<b>Что будет доступно</b>\n• Нидерланды, Германия и Латвия — без лимита\n• Белые списки — 10 ГБ каждые 30 дней",
     ...(input.trialActive
-      ? [RICH_SPACER, "Оплаченные 30 дней начнутся сразу. Оставшиеся дни пробного периода не переносятся."]
+      ? ["Оплаченные 30 дней начнутся сразу. Остаток бесплатной недели не перенесётся."]
       : []),
-    RICH_SPACER,
-    "Нажимая «Принять и оплатить», ты принимаешь действующие условия. Продление можно отключить в боте, оплаченный срок при этом сохранится.",
-    RICH_SPACER,
-  ].join("\n\n");
+    "Продление можно отключить в боте. Уже оплаченный срок сохранится.",
+    "Нажимая «Принять и оплатить», ты принимаешь условия.",
+  ]);
 }
 
 export function buildPaidVpnTrialActiveText(input: {
@@ -97,38 +99,33 @@ export function buildPaidVpnTrialActiveText(input: {
 }): string {
   const usedMb = Number(input.whitelistUsedBytes / (1024n ** 2n));
   const limitGb = Number(input.whitelistLimitBytes / (1024n ** 3n));
-  return [
-    "<b>Пробный период МОЖНО VPN</b>",
-    RICH_SPACER,
-    `Работает до ${formatPaidVpnDate(input.endsAt)}. Списаний не будет.`,
-    `Белые списки: ${usedMb} МБ из ${limitGb} ГБ. Прямые профили — без лимита.`,
-    RICH_SPACER,
-    "Личная ссылка для INCY или HAPP:",
+  return joinPaidVpnBlocks([
+    "<b>Пробный период работает</b>",
+    `До ${formatPaidVpnDate(input.endsAt)}.\nОплата не нужна. Списаний не будет.`,
+    `<b>Твои профили</b>\n• Нидерланды, Германия и Латвия — без лимита\n• Белые списки — ${usedMb} МБ из ${limitGb} ГБ`,
+    "<b>Как подключиться</b>\nУстанови INCY или HAPP, затем нажми «Подключить VPN».",
+    "Если кнопка не сработает, скопируй ссылку в приложение:",
     `<pre>${escapeHtml(input.subscriptionUrl)}</pre>`,
-    RICH_SPACER,
-  ].join("\n\n");
+  ]);
 }
 
-export const PAID_VPN_TRIAL_PROVISIONING_TEXT = [
-  "<b>Подключаю пробный период</b>",
-  RICH_SPACER,
-  "Профили пока настраиваются. Семь дней ещё не начались — проверь доступ через несколько минут.",
-  RICH_SPACER,
-].join("\n\n");
+export const PAID_VPN_TRIAL_PROVISIONING_TEXT = joinPaidVpnBlocks([
+  "<b>Готовим пробный доступ</b>",
+  "Профили ещё создаются. Бесплатные 7 дней начнутся, когда ссылка будет готова.",
+  "Проверь доступ через несколько минут.",
+]);
 
-export const PAID_VPN_TRIAL_STATUS_ERROR_TEXT = [
-  "<b>Пробный период подключён</b>",
-  RICH_SPACER,
-  "Не получилось проверить расход белых списков. Попробуй снова через несколько минут или напиши в поддержку.",
-  RICH_SPACER,
-].join("\n\n");
+export const PAID_VPN_TRIAL_STATUS_ERROR_TEXT = joinPaidVpnBlocks([
+  "<b>Не удалось обновить данные</b>",
+  "Пробный период сохранён, но сейчас не получается узнать расход белых списков.",
+  "Попробуй снова через несколько минут. Если ошибка останется, напиши в поддержку.",
+]);
 
-export const PAID_VPN_INVOICE_SENT_TEXT = [
+export const PAID_VPN_INVOICE_SENT_TEXT = joinPaidVpnBlocks([
   "<b>Счёт отправлен</b>",
-  RICH_SPACER,
-  "Заверши оплату в сообщении Telegram со счётом. Доступ появится только после подтверждения платежа.",
-  RICH_SPACER,
-].join("\n\n");
+  "Нажми кнопку оплаты в отдельном сообщении Telegram.",
+  "VPN включится автоматически после подтверждения платежа.",
+]);
 
 export function buildPaidVpnActiveText(input: {
   subscriptionUrl: string;
@@ -136,21 +133,20 @@ export function buildPaidVpnActiveText(input: {
   renewalState: "active" | "canceled" | "failed" | "unknown";
 }): string {
   const renewalText = input.renewalState === "active"
-    ? `Следующее списание — ${formatPaidVpnDate(input.expiresAt)}.`
+    ? `Оплачено до ${formatPaidVpnDate(input.expiresAt)}. В этот день подписка продлится автоматически.`
     : input.renewalState === "canceled"
-      ? `Автопродление отключено. VPN работает до ${formatPaidVpnDate(input.expiresAt)}.`
+      ? `Оплачено до ${formatPaidVpnDate(input.expiresAt)}. Автопродление отключено.`
       : input.renewalState === "failed"
-        ? `Автопродление не прошло. VPN работает до ${formatPaidVpnDate(input.expiresAt)}.`
+        ? `Оплачено до ${formatPaidVpnDate(input.expiresAt)}. Последнее автопродление не прошло.`
         : `VPN оплачен до ${formatPaidVpnDate(input.expiresAt)}.`;
-  return [
-    "<b>МОЖНО VPN подключён</b>",
-    RICH_SPACER,
+  return joinPaidVpnBlocks([
+    "<b>МОЖНО VPN работает</b>",
     renewalText,
-    RICH_SPACER,
-    "Личная ссылка для INCY или HAPP:",
+    "<b>Твои профили</b>\n• Нидерланды, Германия и Латвия — без лимита\n• Белые списки — 10 ГБ, лимит обновляется каждые 30 дней",
+    "<b>Как подключиться</b>\nУстанови INCY или HAPP, затем нажми «Подключить VPN».",
+    "Если кнопка не сработает, скопируй ссылку в приложение:",
     `<pre>${escapeHtml(input.subscriptionUrl)}</pre>`,
-    RICH_SPACER,
-  ].join("\n\n");
+  ]);
 }
 
 export function buildPaidVpnFreeAccessText(input: {
@@ -159,82 +155,72 @@ export function buildPaidVpnFreeAccessText(input: {
   renewalActive: boolean;
 }): string {
   const renewalNotice = input.renewalActive && input.paidExpiresAt
-    ? [
-        RICH_SPACER,
-        `У ранее оформленной подписки включено автопродление. Следующее списание — ${formatPaidVpnDate(input.paidExpiresAt)}. Если оно больше не нужно, отключи продление ниже.`,
-      ]
-    : [];
-  return [
-    "<b>МОЖНО VPN подключён</b>",
-    RICH_SPACER,
-    "Администратор предоставил бесплатный доступ без ограничения срока. Оплачивать подписку не нужно.",
-    ...renewalNotice,
-    RICH_SPACER,
-    "Личная ссылка для INCY или HAPP:",
+    ? `Важно: у прежней подписки осталось автопродление. Следующее списание — ${formatPaidVpnDate(input.paidExpiresAt)}. Если оно не нужно, отключи продление ниже.`
+    : null;
+  return joinPaidVpnBlocks([
+    "<b>МОЖНО VPN работает</b>",
+    "У тебя бесплатный доступ без срока. Платить не нужно.",
+    ...(renewalNotice ? [renewalNotice] : []),
+    "<b>Твои профили</b>\n• Нидерланды, Германия и Латвия — без лимита\n• Белые списки — 10 ГБ, лимит обновляется каждые 30 дней",
+    "<b>Как подключиться</b>\nУстанови INCY или HAPP, затем нажми «Подключить VPN».",
+    "Если кнопка не сработает, скопируй ссылку в приложение:",
     `<pre>${escapeHtml(input.subscriptionUrl)}</pre>`,
-    RICH_SPACER,
-  ].join("\n\n");
+  ]);
 }
 
-export const PAID_VPN_PROVISIONING_ERROR_TEXT = [
+export const PAID_VPN_PROVISIONING_ERROR_TEXT = joinPaidVpnBlocks([
   "<b>Оплата получена</b>",
-  RICH_SPACER,
-  "Доступ пока настраивается — повторно платить не нужно. Проверь ещё раз через несколько минут или напиши в поддержку.",
-  RICH_SPACER,
-].join("\n\n");
+  "Профили ещё создаются. Повторно платить не нужно.",
+  "Проверь доступ через несколько минут. Если ссылка не появится, напиши в поддержку.",
+]);
 
-export const PAID_VPN_FREE_PROVISIONING_ERROR_TEXT = [
-  "<b>Доступ предоставлен</b>",
-  RICH_SPACER,
-  "Профили пока настраиваются. Проверь ещё раз через несколько минут или напиши в поддержку.",
-  RICH_SPACER,
-].join("\n\n");
+export const PAID_VPN_FREE_PROVISIONING_ERROR_TEXT = joinPaidVpnBlocks([
+  "<b>Бесплатный доступ включён</b>",
+  "Профили ещё создаются. Проверь доступ через несколько минут.",
+  "Если ссылка не появится, напиши в поддержку.",
+]);
 
 export function buildPaidVpnPaymentReadyText(expiresAt: Date, renewal: boolean): string {
-  return [
-    renewal ? "<b>МОЖНО VPN продлён</b>" : "<b>Оплата получена</b>",
-    RICH_SPACER,
-    `Доступ работает до ${formatPaidVpnDate(expiresAt)}. Личная ссылка и четыре профиля готовы в разделе /vpn.`,
-    RICH_SPACER,
-  ].join("\n\n");
+  return joinPaidVpnBlocks([
+    renewal ? "<b>МОЖНО VPN продлён</b>" : "<b>МОЖНО VPN оплачен</b>",
+    `VPN работает до ${formatPaidVpnDate(expiresAt)}.`,
+    "Личная ссылка и четыре профиля уже готовы. Нажми «Открыть VPN».",
+  ]);
 }
 
 export function buildPaidVpnCancelConfirmationText(expiresAt: Date): string {
-  return [
-    "<b>Отключить автопродление?</b>",
-    RICH_SPACER,
+  return joinPaidVpnBlocks([
+    "<b>Отключить продление?</b>",
     "Новых списаний не будет.",
-    `VPN продолжит работать до ${formatPaidVpnDate(expiresAt)}. Личная ссылка, профили и история оплаты сохранятся.`,
-    RICH_SPACER,
-  ].join("\n\n");
+    `VPN продолжит работать до ${formatPaidVpnDate(expiresAt)}. Личная ссылка и профили сохранятся.`,
+  ]);
 }
 
 export function buildPaidVpnTermsText(termsUrl: string): string {
   return termsUrl
-    ? "Условия продажи и использования МОЖНО VPN доступны по кнопке ниже."
-    : "Условия продажи ещё не опубликованы. Оплата пока недоступна.";
+    ? "Условия подписки и возвратов — по кнопке ниже."
+    : "Условия ещё не опубликованы, поэтому оплата пока недоступна.";
 }
 
 export function buildPaidVpnSupportText(username: string): string {
-  return [
-    "<b>Помощь с оплатой и доступом</b>",
-    RICH_SPACER,
-    `Напиши ${escapeHtml(username)}. Укажи свой Telegram username и кратко опиши, что произошло.`,
-  ].join("\n\n");
+  return joinPaidVpnBlocks([
+    "<b>Поддержка МОЖНО VPN</b>",
+    `Напиши ${escapeHtml(username)} и укажи:\n• свой Telegram username\n• что именно не работает\n• дату и сумму, если вопрос об оплате`,
+  ]);
 }
 
-export const PAID_VPN_PENDING_ACCESS_PROGRESS_TEXT = "Подключаю выданный доступ…";
+export const PAID_VPN_PENDING_ACCESS_PROGRESS_TEXT = "Подключаю бесплатный доступ…";
 
 export const PAID_VPN_PENDING_ACCESS_READY_TEXT = [
-  "Доступ к МОЖНО VPN подключён.",
+  "Бесплатный доступ к МОЖНО VPN включён.",
   "",
-  "Отправь /vpn, чтобы получить инструкцию и личную ссылку.",
+  "Отправь /vpn, чтобы подключить профили.",
 ].join("\n");
 
 export const PAID_VPN_PENDING_ACCESS_ERROR_TEXT = [
-  "Не получилось подключить выданный доступ.",
+  "Не получилось подключить бесплатный доступ.",
   "",
-  "Отправь /start ещё раз позже.",
+  "Отправь /start ещё раз через несколько минут.",
 ].join("\n");
 
 export function buildPendingAccessSavedText(username: string): string {
