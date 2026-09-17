@@ -10,6 +10,14 @@ const envSchema = z.object({
   GROUP_ACCESS_DUE_INTERVAL_MS: z.coerce.number().int().positive().default(86400000),
   VPN_BOT_TOKEN: z.string().optional().default(""),
   VPN_BOT_ADMIN_TELEGRAM_ID: z.union([z.string().regex(/^\d+$/), z.literal("")]).default(""),
+  VPN_PAID_PAYMENTS_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  VPN_PAID_PRICE_STARS: z.coerce.number().int().positive().max(10000).default(100),
+  VPN_PAID_TERMS_VERSION: z.string().optional().default(""),
+  VPN_PAID_TERMS_URL: z.union([
+    z.string().url().refine((value) => value.startsWith("https://"), "must use HTTPS"),
+    z.literal(""),
+  ]).default(""),
+  VPN_PAID_SUPPORT_USERNAME: z.string().regex(/^@[A-Za-z0-9_]{5,32}$/).default("@clubni_support"),
 
   XUI_BASE_URL: z.string().url(),
   XUI_SUB_BASE_URL: z.string().url(),
@@ -64,6 +72,22 @@ const envSchema = z.object({
   QWEN_TRANSCRIPTION_TIMEOUT_MS: z.coerce.number().int().positive().default(120000),
   QWEN_TRANSCRIPT_CLEANUP_MODEL: z.string().min(1).default("qwen-max"),
   QWEN_TRANSCRIPT_CLEANUP_TIMEOUT_MS: z.coerce.number().int().positive().default(60000),
+}).superRefine((value, ctx) => {
+  if (!value.VPN_PAID_PAYMENTS_ENABLED) return;
+  if (!value.VPN_PAID_TERMS_VERSION.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["VPN_PAID_TERMS_VERSION"],
+      message: "is required when paid VPN payments are enabled",
+    });
+  }
+  if (!value.VPN_PAID_TERMS_URL) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["VPN_PAID_TERMS_URL"],
+      message: "is required when paid VPN payments are enabled",
+    });
+  }
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -184,6 +208,13 @@ export const config = {
     adminTelegramId: env.VPN_BOT_ADMIN_TELEGRAM_ID
       ? BigInt(env.VPN_BOT_ADMIN_TELEGRAM_ID)
       : null,
+    payments: {
+      enabled: env.VPN_PAID_PAYMENTS_ENABLED,
+      priceStars: env.VPN_PAID_PRICE_STARS,
+      termsVersion: env.VPN_PAID_TERMS_VERSION,
+      termsUrl: env.VPN_PAID_TERMS_URL,
+      supportUsername: env.VPN_PAID_SUPPORT_USERNAME,
+    },
   },
 
   xui: {

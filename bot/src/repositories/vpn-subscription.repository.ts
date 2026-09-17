@@ -59,8 +59,7 @@ export class VpnSubscriptionRepository {
       where: { userId_productId: { userId, productId: product.id } },
     });
     const alreadyGranted = existing?.status === VpnSubscriptionStatus.ACTIVE &&
-      existing.accessOverride === VpnSubscriptionAccessOverride.FREE_UNLIMITED &&
-      existing.expiresAt === null;
+      existing.accessOverride === VpnSubscriptionAccessOverride.FREE_UNLIMITED;
     const subscription = await prisma.vpnSubscription.upsert({
       where: { userId_productId: { userId, productId: product.id } },
       create: {
@@ -72,7 +71,6 @@ export class VpnSubscriptionRepository {
       update: {
         status: VpnSubscriptionStatus.ACTIVE,
         accessOverride: VpnSubscriptionAccessOverride.FREE_UNLIMITED,
-        expiresAt: null,
       },
     });
 

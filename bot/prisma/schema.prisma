@@ -73,6 +73,19 @@ enum VpnSubscriptionInboundStatus {
   DISABLED
 }
 
+enum VpnBillingSubscriptionStatus {
+  CREATED
+  ACTIVE
+  CANCELED
+  FAILED
+  ENDED
+}
+
+enum VpnPaymentStatus {
+  PAID
+  REFUNDED
+}
+
 enum ClubSearchRequestStatus {
   PENDING
   PROCESSING
@@ -254,11 +267,60 @@ model VpnSubscription {
   product       VpnProduct                    @relation(fields: [productId], references: [id], onDelete: Restrict)
   keys          VpnKey[]
   inboundStates VpnSubscriptionInboundState[]
+  billingSubscriptions VpnBillingSubscription[]
 
   @@unique([userId, productId])
   @@index([productId, status])
   @@index([status, expiresAt])
   @@map("vpn_subscriptions")
+}
+
+model VpnBillingSubscription {
+  id                           Int                          @id @default(autoincrement())
+  vpnSubscriptionId            Int                          @map("vpn_subscription_id")
+  invoicePayload               String                       @unique @map("invoice_payload") @db.VarChar(128)
+  status                       VpnBillingSubscriptionStatus @default(CREATED)
+  currency                     String                       @db.VarChar(3)
+  amountStars                  Int                          @map("amount_stars")
+  periodSeconds                Int                          @map("period_seconds")
+  productCode                  String                       @map("product_code") @db.VarChar(80)
+  termsVersion                 String                       @map("terms_version") @db.VarChar(80)
+  termsAcceptedAt              DateTime                     @map("terms_accepted_at") @db.Timestamptz()
+  telegramSubscriptionChargeId String?                      @unique @map("telegram_subscription_charge_id") @db.VarChar(255)
+  activatedAt                  DateTime?                    @map("activated_at") @db.Timestamptz()
+  stateUpdatedAt               DateTime?                    @map("state_updated_at") @db.Timestamptz()
+  createdAt                    DateTime                     @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt                    DateTime                     @updatedAt @map("updated_at") @db.Timestamptz()
+
+  vpnSubscription VpnSubscription @relation(fields: [vpnSubscriptionId], references: [id], onDelete: Restrict)
+  payments        VpnPayment[]
+
+  @@index([vpnSubscriptionId, status])
+  @@index([status, createdAt])
+  @@map("vpn_billing_subscriptions")
+}
+
+model VpnPayment {
+  id                         Int              @id @default(autoincrement())
+  billingSubscriptionId      Int              @map("billing_subscription_id")
+  telegramPaymentChargeId    String           @unique @map("telegram_payment_charge_id") @db.VarChar(255)
+  providerPaymentChargeId    String?          @map("provider_payment_charge_id") @db.VarChar(255)
+  status                     VpnPaymentStatus @default(PAID)
+  currency                   String           @db.VarChar(3)
+  amountStars                Int              @map("amount_stars")
+  isRecurring                Boolean          @default(false) @map("is_recurring")
+  isFirstRecurring           Boolean          @default(false) @map("is_first_recurring")
+  subscriptionExpirationDate DateTime          @map("subscription_expiration_date") @db.Timestamptz()
+  paidAt                     DateTime          @map("paid_at") @db.Timestamptz()
+  refundedAt                 DateTime?         @map("refunded_at") @db.Timestamptz()
+  createdAt                  DateTime           @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt                  DateTime           @updatedAt @map("updated_at") @db.Timestamptz()
+
+  billingSubscription VpnBillingSubscription @relation(fields: [billingSubscriptionId], references: [id], onDelete: Restrict)
+
+  @@index([billingSubscriptionId, paidAt])
+  @@index([status, paidAt])
+  @@map("vpn_payments")
 }
 
 model VpnSubscriptionInboundState {

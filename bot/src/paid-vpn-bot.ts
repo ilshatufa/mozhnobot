@@ -7,6 +7,19 @@ import {
   paidVpnStartHandler,
 } from "./handlers/paid-vpn.js";
 import {
+  extractBotSubscriptionUpdate,
+  paidVpnBuyConfirmHandler,
+  paidVpnBuyHandler,
+  paidVpnCancelConfirmHandler,
+  paidVpnCancelHandler,
+  paidVpnPreCheckoutHandler,
+  paidVpnSubscriptionUpdatedHandler,
+  paidVpnSuccessfulPaymentHandler,
+  paidVpnSupportHandler,
+  paidVpnTermsHandler,
+} from "./handlers/paid-vpn-payments.js";
+import { showPaidVpnScreen } from "./handlers/paid-vpn-screen.js";
+import {
   type PaidVpnContext,
   paidVpnAdminOnly,
   paidVpnAuthMiddleware,
@@ -33,7 +46,23 @@ export function createPaidVpnBot(): Telegraf<PaidVpnContext> {
   bot.use(paidVpnAuthMiddleware());
   bot.command("start", paidVpnStartHandler);
   bot.command("vpn", paidVpnAccessHandler);
+  bot.command("terms", paidVpnTermsHandler);
+  bot.command("paysupport", paidVpnSupportHandler);
   bot.command("add", paidVpnAdminOnly(), paidVpnAddHandler);
   bot.command("remove", paidVpnAdminOnly(), paidVpnRemoveHandler);
+  bot.action("vpn_status", async (ctx) => showPaidVpnScreen(ctx));
+  bot.action("vpn_buy", paidVpnBuyHandler);
+  bot.action("vpn_buy_confirm", paidVpnBuyConfirmHandler);
+  bot.action("vpn_cancel", paidVpnCancelHandler);
+  bot.action("vpn_cancel_confirm", paidVpnCancelConfirmHandler);
+  bot.on("pre_checkout_query", paidVpnPreCheckoutHandler);
+  bot.on("message", paidVpnSuccessfulPaymentHandler);
+  bot.use(async (ctx, next) => {
+    if (extractBotSubscriptionUpdate(ctx)) {
+      await paidVpnSubscriptionUpdatedHandler(ctx);
+      return;
+    }
+    return next();
+  });
   return bot;
 }

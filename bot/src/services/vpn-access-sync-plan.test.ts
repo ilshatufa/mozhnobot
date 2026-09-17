@@ -107,6 +107,45 @@ test("free unlimited override grants paid product access without balance", () =>
   assert.equal(plan.reason, "FREE_UNLIMITED");
 });
 
+test("free unlimited override preserves access after an old paid period expires", () => {
+  const plan = buildVpnAccessSyncPlan(input({
+    product: { accessPolicy: VpnProductAccessPolicy.PAID_BALANCE } as VpnAccessSyncPlanInput["product"],
+    subscription: {
+      accessOverride: VpnSubscriptionAccessOverride.FREE_UNLIMITED,
+      expiresAt: new Date("2026-09-01T00:00:00Z"),
+    } as VpnAccessSyncPlanInput["subscription"],
+  }));
+
+  assert.equal(plan.eligible, true);
+  assert.equal(plan.reason, "FREE_UNLIMITED");
+});
+
+test("active paid period grants paid product access", () => {
+  const plan = buildVpnAccessSyncPlan(input({
+    paidAccess: true,
+    product: { accessPolicy: VpnProductAccessPolicy.PAID_BALANCE } as VpnAccessSyncPlanInput["product"],
+    subscription: {
+      expiresAt: new Date("2026-10-01T00:00:00Z"),
+    } as VpnAccessSyncPlanInput["subscription"],
+  }));
+
+  assert.equal(plan.eligible, true);
+  assert.equal(plan.reason, "ELIGIBLE");
+});
+
+test("expired paid period does not grant access", () => {
+  const plan = buildVpnAccessSyncPlan(input({
+    paidAccess: true,
+    product: { accessPolicy: VpnProductAccessPolicy.PAID_BALANCE } as VpnAccessSyncPlanInput["product"],
+    subscription: {
+      expiresAt: new Date("2026-09-01T00:00:00Z"),
+    } as VpnAccessSyncPlanInput["subscription"],
+  }));
+
+  assert.equal(plan.eligible, false);
+  assert.equal(plan.reason, "SUBSCRIPTION_EXPIRED");
+});
+
 test("global block overrides free unlimited access", () => {
   const plan = buildVpnAccessSyncPlan(input({
     user: { vpnBlocked: true } as VpnAccessSyncPlanInput["user"],

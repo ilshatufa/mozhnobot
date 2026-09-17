@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildNoRemovableAccessText,
+  buildPaidVpnActiveText,
+  buildPaidVpnConfirmationText,
+  buildPaidVpnFreeAccessText,
+  buildPaidVpnOfferText,
   buildPaidVpnAccessRemovedText,
   buildPendingAccessSavedText,
   buildPendingAccessRemovedText,
@@ -13,9 +17,48 @@ import {
   parseRemoveUsername,
 } from "./paid-vpn-copy.js";
 
-test("paid VPN start text points to /vpn and does not promise immediate paid access", () => {
-  assert.match(PAID_VPN_START_TEXT, /\/vpn/);
-  assert.match(PAID_VPN_START_TEXT, /Платная подписка появится позже/);
+test("paid VPN start text explains payment and access purpose", () => {
+  assert.match(PAID_VPN_START_TEXT, /оплатить подписку/);
+  assert.match(PAID_VPN_START_TEXT, /личную ссылку/);
+});
+
+test("paid VPN offer shows price, period, and automatic renewal before payment", () => {
+  const text = buildPaidVpnOfferText({
+    amountStars: 100,
+    salesAvailable: true,
+  });
+  assert.match(text, /100 ⭐/);
+  assert.match(text, /30 дней/);
+  assert.match(text, /продлевается автоматически/);
+});
+
+test("paid VPN confirmation explains current and recurring charge", () => {
+  const text = buildPaidVpnConfirmationText({ amountStars: 100 });
+  assert.match(text, /спишутся сейчас/);
+  assert.match(text, /каждые 30 дней/);
+  assert.match(text, /Принять и оплатить/);
+});
+
+test("paid VPN canceled state preserves the paid period and link", () => {
+  const text = buildPaidVpnActiveText({
+    subscriptionUrl: "https://vpn.example.com/sub/private-token",
+    expiresAt: new Date("2026-10-17T12:00:00Z"),
+    renewalState: "canceled",
+  });
+  assert.match(text, /Автопродление отключено/);
+  assert.match(text, /VPN работает до/);
+  assert.match(text, /https:\/\/vpn\.example\.com\/sub\/private-token/);
+});
+
+test("free VPN access still exposes an active paid renewal", () => {
+  const text = buildPaidVpnFreeAccessText({
+    subscriptionUrl: "https://vpn.example.com/sub/private-token",
+    paidExpiresAt: new Date("2026-10-17T12:00:00Z"),
+    renewalActive: true,
+  });
+  assert.match(text, /бесплатный доступ/);
+  assert.match(text, /включено автопродление/);
+  assert.match(text, /отключи продление/);
 });
 
 test("paid VPN no-access text gives the next action", () => {

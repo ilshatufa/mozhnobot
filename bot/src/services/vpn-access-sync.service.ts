@@ -22,6 +22,12 @@ class DenyUnavailablePaidVpnAccessProvider implements PaidVpnAccessProvider {
   }
 }
 
+class SubscriptionExpiryPaidVpnAccessProvider implements PaidVpnAccessProvider {
+  async hasAccess(subscription: VpnSubscriptionForSync, now: Date): Promise<boolean> {
+    return subscription.expiresAt !== null && subscription.expiresAt > now;
+  }
+}
+
 export interface PlannedVpnSubscriptionSync {
   subscriptionId: number;
   userId: number;
@@ -98,4 +104,6 @@ export class VpnAccessSyncService {
   }
 }
 
-export const vpnAccessSyncService = new VpnAccessSyncService();
+export const vpnAccessSyncService = new VpnAccessSyncService(
+  new SubscriptionExpiryPaidVpnAccessProvider(),
+);

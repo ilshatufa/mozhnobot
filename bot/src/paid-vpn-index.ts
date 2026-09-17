@@ -7,7 +7,9 @@ import { createPaidVpnBot } from "./paid-vpn-bot.js";
 async function configureCommands(bot: ReturnType<typeof createPaidVpnBot>): Promise<void> {
   await bot.telegram.setMyCommands([
     { command: "start", description: "Открыть МОЖНО VPN" },
-    { command: "vpn", description: "Получить инструкцию и личную ссылку" },
+    { command: "vpn", description: "Подписка, оплата и личная ссылка" },
+    { command: "terms", description: "Условия подписки" },
+    { command: "paysupport", description: "Помощь с оплатой и доступом" },
   ]);
 }
 
@@ -30,7 +32,9 @@ async function main(): Promise<void> {
   process.on("SIGINT", () => void shutdown("SIGINT"));
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
-  await bot.launch({ allowedUpdates: ["message"] });
+  await bot.launch({
+    allowedUpdates: ["message", "callback_query", "pre_checkout_query", "subscription"] as never,
+  });
   logger.info("Paid VPN bot started");
 }
 

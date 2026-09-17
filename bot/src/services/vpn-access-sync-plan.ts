@@ -71,13 +71,13 @@ function accessDecision(input: VpnAccessSyncPlanInput): {
   if (input.subscription.status !== VpnSubscriptionStatus.ACTIVE) {
     return { eligible: false, reason: "SUBSCRIPTION_DISABLED" };
   }
-  if (input.subscription.expiresAt && input.subscription.expiresAt <= input.now) {
-    return { eligible: false, reason: "SUBSCRIPTION_EXPIRED" };
-  }
   if (input.user.vpnBlocked) return { eligible: false, reason: "USER_BLOCKED" };
   if (input.user.isBanned) return { eligible: false, reason: "USER_BANNED" };
   if (input.subscription.accessOverride === VpnSubscriptionAccessOverride.FREE_UNLIMITED) {
     return { eligible: true, reason: "FREE_UNLIMITED" };
+  }
+  if (input.subscription.expiresAt && input.subscription.expiresAt <= input.now) {
+    return { eligible: false, reason: "SUBSCRIPTION_EXPIRED" };
   }
 
   switch (input.product.accessPolicy) {
