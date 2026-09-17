@@ -37,7 +37,8 @@ export function resolveVpnTrafficResetDays(
   if (
     accessPolicy === VpnProductAccessPolicy.PAID_BALANCE &&
     isWhitelistClientGroup(clientGroup) &&
-    entitlementKind !== "PAID"
+    entitlementKind !== "PAID" &&
+    entitlementKind !== "FREE_UNLIMITED"
   ) {
     return 0;
   }

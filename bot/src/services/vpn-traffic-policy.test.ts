@@ -35,7 +35,7 @@ test("limits only the trial whitelist group to one GiB", () => {
   assert.equal(resolveVpnTrafficLimitBytes("direct", null, "TRIAL"), null);
 });
 
-test("resets paid whitelist traffic only during an active paid period", () => {
+test("resets paid whitelist traffic for paid and permanent free access", () => {
   const now = new Date("2026-09-11T12:00:00Z");
   assert.equal(
     resolveVpnTrafficResetDays(
@@ -65,6 +65,17 @@ test("resets paid whitelist traffic only during an active paid period", () => {
       new Date("2026-10-10T12:00:00Z"),
       now,
       "PAID",
+    ),
+    30,
+  );
+  assert.equal(
+    resolveVpnTrafficResetDays(
+      VpnProductAccessPolicy.PAID_BALANCE,
+      "whitelist",
+      30,
+      null,
+      now,
+      "FREE_UNLIMITED",
     ),
     30,
   );
