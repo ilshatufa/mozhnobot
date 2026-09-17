@@ -11,10 +11,9 @@ import {
   buildPaidVpnTrialActiveText,
   PAID_VPN_BLOCKED_TEXT,
   PAID_VPN_FREE_PROVISIONING_ERROR_TEXT,
-  PAID_VPN_PROGRESS_TEXT,
   PAID_VPN_PROVISIONING_ERROR_TEXT,
+  PAID_VPN_STATUS_ERROR_TEXT,
   PAID_VPN_TRIAL_PROVISIONING_TEXT,
-  PAID_VPN_TRIAL_STATUS_ERROR_TEXT,
 } from "../paid-vpn-copy.js";
 import { vpnBillingService } from "../services/vpn-billing.service.js";
 import { VPN_TRIAL_WHITELIST_LIMIT_BYTES } from "../services/vpn-entitlement.js";
@@ -104,39 +103,36 @@ export async function showPaidVpnScreen(
 ): Promise<void> {
   if (ctx.callbackQuery && options.answerCallback !== false) await ctx.answerCbQuery();
 
-  let progressMessageId: number | null = null;
+  let messageId: number | null = null;
   if (ctx.callbackQuery && "message" in ctx.callbackQuery && ctx.callbackQuery.message) {
-    progressMessageId = ctx.callbackQuery.message.message_id;
-    if (ctx.chat) {
-      await ctx.telegram.editMessageText(ctx.chat.id, progressMessageId, undefined, PAID_VPN_PROGRESS_TEXT);
-    }
-  } else {
-    const progress = await ctx.reply(PAID_VPN_PROGRESS_TEXT);
-    progressMessageId = progress.message_id;
+    messageId = ctx.callbackQuery.message.message_id;
   }
 
   if (ctx.dbUser.vpnBlocked) {
-    await editOrReply(ctx, progressMessageId, PAID_VPN_BLOCKED_TEXT, {});
+    await editOrReply(ctx, messageId, PAID_VPN_BLOCKED_TEXT, {});
     return;
   }
 
-  const overview = await vpnBillingService.getOverview(ctx.dbUser.id);
-  const subscription = overview.subscription;
-  const billingSubscription = overview.billingSubscription;
-  const now = new Date();
-  const freeAccess = subscription?.accessOverride === VpnSubscriptionAccessOverride.FREE_UNLIMITED;
-  const paidAccess = subscription?.expiresAt !== null && subscription?.expiresAt !== undefined && subscription.expiresAt > now;
+  let overview;
   let trialOverview;
   try {
-    trialOverview = await vpnTrialService.getOverview(ctx.dbUser.id, now);
+    [overview, trialOverview] = await Promise.all([
+      vpnBillingService.getOverview(ctx.dbUser.id),
+      vpnTrialService.getOverview(ctx.dbUser.id, new Date()),
+    ]);
   } catch (error) {
-    logger.error("Failed to read paid VPN trial usage", { userId: ctx.dbUser.id, error });
-    await editOrReply(ctx, progressMessageId, PAID_VPN_TRIAL_STATUS_ERROR_TEXT, {
+    logger.error("Failed to read paid VPN status", { userId: ctx.dbUser.id, error });
+    await editOrReply(ctx, messageId, PAID_VPN_STATUS_ERROR_TEXT, {
       parse_mode: "HTML",
       ...retryKeyboard(),
     });
     return;
   }
+  const subscription = overview.subscription;
+  const billingSubscription = overview.billingSubscription;
+  const now = new Date();
+  const freeAccess = subscription?.accessOverride === VpnSubscriptionAccessOverride.FREE_UNLIMITED;
+  const paidAccess = subscription?.expiresAt !== null && subscription?.expiresAt !== undefined && subscription.expiresAt > now;
   const activeTrial = trialOverview.trial?.status === VpnTrialStatus.ACTIVE &&
     trialOverview.trial.endsAt !== null && trialOverview.trial.endsAt > now &&
     !freeAccess && !paidAccess;
@@ -150,7 +146,10 @@ export async function showPaidVpnScreen(
 
   if (freeAccess || paidAccess || activeTrial) {
     try {
-      const result = await vpnService.getPaidKey(ctx.dbUser);
+      let result = subscription
+        ? await vpnService.getExistingPaidKey(subscription)
+        : null;
+      if (!result) result = await vpnService.getPaidKey(ctx.dbUser);
       if (!result || !subscription) throw new Error("Paid VPN key is unavailable");
       const canCancel =
         billingSubscription?.status === VpnBillingSubscriptionStatus.ACTIVE &&
@@ -175,7 +174,7 @@ export async function showPaidVpnScreen(
           });
       await editOrReply(
         ctx,
-        progressMessageId,
+        messageId,
         text,
         {
           parse_mode: "HTML",
@@ -196,7 +195,7 @@ export async function showPaidVpnScreen(
       });
       await editOrReply(
         ctx,
-        progressMessageId,
+        messageId,
         freeAccess
           ? PAID_VPN_FREE_PROVISIONING_ERROR_TEXT
           : activeTrial
@@ -212,7 +211,7 @@ export async function showPaidVpnScreen(
   }
 
   if (trialOverview.trial?.status === VpnTrialStatus.PROVISIONING) {
-    await editOrReply(ctx, progressMessageId, PAID_VPN_TRIAL_PROVISIONING_TEXT, {
+    await editOrReply(ctx, messageId, PAID_VPN_TRIAL_PROVISIONING_TEXT, {
       parse_mode: "HTML",
       ...retryKeyboard(),
     });
@@ -234,7 +233,7 @@ export async function showPaidVpnScreen(
       : null,
     adminConfigurationMissing: ctx.isPaidVpnAdmin && !paymentsConfigured,
   });
-  await editOrReply(ctx, progressMessageId, text, {
+  await editOrReply(ctx, messageId, text, {
     parse_mode: "HTML",
     ...offerKeyboard(salesAvailable, trialAvailable, config.vpnBot.payments.priceStars),
   });

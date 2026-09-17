@@ -4,6 +4,7 @@ import test from "node:test";
 import { VpnProductAccessPolicy, VpnSubscriptionInboundStatus, VpnTrialStatus } from "@prisma/client";
 import { prisma } from "../database.js";
 import { vpnAccessSyncService } from "./vpn-access-sync.service.js";
+import { vpnService } from "./vpn.service.js";
 import { vpnTrialService } from "./vpn-trial.service.js";
 
 const integrationDatabaseUrl = process.env.VPN_ACCESS_INTEGRATION_DATABASE_URL;
@@ -18,6 +19,7 @@ test("starts the seven-day trial only after provisioning and never extends it", 
     }>>;
   };
   const originalSync = syncTarget.sync.bind(vpnAccessSyncService);
+  let syncCalls = 0;
   let userId: number | null = null;
   let subscriptionId: number | null = null;
   try {
@@ -57,6 +59,7 @@ test("starts the seven-day trial only after provisioning and never extends it", 
     })));
     let shouldFail = true;
     syncTarget.sync = async (filters) => {
+      syncCalls += 1;
       if (!shouldFail && filters.subscriptionId) {
         await prisma.vpnSubscriptionInboundState.createMany({
           data: inbounds.map((inbound) => ({
@@ -120,11 +123,46 @@ test("starts the seven-day trial only after provisioning and never extends it", 
       (await prisma.vpnTrial.findUniqueOrThrow({ where: { id: active.trial.id } })).status,
       VpnTrialStatus.ACTIVE,
     );
+
+    const cachedTraffic = 128n * 1024n ** 2n;
+    const key = await prisma.vpnKey.create({
+      data: {
+        userId: user.id,
+        serverId: vpnServer.id,
+        subscriptionId,
+        clientGroup: "whitelist-trial",
+        xuiClientId: randomUUID(),
+        providerClientId: `trial-${randomUUID()}`,
+        providerPeerId: randomUUID(),
+        subId: randomUUID(),
+        subscriptionUrl: "https://provider.invalid/sub/trial",
+        trafficUsedBytes: cachedTraffic,
+      },
+    });
+    await prisma.vpnSubscriptionInboundState.updateMany({
+      where: { subscriptionId },
+      data: { keyId: key.id },
+    });
+
+    const overview = await vpnTrialService.getOverview(
+      user.id,
+      new Date("2026-09-18T12:05:00Z"),
+    );
+    assert.equal(overview.whitelistUsedBytes, cachedTraffic);
+
+    const syncCallsBeforeRead = syncCalls;
+    const subscription = await prisma.vpnSubscription.findUniqueOrThrow({
+      where: { id: subscriptionId },
+    });
+    const existing = await vpnService.getExistingPaidKey(subscription);
+    assert.equal(existing?.key.id, key.id);
+    assert.equal(syncCalls, syncCallsBeforeRead);
   } finally {
     syncTarget.sync = originalSync;
     if (subscriptionId !== null) {
       await prisma.vpnSubscriptionInboundState.deleteMany({ where: { subscriptionId } });
       await prisma.vpnTrial.deleteMany({ where: { vpnSubscriptionId: subscriptionId } });
+      await prisma.vpnKey.deleteMany({ where: { subscriptionId } });
       await prisma.vpnSubscription.deleteMany({ where: { id: subscriptionId } });
     }
     const trialProducts = await prisma.vpnProduct.findUnique({

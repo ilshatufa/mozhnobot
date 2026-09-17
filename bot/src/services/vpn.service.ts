@@ -1,4 +1,11 @@
-import { VpnProvider, type User, type VpnKey, type VpnServer } from "@prisma/client";
+import {
+  VpnProvider,
+  VpnSubscriptionInboundStatus,
+  type User,
+  type VpnKey,
+  type VpnServer,
+  type VpnSubscription,
+} from "@prisma/client";
 import { config, type XuiServerConfig } from "../config.js";
 import { prisma } from "../database.js";
 import { logger } from "../logger.js";
@@ -35,6 +42,13 @@ export class VpnService {
     if (!subscription) return null;
     const key = await this.syncSubscriptionKey(subscription.id, subscription.token);
     if (key) await this.ensurePaidWhitelistQuotaReset(subscription.id);
+    return key ? { key, alreadyExisted: true } : null;
+  }
+
+  async getExistingPaidKey(
+    subscription: Pick<VpnSubscription, "id" | "token">,
+  ): Promise<VpnKeyResult | null> {
+    const key = await this.readSubscriptionKey(subscription.id, subscription.token);
     return key ? { key, alreadyExisted: true } : null;
   }
 
@@ -283,12 +297,37 @@ export class VpnService {
       );
     }
 
+    return this.readSubscriptionKey(subscriptionId, token);
+  }
+
+  private async readSubscriptionKey(subscriptionId: number, token: string): Promise<VpnKey | null> {
     const [fresh] = await vpnSubscriptionRepository.findManyForSync({ subscriptionId });
+    if (!fresh) return null;
+    const requiredInboundIds = fresh.product.inbounds
+      .filter((item) => item.isRequired && item.inbound.isActive)
+      .map((item) => item.inboundId);
+    const activeInboundIds = new Set(
+      fresh.inboundStates
+        .filter((state) => state.status === VpnSubscriptionInboundStatus.ACTIVE)
+        .map((state) => state.inboundId),
+    );
+    if (
+      requiredInboundIds.length === 0 ||
+      requiredInboundIds.some((inboundId) => !activeInboundIds.has(inboundId))
+    ) {
+      return null;
+    }
+
     const aggregatorCode = config.vpnServers.xui.multiServerCode;
-    const key = fresh?.keys.find(
-      (candidate) => candidate.isActive && candidate.server?.code === aggregatorCode,
-    ) ?? fresh?.keys.find((candidate) => candidate.isActive);
-    if (!key) throw new Error(`VPN subscription ${subscriptionId} has no active key`);
+    const now = new Date();
+    const activeKeys = fresh.keys.filter(
+      (candidate) => candidate.isActive &&
+        (candidate.expiresAt === null || candidate.expiresAt > now),
+    );
+    const key = activeKeys.find(
+      (candidate) => candidate.server?.code === aggregatorCode,
+    ) ?? activeKeys[0];
+    if (!key) return null;
 
     const baseUrl = config.vpnServers.xui.multiSubBaseUrl;
     if (!baseUrl) throw new Error("VPN public subscription base URL is not configured");

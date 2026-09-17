@@ -14,7 +14,6 @@ export const PAID_VPN_NO_ACCESS_TEXT = [
 
 export const PAID_VPN_BLOCKED_TEXT = "МОЖНО VPN заблокирован. Чтобы узнать причину, напиши в поддержку.";
 export const PAID_VPN_BANNED_TEXT = "Бот для тебя недоступен. Чтобы узнать причину, напиши в поддержку.";
-export const PAID_VPN_PROGRESS_TEXT = "Проверяю доступ…";
 
 const RICH_SPACER = "⠀";
 
@@ -115,10 +114,9 @@ export const PAID_VPN_TRIAL_PROVISIONING_TEXT = joinPaidVpnBlocks([
   "Проверь доступ через несколько минут.",
 ]);
 
-export const PAID_VPN_TRIAL_STATUS_ERROR_TEXT = joinPaidVpnBlocks([
-  "<b>Не удалось обновить данные</b>",
-  "Пробный период сохранён, но сейчас не получается узнать расход белых списков.",
-  "Попробуй снова через несколько минут. Если ошибка останется, напиши в поддержку.",
+export const PAID_VPN_STATUS_ERROR_TEXT = joinPaidVpnBlocks([
+  "<b>Не удалось открыть МОЖНО VPN</b>",
+  "Попробуй снова через несколько минут. Если экран не откроется, напиши в поддержку.",
 ]);
 
 export const PAID_VPN_INVOICE_SENT_TEXT = joinPaidVpnBlocks([

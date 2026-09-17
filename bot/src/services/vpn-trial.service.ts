@@ -7,12 +7,10 @@ import {
   type User,
   type VpnTrial,
 } from "@prisma/client";
-import { config } from "../config.js";
 import { prisma } from "../database.js";
 import { vpnSubscriptionRepository } from "../repositories/vpn-subscription.repository.js";
 import { vpnAccessSyncService } from "./vpn-access-sync.service.js";
 import { VPN_TRIAL_DURATION_DAYS } from "./vpn-entitlement.js";
-import { xuiClient } from "./xui-client.js";
 
 export type StartVpnTrialResult =
   | { status: "ACTIVE"; trial: VpnTrial }
@@ -67,24 +65,11 @@ export class VpnTrialService {
       where: {
         subscriptionId: subscription.id,
         clientGroup: { startsWith: "whitelist" },
-        serverId: { not: null },
-        providerClientId: { not: null },
+        isActive: true,
       },
-      include: { server: true },
       orderBy: { id: "asc" },
     });
-    if (!key?.server || !key.providerClientId) {
-      throw new Error("Active VPN trial has no whitelist client");
-    }
-    const server = config.vpnServers.xui.servers.find((item) => item.code === key.server?.code);
-    if (!server) throw new Error(`3X-UI server ${key.server.code} is not configured`);
-
-    const whitelistUsedBytes = await xuiClient.getClientTraffic(server, key.providerClientId);
-    await prisma.vpnKey.update({
-      where: { id: key.id },
-      data: { trafficUsedBytes: whitelistUsedBytes, lastSyncedAt: now },
-    });
-    return { trial, whitelistUsedBytes };
+    return { trial, whitelistUsedBytes: key?.trafficUsedBytes ?? 0n };
   }
 
   async startTrial(input: {
