@@ -4,10 +4,12 @@ import {
   buildNoRemovableAccessText,
   buildPaidVpnActiveText,
   buildPaidVpnConfirmationText,
+  buildPaidVpnInvoiceReadyText,
   buildPaidVpnClubAccessText,
   buildPaidVpnReferralText,
   buildPaidVpnSupportAdminReplyPrompt,
   buildPaidVpnSupportAdminText,
+  buildPaidVpnStarsHelpText,
   buildPaidVpnFreeAccessText,
   buildPaidVpnOfferText,
   buildPaidVpnTrialActiveText,
@@ -16,11 +18,9 @@ import {
   buildPendingAccessRemovedText,
   PAID_VPN_NO_ACCESS_TEXT,
   PAID_VPN_INVOICE_ERROR_TEXT,
-  PAID_VPN_INVOICE_READY_TEXT,
   PAID_VPN_PENDING_ACCESS_ERROR_TEXT,
   PAID_VPN_PENDING_ACCESS_READY_TEXT,
   PAID_VPN_PREMIUM_BOT_URL,
-  PAID_VPN_STARS_HELP_TEXT,
   PAID_VPN_START_TEXT,
   PAID_VPN_SUPPORT_PROMPT_TEXT,
   parseAddUsername,
@@ -41,6 +41,7 @@ test("paid VPN offer shows price, period, and automatic renewal before payment",
   });
   assert.match(text, /100 ⭐/);
   assert.match(text, /30 дней/);
+  assert.match(text, /прямо внутри Telegram/);
   assert.match(text, /автоматически/);
   assert.match(text, /7 дней бесплатно/);
   assert.match(text, /списаний не будет/);
@@ -93,15 +94,17 @@ test("paid VPN confirmation explains current and recurring charge", () => {
   const text = buildPaidVpnConfirmationText({ amountStars: 100 });
   assert.match(text, /спишется сейчас/);
   assert.match(text, /каждые 30 дней/);
-  assert.match(text, /Нет 100 ⭐/);
+  assert.match(text, /прямо внутри Telegram/);
   assert.match(text, /@PremiumBot/);
-  assert.match(text, /Принять и оплатить/);
+  assert.match(text, /Перейти к оплате/);
 });
 
 test("invoice link screen always gives a visible payment action or recovery", () => {
-  assert.match(PAID_VPN_INVOICE_READY_TEXT, /Оплатить/);
-  assert.match(PAID_VPN_INVOICE_READY_TEXT, /подтвердить списание/);
-  assert.match(PAID_VPN_INVOICE_READY_TEXT, /@PremiumBot/);
+  const text = buildPaidVpnInvoiceReadyText({ amountStars: 100 });
+  assert.match(text, /Оплатить 100 ⭐/);
+  assert.match(text, /прямо внутри Telegram/);
+  assert.match(text, /После покупки вернись к этому сообщению/);
+  assert.match(text, /@PremiumBot/);
   assert.match(PAID_VPN_INVOICE_ERROR_TEXT, /Попробуй ещё раз/);
   assert.match(PAID_VPN_INVOICE_ERROR_TEXT, /поддержку/);
 });
@@ -111,10 +114,12 @@ test("PremiumBot purchase action uses the official bot link", () => {
 });
 
 test("Stars help explains the PremiumBot purchase and safe return", () => {
-  assert.match(PAID_VPN_STARS_HELP_TEXT, /@PremiumBot/);
-  assert.match(PAID_VPN_STARS_HELP_TEXT, /Купить звёзды/);
-  assert.match(PAID_VPN_STARS_HELP_TEXT, /Вернись сюда/);
-  assert.match(PAID_VPN_STARS_HELP_TEXT, /Не вводи пароль или код/);
+  const text = buildPaidVpnStarsHelpText({ amountStars: 100 });
+  assert.match(text, /прямо внутри Telegram/);
+  assert.match(text, /минимум на 100 ⭐/);
+  assert.match(text, /только пополняет баланс/);
+  assert.match(text, /Подписка VPN оплачивается отдельно/);
+  assert.match(text, /Не вводи пароль или код/);
 });
 
 test("in-bot support copy explains the conversation and preserves safe identity data", () => {

@@ -30,12 +30,15 @@ function joinPaidVpnBlocks(blocks: string[]): string {
 
 const PAID_VPN_REFERRAL_PROMO = "<b>30 дней за друга</b>\nПригласи нового пользователя — после его первой оплаты тебе добавятся 30 дней.";
 
-export const PAID_VPN_STARS_HELP_TEXT = joinPaidVpnBlocks([
-  "<b>Как купить Telegram Stars</b>",
-  "1. Открой официальный @PremiumBot с синей галочкой.\n2. Нажми «Запустить» и выбери «Купить звёзды».\n3. Укажи количество Stars и оплати покупку.\n4. Вернись сюда и продолжи оплату VPN.",
-  "Если кнопки покупки нет, открой @PremiumBot через Telegram Desktop, Telegram Web или приложение для Android с сайта telegram.org.",
-  "Не вводи пароль или код от Telegram. Имя официального бота — @PremiumBot.",
-]);
+export function buildPaidVpnStarsHelpText(input: { amountStars: number }): string {
+  return joinPaidVpnBlocks([
+    "<b>Покупка звёзд в Telegram</b>",
+    "Звёзды можно купить прямо внутри Telegram через официального @PremiumBot.",
+    `1. Нажми «Открыть @PremiumBot».\n2. В боте выбери «Купить звёзды» и пополни баланс минимум на ${input.amountStars} ⭐.\n3. Вернись в МОЖНО VPN и оплати подписку звёздами.`,
+    "<b>Это два отдельных шага</b>\n@PremiumBot только пополняет баланс. Подписка VPN оплачивается отдельно в МОЖНО VPN.",
+    "Не вводи пароль или код от Telegram. Имя официального бота — @PremiumBot.",
+  ]);
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -73,7 +76,7 @@ export function buildPaidVpnOfferText(input: {
     ? "<b>7 дней бесплатно</b>\n• Нидерланды, Германия и Латвия — без лимита\n• Белые списки — 1 ГБ на всю неделю\n\nОплата не нужна. После пробного периода списаний не будет."
     : "<b>Что входит в подписку</b>\n• Нидерланды, Германия и Латвия — без лимита\n• Белые списки — 10 ГБ каждые 30 дней";
   const sale = input.salesAvailable
-    ? `<b>${input.trialAvailable ? "После пробного периода" : "Подписка"}</b>\n${input.amountStars} ⭐ за 30 дней. Продление включается автоматически, но его можно отключить в боте.`
+    ? `<b>${input.trialAvailable ? "После пробного периода" : "Подписка"}</b>\n${input.amountStars} ⭐ за 30 дней. Оплата проходит прямо внутри Telegram. Продление включается автоматически, но его можно отключить в боте.`
     : input.adminConfigurationMissing
       ? "Тестовая оплата пока недоступна: добавь ссылку и версию условий в настройки бота."
       : input.trialAvailable
@@ -102,13 +105,14 @@ export function buildPaidVpnConfirmationText(input: {
   return joinPaidVpnBlocks([
     "<b>Подписка на МОЖНО VPN</b>",
     `${input.amountStars} ⭐ спишется сейчас. Затем — столько же каждые 30 дней.`,
-    `Нет ${input.amountStars} ⭐? Купи их у официального @PremiumBot, затем вернись сюда и оплати подписку.`,
+    `<b>Как оплатить</b>\n• Если звёзды уже есть — нажми «Перейти к оплате».\n• Если звёзд не хватает — нажми «Купить звёзды». Telegram откроет официальный @PremiumBot, где можно пополнить баланс прямо внутри Telegram.`,
+    "После покупки звёзд вернись в этот чат и нажми «Перейти к оплате».",
     "<b>Что будет доступно</b>\n• Нидерланды, Германия и Латвия — без лимита\n• Белые списки — 10 ГБ каждые 30 дней",
     ...(input.trialActive
       ? ["Полный доступ включится сразу. Неиспользованный остаток бесплатной недели сохранится и добавится к 30 оплаченным дням."]
       : []),
     "Продление можно отключить в боте. Уже оплаченный срок сохранится.",
-    "Нажимая «Принять и оплатить», ты принимаешь условия.",
+    "Нажимая «Перейти к оплате», ты принимаешь условия.",
   ]);
 }
 
@@ -141,12 +145,14 @@ export const PAID_VPN_STATUS_ERROR_TEXT = joinPaidVpnBlocks([
   "Попробуй снова через несколько минут. Если экран не откроется, напиши в поддержку.",
 ]);
 
-export const PAID_VPN_INVOICE_READY_TEXT = joinPaidVpnBlocks([
-  "<b>Счёт готов</b>",
-  "Нажми «Оплатить» ниже. Telegram покажет сумму и попросит подтвердить списание.",
-  "Если звёзд не хватает, купи их у официального @PremiumBot, затем вернись к этому сообщению.",
-  "VPN включится автоматически после подтверждения платежа.",
-]);
+export function buildPaidVpnInvoiceReadyText(input: { amountStars: number }): string {
+  return joinPaidVpnBlocks([
+    "<b>Оплата подписки</b>",
+    `Если на балансе есть ${input.amountStars} ⭐, нажми «Оплатить ${input.amountStars} ⭐».`,
+    `Если звёзд не хватает, нажми «Купить звёзды». Telegram откроет официальный @PremiumBot для пополнения баланса прямо внутри Telegram. После покупки вернись к этому сообщению и нажми «Оплатить ${input.amountStars} ⭐».`,
+    "После оплаты VPN включится автоматически.",
+  ]);
+}
 
 export const PAID_VPN_INVOICE_ERROR_TEXT = joinPaidVpnBlocks([
   "<b>Не получилось открыть оплату</b>",

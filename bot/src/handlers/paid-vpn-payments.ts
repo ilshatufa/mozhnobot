@@ -7,15 +7,15 @@ import { type PaidVpnContext } from "../middlewares/paid-vpn-auth.js";
 import {
   buildPaidVpnCancelConfirmationText,
   buildPaidVpnConfirmationText,
+  buildPaidVpnInvoiceReadyText,
   buildPaidVpnPaymentReadyText,
+  buildPaidVpnStarsHelpText,
   buildPaidVpnTermsText,
   buildVpnReferralRewardText,
   PAID_VPN_INVOICE_ERROR_TEXT,
-  PAID_VPN_INVOICE_READY_TEXT,
   PAID_VPN_PAYMENT_BANKED_TEXT,
   PAID_VPN_PREMIUM_BOT_URL,
   PAID_VPN_PROVISIONING_ERROR_TEXT,
-  PAID_VPN_STARS_HELP_TEXT,
 } from "../paid-vpn-copy.js";
 import {
   VPN_STARS_CURRENCY,
@@ -132,7 +132,7 @@ export async function paidVpnBuyHandler(ctx: PaidVpnContext): Promise<void> {
     {
       parse_mode: "HTML",
       ...Markup.inlineKeyboard([
-        [Markup.button.callback("Принять и оплатить", "vpn_buy_confirm")],
+        [Markup.button.callback("Перейти к оплате", "vpn_buy_confirm")],
         [Markup.button.url("Купить звёзды", PAID_VPN_PREMIUM_BOT_URL)],
         [Markup.button.url("Условия", config.vpnBot.payments.termsUrl)],
         [Markup.button.callback("Назад", "vpn_status")],
@@ -143,7 +143,9 @@ export async function paidVpnBuyHandler(ctx: PaidVpnContext): Promise<void> {
 
 export async function paidVpnStarsHelpHandler(ctx: PaidVpnContext): Promise<void> {
   await ctx.answerCbQuery();
-  await editCallbackMessage(ctx, PAID_VPN_STARS_HELP_TEXT, {
+  await editCallbackMessage(ctx, buildPaidVpnStarsHelpText({
+    amountStars: config.vpnBot.payments.priceStars,
+  }), {
     parse_mode: "HTML",
     ...Markup.inlineKeyboard([
       [Markup.button.url("Открыть @PremiumBot", PAID_VPN_PREMIUM_BOT_URL)],
@@ -222,7 +224,9 @@ export async function paidVpnBuyConfirmHandler(ctx: PaidVpnContext): Promise<voi
       billingSubscriptionId: created.billingSubscription.id,
       amountStars: created.billingSubscription.amountStars,
     });
-    await editCallbackMessage(ctx, PAID_VPN_INVOICE_READY_TEXT, {
+    await editCallbackMessage(ctx, buildPaidVpnInvoiceReadyText({
+      amountStars: created.billingSubscription.amountStars,
+    }), {
       parse_mode: "HTML",
       ...Markup.inlineKeyboard([
         [Markup.button.url(`Оплатить ${created.billingSubscription.amountStars} ⭐`, invoiceLink)],
