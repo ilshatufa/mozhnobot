@@ -1,4 +1,4 @@
-import type { ApiMethods, InlineKeyboardButton, InlineKeyboardMarkup, SuccessfulPayment } from "@telegraf/types";
+import type { InlineKeyboardButton, InlineKeyboardMarkup, SuccessfulPayment } from "@telegraf/types";
 import { ClubMembershipStatus, VpnSubscriptionAccessOverride } from "@prisma/client";
 import { Markup } from "telegraf";
 import { config } from "../config.js";
@@ -10,7 +10,8 @@ import {
   buildPaidVpnPaymentReadyText,
   buildPaidVpnTermsText,
   buildVpnReferralRewardText,
-  PAID_VPN_INVOICE_SENT_TEXT,
+  PAID_VPN_INVOICE_ERROR_TEXT,
+  PAID_VPN_INVOICE_READY_TEXT,
   PAID_VPN_PAYMENT_BANKED_TEXT,
   PAID_VPN_PROVISIONING_ERROR_TEXT,
   PAID_VPN_STARS_HELP_TEXT,
@@ -33,9 +34,14 @@ interface BotSubscriptionUpdated {
   state: "active" | "canceled" | "failed";
 }
 
-type SendInvoiceRequest = Parameters<ApiMethods<unknown>["sendInvoice"]>[0] & {
+export interface PaidVpnSubscriptionInvoiceLinkRequest {
+  title: string;
+  description: string;
+  payload: string;
+  currency: typeof VPN_STARS_CURRENCY;
+  prices: Array<{ label: string; amount: number }>;
   subscription_period: number;
-};
+}
 interface EditUserStarSubscriptionRequest {
   user_id: number;
   telegram_payment_charge_id: string;
@@ -54,6 +60,20 @@ type TextExtra = {
 
 interface RawTelegramApi {
   callApi(method: string, payload: Record<string, unknown>): Promise<unknown>;
+}
+
+export function buildPaidVpnSubscriptionInvoiceLinkRequest(input: {
+  invoicePayload: string;
+  amountStars: number;
+}): PaidVpnSubscriptionInvoiceLinkRequest {
+  return {
+    title: "МОЖНО VPN — 30 дней",
+    description: "Нидерланды, Германия и Латвия без лимита; белые списки — 10 ГБ. Автопродление каждые 30 дней.",
+    payload: input.invoicePayload,
+    currency: VPN_STARS_CURRENCY,
+    prices: [{ label: "МОЖНО VPN — 30 дней", amount: input.amountStars }],
+    subscription_period: VPN_SUBSCRIPTION_PERIOD_SECONDS,
+  };
 }
 
 function salesAllowedFor(telegramId: number): boolean {
@@ -184,33 +204,45 @@ export async function paidVpnBuyConfirmHandler(ctx: PaidVpnContext): Promise<voi
     return;
   }
 
-  const invoice: SendInvoiceRequest = {
-    chat_id: chatId,
-    title: "МОЖНО VPN — 30 дней",
-    description: "Нидерланды, Германия и Латвия без лимита; белые списки — 10 ГБ. Автопродление каждые 30 дней.",
-    payload: created.billingSubscription.invoicePayload,
-    provider_token: "",
-    currency: VPN_STARS_CURRENCY,
-    prices: [{ label: "МОЖНО VPN — 30 дней", amount: created.billingSubscription.amountStars }],
-    subscription_period: VPN_SUBSCRIPTION_PERIOD_SECONDS,
-    start_parameter: "mozhno-vpn-paid",
-  };
-  await (ctx.telegram as unknown as RawTelegramApi).callApi(
-    "sendInvoice",
-    invoice as unknown as Record<string, unknown>,
-  );
-  logger.info("Paid VPN Stars invoice sent", {
-    userId: ctx.dbUser.id,
-    billingSubscriptionId: created.billingSubscription.id,
+  const invoice = buildPaidVpnSubscriptionInvoiceLinkRequest({
+    invoicePayload: created.billingSubscription.invoicePayload,
     amountStars: created.billingSubscription.amountStars,
   });
-  await editCallbackMessage(ctx, PAID_VPN_INVOICE_SENT_TEXT, {
-    parse_mode: "HTML",
-    ...Markup.inlineKeyboard([
-      [Markup.button.callback("Проверить статус", "vpn_status")],
-      [Markup.button.callback("Поддержка", VPN_SUPPORT_ACTION)],
-    ]),
-  });
+  try {
+    const invoiceLink = await (ctx.telegram as unknown as RawTelegramApi).callApi(
+      "createInvoiceLink",
+      invoice as unknown as Record<string, unknown>,
+    );
+    if (typeof invoiceLink !== "string" || !invoiceLink.trim()) {
+      throw new Error("Telegram returned an empty VPN subscription invoice link");
+    }
+    logger.info("Paid VPN Stars invoice link created", {
+      userId: ctx.dbUser.id,
+      billingSubscriptionId: created.billingSubscription.id,
+      amountStars: created.billingSubscription.amountStars,
+    });
+    await editCallbackMessage(ctx, PAID_VPN_INVOICE_READY_TEXT, {
+      parse_mode: "HTML",
+      ...Markup.inlineKeyboard([
+        [Markup.button.url(`Оплатить ${created.billingSubscription.amountStars} ⭐`, invoiceLink)],
+        [Markup.button.callback("Назад", "vpn_status")],
+        [Markup.button.callback("Поддержка", VPN_SUPPORT_ACTION)],
+      ]),
+    });
+  } catch (error) {
+    logger.error("Failed to create paid VPN Stars invoice link", {
+      userId: ctx.dbUser.id,
+      billingSubscriptionId: created.billingSubscription.id,
+      error,
+    });
+    await editCallbackMessage(ctx, PAID_VPN_INVOICE_ERROR_TEXT, {
+      parse_mode: "HTML",
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback("Попробовать снова", "vpn_buy_confirm")],
+        [Markup.button.callback("Поддержка", VPN_SUPPORT_ACTION)],
+      ]),
+    });
+  }
 }
 
 export async function paidVpnPreCheckoutHandler(ctx: PaidVpnContext): Promise<void> {

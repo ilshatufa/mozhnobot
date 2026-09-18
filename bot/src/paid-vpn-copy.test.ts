@@ -15,6 +15,8 @@ import {
   buildPendingAccessSavedText,
   buildPendingAccessRemovedText,
   PAID_VPN_NO_ACCESS_TEXT,
+  PAID_VPN_INVOICE_ERROR_TEXT,
+  PAID_VPN_INVOICE_READY_TEXT,
   PAID_VPN_PENDING_ACCESS_ERROR_TEXT,
   PAID_VPN_PENDING_ACCESS_READY_TEXT,
   PAID_VPN_STARS_HELP_TEXT,
@@ -91,6 +93,13 @@ test("paid VPN confirmation explains current and recurring charge", () => {
   assert.match(text, /спишется сейчас/);
   assert.match(text, /каждые 30 дней/);
   assert.match(text, /Принять и оплатить/);
+});
+
+test("invoice link screen always gives a visible payment action or recovery", () => {
+  assert.match(PAID_VPN_INVOICE_READY_TEXT, /Оплатить/);
+  assert.match(PAID_VPN_INVOICE_READY_TEXT, /подтвердить списание/);
+  assert.match(PAID_VPN_INVOICE_ERROR_TEXT, /Попробуй ещё раз/);
+  assert.match(PAID_VPN_INVOICE_ERROR_TEXT, /поддержку/);
 });
 
 test("Stars help explains the PremiumBot purchase and safe return", () => {

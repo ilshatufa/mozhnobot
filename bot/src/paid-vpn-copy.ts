@@ -138,10 +138,15 @@ export const PAID_VPN_STATUS_ERROR_TEXT = joinPaidVpnBlocks([
   "Попробуй снова через несколько минут. Если экран не откроется, напиши в поддержку.",
 ]);
 
-export const PAID_VPN_INVOICE_SENT_TEXT = joinPaidVpnBlocks([
-  "<b>Счёт отправлен</b>",
-  "Нажми кнопку оплаты в отдельном сообщении Telegram.",
+export const PAID_VPN_INVOICE_READY_TEXT = joinPaidVpnBlocks([
+  "<b>Счёт готов</b>",
+  "Нажми «Оплатить» ниже. Telegram покажет сумму и попросит подтвердить списание.",
   "VPN включится автоматически после подтверждения платежа.",
+]);
+
+export const PAID_VPN_INVOICE_ERROR_TEXT = joinPaidVpnBlocks([
+  "<b>Не получилось открыть оплату</b>",
+  "Попробуй ещё раз. Если оплата по-прежнему не открывается, напиши в поддержку.",
 ]);
 
 export function buildPaidVpnActiveText(input: {
