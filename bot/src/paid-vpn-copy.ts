@@ -22,6 +22,8 @@ export const PAID_VPN_BANNED_TEXT = "Бот для тебя недоступен
 
 const RICH_SPACER = "⠀";
 
+export const PAID_VPN_PREMIUM_BOT_URL = "https://t.me/PremiumBot";
+
 function joinPaidVpnBlocks(blocks: string[]): string {
   return `${blocks.join(`\n${RICH_SPACER}\n`)}\n${RICH_SPACER}`;
 }
@@ -100,6 +102,7 @@ export function buildPaidVpnConfirmationText(input: {
   return joinPaidVpnBlocks([
     "<b>Подписка на МОЖНО VPN</b>",
     `${input.amountStars} ⭐ спишется сейчас. Затем — столько же каждые 30 дней.`,
+    `Нет ${input.amountStars} ⭐? Купи их у официального @PremiumBot, затем вернись сюда и оплати подписку.`,
     "<b>Что будет доступно</b>\n• Нидерланды, Германия и Латвия — без лимита\n• Белые списки — 10 ГБ каждые 30 дней",
     ...(input.trialActive
       ? ["Полный доступ включится сразу. Неиспользованный остаток бесплатной недели сохранится и добавится к 30 оплаченным дням."]
@@ -141,6 +144,7 @@ export const PAID_VPN_STATUS_ERROR_TEXT = joinPaidVpnBlocks([
 export const PAID_VPN_INVOICE_READY_TEXT = joinPaidVpnBlocks([
   "<b>Счёт готов</b>",
   "Нажми «Оплатить» ниже. Telegram покажет сумму и попросит подтвердить списание.",
+  "Если звёзд не хватает, купи их у официального @PremiumBot, затем вернись к этому сообщению.",
   "VPN включится автоматически после подтверждения платежа.",
 ]);
 

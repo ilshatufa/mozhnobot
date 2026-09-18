@@ -19,6 +19,7 @@ import {
   PAID_VPN_INVOICE_READY_TEXT,
   PAID_VPN_PENDING_ACCESS_ERROR_TEXT,
   PAID_VPN_PENDING_ACCESS_READY_TEXT,
+  PAID_VPN_PREMIUM_BOT_URL,
   PAID_VPN_STARS_HELP_TEXT,
   PAID_VPN_START_TEXT,
   PAID_VPN_SUPPORT_PROMPT_TEXT,
@@ -92,14 +93,21 @@ test("paid VPN confirmation explains current and recurring charge", () => {
   const text = buildPaidVpnConfirmationText({ amountStars: 100 });
   assert.match(text, /спишется сейчас/);
   assert.match(text, /каждые 30 дней/);
+  assert.match(text, /Нет 100 ⭐/);
+  assert.match(text, /@PremiumBot/);
   assert.match(text, /Принять и оплатить/);
 });
 
 test("invoice link screen always gives a visible payment action or recovery", () => {
   assert.match(PAID_VPN_INVOICE_READY_TEXT, /Оплатить/);
   assert.match(PAID_VPN_INVOICE_READY_TEXT, /подтвердить списание/);
+  assert.match(PAID_VPN_INVOICE_READY_TEXT, /@PremiumBot/);
   assert.match(PAID_VPN_INVOICE_ERROR_TEXT, /Попробуй ещё раз/);
   assert.match(PAID_VPN_INVOICE_ERROR_TEXT, /поддержку/);
+});
+
+test("PremiumBot purchase action uses the official bot link", () => {
+  assert.equal(PAID_VPN_PREMIUM_BOT_URL, "https://t.me/PremiumBot");
 });
 
 test("Stars help explains the PremiumBot purchase and safe return", () => {
