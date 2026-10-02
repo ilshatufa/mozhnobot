@@ -55,3 +55,17 @@ test("keeps club direct and whitelist traffic in separate client groups", () => 
   assert.equal(whitelist?.trafficLimitBytes, null);
   assert.equal(whitelist?.trafficResetDays, 30);
 });
+
+test("publishes direct Netherlands profiles through the stable public hostname", () => {
+  const club = INITIAL_VPN_INBOUND_CATALOG.find((item) => item.code === "club-nl-direct");
+  const paid = INITIAL_VPN_INBOUND_CATALOG.find((item) => item.code === "paid-nl-direct");
+
+  assert.deepEqual(club?.publicProfile, {
+    host: "xraynl.vpn.mozhno.org",
+    port: 443,
+  });
+  assert.deepEqual(paid?.publicProfile, {
+    host: "xraynl.vpn.mozhno.org",
+    port: 11443,
+  });
+});

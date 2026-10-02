@@ -2,6 +2,8 @@ import { Prisma, VpnProductAccessPolicy } from "@prisma/client";
 import { config } from "../config.js";
 import { prisma } from "../database.js";
 import {
+  CLUB_NL_DIRECT_PUBLIC_PROFILE,
+  PAID_NL_DIRECT_PUBLIC_PROFILE,
   PAID_YANDEX_CDN_PUBLIC_PROFILE,
   YANDEX_CDN_PUBLIC_PROFILE,
 } from "./vpn-public-profile.js";
@@ -44,6 +46,7 @@ export const INITIAL_VPN_INBOUND_CATALOG: readonly VpnInboundCatalogEntry[] = [
     providerInboundId: 1,
     name: "🇳🇱 МОЖНО • Нидерланды",
     port: 443,
+    publicProfile: CLUB_NL_DIRECT_PUBLIC_PROFILE as unknown as Prisma.InputJsonObject,
   },
   {
     code: "club-nl-yandex-cdn",
@@ -94,6 +97,7 @@ export const INITIAL_VPN_INBOUND_CATALOG: readonly VpnInboundCatalogEntry[] = [
     providerInboundId: 6,
     name: "🇳🇱 МОЖНО • Нидерланды",
     port: 11443,
+    publicProfile: PAID_NL_DIRECT_PUBLIC_PROFILE as unknown as Prisma.InputJsonObject,
   },
   {
     code: "paid-nl-yandex-cdn",

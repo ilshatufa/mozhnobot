@@ -8,6 +8,8 @@ import {
   rewriteNativeHtml,
 } from "./xray-subscription.service.js";
 import {
+  CLUB_NL_DIRECT_PUBLIC_PROFILE,
+  PAID_NL_DIRECT_PUBLIC_PROFILE,
   PAID_YANDEX_CDN_PUBLIC_PROFILE,
   renderVpnInboundProfile,
   YANDEX_CDN_PUBLIC_PROFILE,
@@ -22,6 +24,10 @@ const SOURCE_LINK = [
 ].join("");
 
 const ROUTER_SOURCE_LINK = SOURCE_LINK.replace(":443", ":10443");
+const NL_IP_SOURCE_LINK = SOURCE_LINK.replace(
+  "@xraynl.vpn.mozhno.org:443",
+  "@194.104.9.38:443",
+);
 
 test("requires every active required inbound before rendering a subscription", () => {
   const product = {
@@ -58,6 +64,26 @@ test("uses a separate Yandex CDN domain for the paid whitelist", () => {
   assert.equal(paid.port, "443");
   assert.equal(paid.searchParams.get("sni"), "paid.yc.cdn.mozhno.org");
   assert.equal(paid.searchParams.get("host"), "paid.yc.cdn.mozhno.org");
+});
+
+test("uses the public NL hostname for direct club and paid profiles", () => {
+  const club = new URL(renderVpnInboundProfile(
+    NL_IP_SOURCE_LINK,
+    "🇳🇱 МОЖНО • Нидерланды",
+    CLUB_NL_DIRECT_PUBLIC_PROFILE,
+  ));
+  const paid = new URL(renderVpnInboundProfile(
+    NL_IP_SOURCE_LINK.replace(":443", ":11443"),
+    "🇳🇱 МОЖНО • Нидерланды",
+    PAID_NL_DIRECT_PUBLIC_PROFILE,
+  ));
+
+  assert.equal(club.hostname, "xraynl.vpn.mozhno.org");
+  assert.equal(club.port, "443");
+  assert.equal(club.searchParams.get("sni"), "xraynl.vpn.mozhno.org");
+  assert.equal(paid.hostname, "xraynl.vpn.mozhno.org");
+  assert.equal(paid.port, "11443");
+  assert.equal(paid.searchParams.get("sni"), "xraynl.vpn.mozhno.org");
 });
 
 test("renders direct and CDN profiles from explicit inbound metadata", () => {

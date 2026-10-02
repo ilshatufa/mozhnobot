@@ -5,6 +5,18 @@ export interface VpnPublicProfileOverride {
   removeQuery?: string[];
 }
 
+const NL_DIRECT_PUBLIC_HOST = "xraynl.vpn.mozhno.org";
+
+export const CLUB_NL_DIRECT_PUBLIC_PROFILE: VpnPublicProfileOverride = {
+  host: NL_DIRECT_PUBLIC_HOST,
+  port: 443,
+};
+
+export const PAID_NL_DIRECT_PUBLIC_PROFILE: VpnPublicProfileOverride = {
+  host: NL_DIRECT_PUBLIC_HOST,
+  port: 11443,
+};
+
 function yandexCdnPublicProfile(host: string): VpnPublicProfileOverride {
   return {
     host,
