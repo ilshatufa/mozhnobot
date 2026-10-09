@@ -244,7 +244,7 @@ test("does not accept an answer before the first video or finish before the seco
   );
 });
 
-test("reuses the custom bot invite when completed onboarding is resumed", async () => {
+test("does not resend the final step when completed onboarding is resumed", async () => {
   const repository = new MemoryClubEventRepository();
   await deliverClubniPaymentWelcome(payment, payment.clubId, {
     repository,
@@ -282,6 +282,7 @@ test("reuses the custom bot invite when completed onboarding is resumed", async 
     }),
     "final",
   );
+  assert.deepEqual(delivered, ["https://t.me/+custom-bot-invite"]);
   assert.equal(
     await finishClubniOnboarding(
       payment,
@@ -293,7 +294,6 @@ test("reuses the custom bot invite when completed onboarding is resumed", async 
   );
   assert.equal(createdInvites, 1);
   assert.deepEqual(delivered, [
-    "https://t.me/+custom-bot-invite",
     "https://t.me/+custom-bot-invite",
     "https://t.me/+custom-bot-invite",
   ]);

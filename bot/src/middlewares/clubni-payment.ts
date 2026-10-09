@@ -222,8 +222,9 @@ export function clubniPaymentMiddleware(): MiddlewareFn<Context> {
       "text" in message &&
       /^\/start(?:@\w+)?(?:\s|$)/i.test(message.text)
     ) {
+      let state: Awaited<ReturnType<typeof sendOrResumeClubniOnboarding>>;
       try {
-        await sendOrResumeClubniOnboarding(event, clubEventRepository, {
+        state = await sendOrResumeClubniOnboarding(event, clubEventRepository, {
           sendIntro: (payment) => sendIntro(ctx, payment),
           sendQuestionReminder: (payment) => sendQuestionReminder(ctx, payment),
           sendVideo2: (payment) => sendVideo2(ctx, payment),
@@ -232,7 +233,9 @@ export function clubniPaymentMiddleware(): MiddlewareFn<Context> {
         });
       } catch (error) {
         await reportAccessError(ctx, event, error);
+        return;
       }
+      if (state === "final") return next();
       return;
     }
 

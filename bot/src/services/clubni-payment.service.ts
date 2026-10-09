@@ -244,14 +244,17 @@ export async function sendOrResumeClubniOnboarding(
   },
 ): Promise<OnboardingStep | "payment"> {
   const state = await clubniOnboardingState(event, repository);
-  if (state === "final" || state === "access") {
+  if (state === "final") {
+    return state;
+  }
+  if (state === "access") {
     const inviteUrl = await ensureAccessInvite(
       repository,
       event,
       senders.createInvite,
     );
     await senders.sendFinal(event, inviteUrl);
-    if (state === "access") await markStep(repository, event, "final");
+    await markStep(repository, event, "final");
   } else if (state === "video2") {
     await senders.sendVideo2(event);
   } else if (state === "answer") {
