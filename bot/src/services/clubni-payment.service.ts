@@ -1,5 +1,9 @@
 import { z } from "zod";
-import type { ClubEventRepository } from "../repositories/club-event.repository.js";
+import type { ClubEvent, Prisma } from "@prisma/client";
+import type {
+  ClubEventInput,
+  ClubEventRepository,
+} from "../repositories/club-event.repository.js";
 
 const paymentEventSchema = z.object({
   eventId: z.string().min(1).max(200),
@@ -9,17 +13,92 @@ const paymentEventSchema = z.object({
   subscriptionId: z.string().uuid(),
   telegramUserId: z.number().int().positive().safe(),
   paidAt: z.string().datetime({ offset: true }),
+  inviteUrl: z.string().url().nullable(),
 });
 
 export type ClubniPaymentEvent = z.infer<typeof paymentEventSchema>;
 
+type OnboardingStep = "intro" | "video1" | "answer" | "video2" | "final";
+
+export const CLUBNI_ONBOARDING_START_PREFIX = "clubni_onboarding:start:";
+export const CLUBNI_ONBOARDING_NEXT_PREFIX = "clubni_onboarding:next:";
+
 export const CLUBNI_PAYMENT_WELCOME_TEXT = [
-  "Оплата прошла ✅",
+  "Огонь, поздравляю, ты уже в клубе👌",
   "⠀",
-  "Добро пожаловать в клуб «МОЖНО».",
+  "Перед тем, как ты зайдешь, очень кратко расскажу о нас и о том, как всё устроено, чтобы тебе сразу всё было просто и понятно.",
   "⠀",
-  "Теперь можно начинать знакомство с клубом. Следующие шаги придут здесь, в МожноБоте.",
+  "Жми кнопку ⤵️",
 ].join("\n");
+
+export const CLUBNI_ONBOARDING_QUESTION =
+  "Что привело тебя в клуб «МОЖНО» и чего ты ждёшь от участия?";
+
+export const CLUBNI_ONBOARDING_FINAL_TEXT = [
+  "В клубе «МОЖНО» не нужно успевать всё сразу.",
+  "⠀",
+  "Начни со спокойного знакомства: посмотри закреплённые сообщения, правила и навигацию. Внутри уже собраны основные материалы и подсказки, где что находится.",
+  "⠀",
+  "Если появится вопрос — задавай его в клубе. Можно идти маленькими шагами и включаться в своём темпе.",
+].join("\n");
+
+type OnboardingRepository = Pick<
+  ClubEventRepository,
+  "createIfNotExists" | "findByDedupeKey" | "findLatestForTarget"
+>;
+
+function stepDedupeKey(subscriptionId: string, step: OnboardingStep): string {
+  return `clubni_onboarding:${subscriptionId}:${step}`;
+}
+
+function paymentPayload(event: ClubniPaymentEvent): Prisma.InputJsonValue {
+  return {
+    eventId: event.eventId,
+    eventType: event.eventType,
+    clubId: event.clubId,
+    clubName: event.clubName,
+    subscriptionId: event.subscriptionId,
+    telegramUserId: event.telegramUserId,
+    paidAt: event.paidAt,
+    inviteUrl: event.inviteUrl,
+  };
+}
+
+function storedPaymentEvent(event: ClubEvent | null): ClubniPaymentEvent | null {
+  if (!event) return null;
+  const parsed = paymentEventSchema.safeParse(event.payload);
+  return parsed.success ? parsed.data : null;
+}
+
+async function markStep(
+  repository: OnboardingRepository,
+  event: ClubniPaymentEvent,
+  step: OnboardingStep,
+  payload: Prisma.InputJsonValue = {},
+): Promise<ClubEvent | null> {
+  const input: ClubEventInput = {
+    dedupeKey: stepDedupeKey(event.subscriptionId, step),
+    eventType: `clubni_onboarding_${step}`,
+    targetUserTelegramId: BigInt(event.telegramUserId),
+    occurredAt: new Date(),
+    payload: {
+      clubId: event.clubId,
+      subscriptionId: event.subscriptionId,
+      ...(payload as Record<string, Prisma.InputJsonValue>),
+    },
+  };
+  return repository.createIfNotExists(input);
+}
+
+async function hasStep(
+  repository: OnboardingRepository,
+  event: ClubniPaymentEvent,
+  step: OnboardingStep,
+): Promise<boolean> {
+  return Boolean(
+    await repository.findByDedupeKey(stepDedupeKey(event.subscriptionId, step)),
+  );
+}
 
 export function parseClubniPaymentCommand(text: string): ClubniPaymentEvent | null {
   const match = text.match(/^\/clubni_payment\s+([A-Za-z0-9_-]+)$/);
@@ -34,16 +113,30 @@ export function parseClubniPaymentCommand(text: string): ClubniPaymentEvent | nu
   }
 }
 
+export async function findLatestClubniPayment(
+  telegramUserId: number,
+  expectedClubId: string,
+  repository: OnboardingRepository,
+): Promise<ClubniPaymentEvent | null> {
+  const event = storedPaymentEvent(
+    await repository.findLatestForTarget(
+      "clubni_payment_succeeded",
+      BigInt(telegramUserId),
+    ),
+  );
+  return event?.clubId === expectedClubId ? event : null;
+}
+
 type DeliveryDependencies = {
-  repository: Pick<ClubEventRepository, "createIfNotExists">;
-  sendMessage: (telegramUserId: number, text: string) => Promise<unknown>;
+  repository: OnboardingRepository;
+  sendIntro: (event: ClubniPaymentEvent) => Promise<unknown>;
 };
 
 export async function deliverClubniPaymentWelcome(
   event: ClubniPaymentEvent,
   expectedClubId: string,
   dependencies: DeliveryDependencies,
-): Promise<"wrong_club" | "duplicate" | "delivered"> {
+): Promise<"wrong_club" | "duplicate" | "pending" | "delivered"> {
   if (event.clubId !== expectedClubId) return "wrong_club";
 
   const created = await dependencies.repository.createIfNotExists({
@@ -51,15 +144,95 @@ export async function deliverClubniPaymentWelcome(
     eventType: "clubni_payment_succeeded",
     targetUserTelegramId: BigInt(event.telegramUserId),
     occurredAt: new Date(event.paidAt),
-    payload: {
-      clubId: event.clubId,
-      clubName: event.clubName,
-      subscriptionId: event.subscriptionId,
-      sourceEventId: event.eventId,
-    },
+    payload: paymentPayload(event),
   });
-  if (!created) return "duplicate";
+  if (await hasStep(dependencies.repository, event, "intro")) {
+    return created ? "delivered" : "duplicate";
+  }
 
-  await dependencies.sendMessage(event.telegramUserId, CLUBNI_PAYMENT_WELCOME_TEXT);
+  try {
+    await dependencies.sendIntro(event);
+  } catch {
+    return "pending";
+  }
+  await markStep(dependencies.repository, event, "intro");
   return "delivered";
+}
+
+export async function clubniOnboardingState(
+  event: ClubniPaymentEvent,
+  repository: OnboardingRepository,
+): Promise<OnboardingStep | "payment"> {
+  for (const step of ["final", "video2", "answer", "video1", "intro"] as const) {
+    if (await hasStep(repository, event, step)) return step;
+  }
+  return "payment";
+}
+
+export async function sendOrResumeClubniOnboarding(
+  event: ClubniPaymentEvent,
+  repository: OnboardingRepository,
+  senders: {
+    sendIntro: (event: ClubniPaymentEvent) => Promise<unknown>;
+    sendQuestionReminder: (event: ClubniPaymentEvent) => Promise<unknown>;
+    sendVideo2: (event: ClubniPaymentEvent) => Promise<unknown>;
+    sendFinal: (event: ClubniPaymentEvent) => Promise<unknown>;
+  },
+): Promise<OnboardingStep | "payment"> {
+  const state = await clubniOnboardingState(event, repository);
+  if (state === "final") {
+    await senders.sendFinal(event);
+  } else if (state === "video2") {
+    await senders.sendVideo2(event);
+  } else if (state === "answer") {
+    await senders.sendVideo2(event);
+    await markStep(repository, event, "video2");
+  } else if (state === "video1") {
+    await senders.sendQuestionReminder(event);
+  } else {
+    await senders.sendIntro(event);
+    await markStep(repository, event, "intro");
+  }
+  return state;
+}
+
+export async function startClubniOnboarding(
+  event: ClubniPaymentEvent,
+  repository: OnboardingRepository,
+  sendVideo1: (event: ClubniPaymentEvent) => Promise<unknown>,
+): Promise<"duplicate" | "started"> {
+  if (await hasStep(repository, event, "video1")) return "duplicate";
+  await sendVideo1(event);
+  await markStep(repository, event, "video1");
+  return "started";
+}
+
+export async function saveClubniOnboardingAnswer(
+  event: ClubniPaymentEvent,
+  answer: string,
+  repository: OnboardingRepository,
+  sendVideo2: (event: ClubniPaymentEvent) => Promise<unknown>,
+): Promise<"not_awaiting" | "duplicate" | "saved"> {
+  if (!await hasStep(repository, event, "video1")) return "not_awaiting";
+  if (await hasStep(repository, event, "answer")) return "duplicate";
+
+  const normalizedAnswer = answer.trim().slice(0, 4000);
+  if (!normalizedAnswer) return "not_awaiting";
+  await markStep(repository, event, "answer", { answer: normalizedAnswer });
+  await sendVideo2(event);
+  await markStep(repository, event, "video2");
+  return "saved";
+}
+
+export async function finishClubniOnboarding(
+  event: ClubniPaymentEvent,
+  repository: OnboardingRepository,
+  sendFinal: (event: ClubniPaymentEvent) => Promise<unknown>,
+): Promise<"not_ready" | "duplicate" | "finished"> {
+  if (!await hasStep(repository, event, "video2")) return "not_ready";
+  if (await hasStep(repository, event, "final")) return "duplicate";
+  if (!event.inviteUrl) return "not_ready";
+  await sendFinal(event);
+  await markStep(repository, event, "final");
+  return "finished";
 }

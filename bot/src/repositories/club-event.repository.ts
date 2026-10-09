@@ -41,6 +41,20 @@ export class ClubEventRepository {
       throw error;
     }
   }
+
+  async findByDedupeKey(dedupeKey: string): Promise<ClubEvent | null> {
+    return prisma.clubEvent.findUnique({ where: { dedupeKey } });
+  }
+
+  async findLatestForTarget(
+    eventType: string,
+    targetUserTelegramId: bigint,
+  ): Promise<ClubEvent | null> {
+    return prisma.clubEvent.findFirst({
+      where: { eventType, targetUserTelegramId },
+      orderBy: { occurredAt: "desc" },
+    });
+  }
 }
 
 export const clubEventRepository = new ClubEventRepository();
