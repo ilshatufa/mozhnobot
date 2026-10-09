@@ -18,10 +18,42 @@ const paymentEventSchema = z.object({
 
 export type ClubniPaymentEvent = z.infer<typeof paymentEventSchema>;
 
-type OnboardingStep = "intro" | "video1" | "answer" | "video2" | "final";
+type OnboardingStep =
+  | "intro"
+  | "video1"
+  | "answer"
+  | "video2"
+  | "access"
+  | "final";
 
 export const CLUBNI_ONBOARDING_START_PREFIX = "clubni_onboarding:start:";
 export const CLUBNI_ONBOARDING_NEXT_PREFIX = "clubni_onboarding:next:";
+export const CLUBNI_ACCESS_INVITE_PREFIX = "Clubni ";
+
+export function clubniAccessInviteName(telegramUserId: number): string {
+  return `${CLUBNI_ACCESS_INVITE_PREFIX}${telegramUserId}`;
+}
+
+export function clubniAccessInviteTarget(name: string | undefined): number | null {
+  if (!name?.startsWith(CLUBNI_ACCESS_INVITE_PREFIX)) return null;
+  const rawId = name.slice(CLUBNI_ACCESS_INVITE_PREFIX.length);
+  if (!/^\d+$/.test(rawId)) return null;
+  const telegramUserId = Number(rawId);
+  return Number.isSafeInteger(telegramUserId) && telegramUserId > 0
+    ? telegramUserId
+    : null;
+}
+
+export function clubniAccessJoinDecision(
+  name: string | undefined,
+  requesterTelegramUserId: number,
+): "ignore" | "approve" | "decline" {
+  const targetTelegramUserId = clubniAccessInviteTarget(name);
+  if (targetTelegramUserId === null) return "ignore";
+  return targetTelegramUserId === requesterTelegramUserId
+    ? "approve"
+    : "decline";
+}
 
 export const CLUBNI_PAYMENT_WELCOME_TEXT = [
   "Огонь, поздравляю, ты уже в клубе👌",
@@ -100,6 +132,37 @@ async function hasStep(
   );
 }
 
+async function accessInviteUrl(
+  repository: OnboardingRepository,
+  event: ClubniPaymentEvent,
+): Promise<string | null> {
+  const access = await repository.findByDedupeKey(
+    stepDedupeKey(event.subscriptionId, "access"),
+  );
+  if (!access?.payload || typeof access.payload !== "object" || Array.isArray(access.payload)) {
+    return null;
+  }
+  const inviteUrl = (access.payload as Record<string, unknown>).inviteUrl;
+  return typeof inviteUrl === "string" && z.string().url().safeParse(inviteUrl).success
+    ? inviteUrl
+    : null;
+}
+
+async function ensureAccessInvite(
+  repository: OnboardingRepository,
+  event: ClubniPaymentEvent,
+  createInvite: (event: ClubniPaymentEvent) => Promise<string>,
+): Promise<string> {
+  const existing = await accessInviteUrl(repository, event);
+  if (existing) return existing;
+
+  const inviteUrl = z.string().url().parse(await createInvite(event));
+  const created = await markStep(repository, event, "access", { inviteUrl });
+  if (created) return inviteUrl;
+
+  return await accessInviteUrl(repository, event) ?? inviteUrl;
+}
+
 export function parseClubniPaymentCommand(text: string): ClubniPaymentEvent | null {
   const match = text.match(/^\/clubni_payment\s+([A-Za-z0-9_-]+)$/);
   if (!match) return null;
@@ -163,7 +226,7 @@ export async function clubniOnboardingState(
   event: ClubniPaymentEvent,
   repository: OnboardingRepository,
 ): Promise<OnboardingStep | "payment"> {
-  for (const step of ["final", "video2", "answer", "video1", "intro"] as const) {
+  for (const step of ["final", "access", "video2", "answer", "video1", "intro"] as const) {
     if (await hasStep(repository, event, step)) return step;
   }
   return "payment";
@@ -176,12 +239,19 @@ export async function sendOrResumeClubniOnboarding(
     sendIntro: (event: ClubniPaymentEvent) => Promise<unknown>;
     sendQuestionReminder: (event: ClubniPaymentEvent) => Promise<unknown>;
     sendVideo2: (event: ClubniPaymentEvent) => Promise<unknown>;
-    sendFinal: (event: ClubniPaymentEvent) => Promise<unknown>;
+    createInvite: (event: ClubniPaymentEvent) => Promise<string>;
+    sendFinal: (event: ClubniPaymentEvent, inviteUrl: string) => Promise<unknown>;
   },
 ): Promise<OnboardingStep | "payment"> {
   const state = await clubniOnboardingState(event, repository);
-  if (state === "final") {
-    await senders.sendFinal(event);
+  if (state === "final" || state === "access") {
+    const inviteUrl = await ensureAccessInvite(
+      repository,
+      event,
+      senders.createInvite,
+    );
+    await senders.sendFinal(event, inviteUrl);
+    if (state === "access") await markStep(repository, event, "final");
   } else if (state === "video2") {
     await senders.sendVideo2(event);
   } else if (state === "answer") {
@@ -227,12 +297,13 @@ export async function saveClubniOnboardingAnswer(
 export async function finishClubniOnboarding(
   event: ClubniPaymentEvent,
   repository: OnboardingRepository,
-  sendFinal: (event: ClubniPaymentEvent) => Promise<unknown>,
+  createInvite: (event: ClubniPaymentEvent) => Promise<string>,
+  sendFinal: (event: ClubniPaymentEvent, inviteUrl: string) => Promise<unknown>,
 ): Promise<"not_ready" | "duplicate" | "finished"> {
   if (!await hasStep(repository, event, "video2")) return "not_ready";
+  const inviteUrl = await ensureAccessInvite(repository, event, createInvite);
+  await sendFinal(event, inviteUrl);
   if (await hasStep(repository, event, "final")) return "duplicate";
-  if (!event.inviteUrl) return "not_ready";
-  await sendFinal(event);
   await markStep(repository, event, "final");
   return "finished";
 }

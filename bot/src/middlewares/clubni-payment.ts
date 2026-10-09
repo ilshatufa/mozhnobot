@@ -9,6 +9,9 @@ import {
   CLUBNI_ONBOARDING_QUESTION,
   CLUBNI_ONBOARDING_START_PREFIX,
   CLUBNI_PAYMENT_WELCOME_TEXT,
+  clubniAccessInviteName,
+  clubniAccessJoinDecision,
+  clubniAccessInviteTarget,
   deliverClubniPaymentWelcome,
   findLatestClubniPayment,
   finishClubniOnboarding,
@@ -82,24 +85,86 @@ async function sendVideo2(ctx: Context, event: ClubniPaymentEvent): Promise<void
   );
 }
 
-async function sendFinal(ctx: Context, event: ClubniPaymentEvent): Promise<void> {
-  if (!event.inviteUrl) {
-    throw new Error("Clubni onboarding event has no personal invite URL");
-  }
+async function createPersonalInvite(
+  ctx: Context,
+  event: ClubniPaymentEvent,
+): Promise<string> {
+  const invite = await ctx.telegram.createChatInviteLink(config.clubGroupId, {
+    name: clubniAccessInviteName(event.telegramUserId),
+    creates_join_request: true,
+  });
+  return invite.invite_link;
+}
+
+async function sendFinal(
+  ctx: Context,
+  event: ClubniPaymentEvent,
+  inviteUrl: string,
+): Promise<void> {
   await ctx.telegram.sendMessage(event.telegramUserId, CLUBNI_ONBOARDING_FINAL_TEXT, {
     reply_markup: {
       inline_keyboard: [[{
-        text: "Перейти в клуб",
-        url: event.inviteUrl,
+        text: "Вступить в группу",
+        url: inviteUrl,
       }]],
     },
   });
+}
+
+async function reportAccessError(
+  ctx: Context,
+  event: ClubniPaymentEvent,
+  error: unknown,
+): Promise<void> {
+  logger.error("Failed to create Clubni group access", {
+    subscriptionId: event.subscriptionId,
+    targetTelegramUserId: event.telegramUserId,
+    error: error instanceof Error ? error.message : String(error),
+  });
+  await ctx.telegram.sendMessage(
+    event.telegramUserId,
+    "Не удалось открыть доступ в группу. Попробуй ещё раз позже.",
+  );
 }
 
 export function clubniPaymentMiddleware(): MiddlewareFn<Context> {
   return async (ctx, next) => {
     if (!config.clubniPayment.enabled || config.clubniPayment.sourceBotTelegramId === null) {
       return next();
+    }
+
+    if ("chat_join_request" in ctx.update) {
+      const request = ctx.update.chat_join_request;
+      const targetTelegramUserId = clubniAccessInviteTarget(
+        request.invite_link?.name,
+      );
+      const decision = clubniAccessJoinDecision(
+        request.invite_link?.name,
+        request.from.id,
+      );
+      if (
+        String(request.chat.id) === config.clubGroupId &&
+        targetTelegramUserId !== null &&
+        decision !== "ignore"
+      ) {
+        if (decision === "approve") {
+          await ctx.telegram.approveChatJoinRequest(
+            config.clubGroupId,
+            request.from.id,
+          );
+        } else {
+          await ctx.telegram.declineChatJoinRequest(
+            config.clubGroupId,
+            request.from.id,
+          );
+        }
+        logger.info("Clubni group join request processed", {
+          targetTelegramUserId,
+          requesterTelegramUserId: request.from.id,
+          approved: decision === "approve",
+        });
+        return next();
+      }
     }
 
     const trustedClubniBot =
@@ -157,12 +222,17 @@ export function clubniPaymentMiddleware(): MiddlewareFn<Context> {
       "text" in message &&
       /^\/start(?:@\w+)?(?:\s|$)/i.test(message.text)
     ) {
-      await sendOrResumeClubniOnboarding(event, clubEventRepository, {
-        sendIntro: (payment) => sendIntro(ctx, payment),
-        sendQuestionReminder: (payment) => sendQuestionReminder(ctx, payment),
-        sendVideo2: (payment) => sendVideo2(ctx, payment),
-        sendFinal: (payment) => sendFinal(ctx, payment),
-      });
+      try {
+        await sendOrResumeClubniOnboarding(event, clubEventRepository, {
+          sendIntro: (payment) => sendIntro(ctx, payment),
+          sendQuestionReminder: (payment) => sendQuestionReminder(ctx, payment),
+          sendVideo2: (payment) => sendVideo2(ctx, payment),
+          createInvite: (payment) => createPersonalInvite(ctx, payment),
+          sendFinal: (payment, inviteUrl) => sendFinal(ctx, payment, inviteUrl),
+        });
+      } catch (error) {
+        await reportAccessError(ctx, event, error);
+      }
       return;
     }
 
@@ -185,11 +255,16 @@ export function clubniPaymentMiddleware(): MiddlewareFn<Context> {
         `${CLUBNI_ONBOARDING_NEXT_PREFIX}${event.subscriptionId}`
       ) {
         await ctx.answerCbQuery();
-        await finishClubniOnboarding(
-          event,
-          clubEventRepository,
-          (payment) => sendFinal(ctx, payment),
-        );
+        try {
+          await finishClubniOnboarding(
+            event,
+            clubEventRepository,
+            (payment) => createPersonalInvite(ctx, payment),
+            (payment, inviteUrl) => sendFinal(ctx, payment, inviteUrl),
+          );
+        } catch (error) {
+          await reportAccessError(ctx, event, error);
+        }
         return;
       }
     }

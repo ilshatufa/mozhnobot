@@ -3,13 +3,18 @@ import test from "node:test";
 import type { ClubEvent } from "@prisma/client";
 import {
   CLUBNI_PAYMENT_WELCOME_TEXT,
+  clubniAccessInviteName,
+  clubniAccessJoinDecision,
+  clubniAccessInviteTarget,
   clubniOnboardingState,
   deliverClubniPaymentWelcome,
   findLatestClubniPayment,
   finishClubniOnboarding,
   parseClubniPaymentCommand,
   saveClubniOnboardingAnswer,
+  sendOrResumeClubniOnboarding,
   startClubniOnboarding,
+  type ClubniPaymentEvent,
 } from "./services/clubni-payment.service.js";
 import type { ClubEventInput } from "./repositories/club-event.repository.js";
 
@@ -21,7 +26,7 @@ const payment = {
   subscriptionId: "11111111-1111-4111-8111-111111111111",
   telegramUserId: 301474421,
   paidAt: "2026-10-09T10:00:00.000Z",
-  inviteUrl: "https://t.me/+personal-invite",
+  inviteUrl: null,
 };
 
 class MemoryClubEventRepository {
@@ -68,10 +73,21 @@ class MemoryClubEventRepository {
   }
 }
 
-test("decodes a valid Clubni payment command with the personal invite", () => {
+test("decodes a valid Clubni payment command without a Clubni invite", () => {
   const encoded = Buffer.from(JSON.stringify(payment), "utf8").toString("base64url");
   assert.deepEqual(parseClubniPaymentCommand(`/clubni_payment ${encoded}`), payment);
   assert.equal(parseClubniPaymentCommand("/clubni_payment invalid"), null);
+});
+
+test("binds a Clubni join-request link name to one Telegram user", () => {
+  assert.equal(clubniAccessInviteName(301474421), "Clubni 301474421");
+  assert.equal(clubniAccessInviteTarget("Clubni 301474421"), 301474421);
+  assert.equal(clubniAccessInviteTarget("Clubni 301474422"), 301474422);
+  assert.equal(clubniAccessInviteTarget("Other 301474421"), null);
+  assert.equal(clubniAccessInviteTarget("Clubni invalid"), null);
+  assert.equal(clubniAccessJoinDecision("Clubni 301474421", 301474421), "approve");
+  assert.equal(clubniAccessJoinDecision("Clubni 301474421", 301474422), "decline");
+  assert.equal(clubniAccessJoinDecision("Other 301474421", 301474421), "ignore");
 });
 
 test("records the payment and delivers the intro only once", async () => {
@@ -175,10 +191,15 @@ test("runs video, answer, video and final link in order and stores the answer", 
     "saved",
   );
   assert.equal(
-    await finishClubniOnboarding(payment, repository, async (event) => {
-      assert.equal(event.inviteUrl, payment.inviteUrl);
-      delivered.push("final");
-    }),
+    await finishClubniOnboarding(
+      payment,
+      repository,
+      async () => "https://t.me/+custom-bot-invite",
+      async (_event, inviteUrl) => {
+        assert.equal(inviteUrl, "https://t.me/+custom-bot-invite");
+        delivered.push("final");
+      },
+    ),
     "finished",
   );
 
@@ -191,6 +212,14 @@ test("runs video, answer, video and final link in order and stores the answer", 
     clubId: payment.clubId,
     subscriptionId: payment.subscriptionId,
     answer: "Хочу системно развивать свой проект",
+  });
+  const access = repository.events.find(
+    (event) => event.eventType === "clubni_onboarding_access",
+  );
+  assert.deepEqual(access?.payload, {
+    clubId: payment.clubId,
+    subscriptionId: payment.subscriptionId,
+    inviteUrl: "https://t.me/+custom-bot-invite",
   });
 });
 
@@ -205,7 +234,67 @@ test("does not accept an answer before the first video or finish before the seco
     "not_awaiting",
   );
   assert.equal(
-    await finishClubniOnboarding(payment, repository, async () => {}),
+    await finishClubniOnboarding(
+      payment,
+      repository,
+      async () => "https://t.me/+unused",
+      async () => {},
+    ),
     "not_ready",
   );
+});
+
+test("reuses the custom bot invite when completed onboarding is resumed", async () => {
+  const repository = new MemoryClubEventRepository();
+  await deliverClubniPaymentWelcome(payment, payment.clubId, {
+    repository,
+    async sendIntro() {},
+  });
+  await startClubniOnboarding(payment, repository, async () => {});
+  await saveClubniOnboardingAnswer(payment, "Ответ", repository, async () => {});
+
+  let createdInvites = 0;
+  const delivered: string[] = [];
+  const createInvite = async () => {
+    createdInvites += 1;
+    return "https://t.me/+custom-bot-invite";
+  };
+  const sendFinal = async (_event: ClubniPaymentEvent, inviteUrl: string) => {
+    delivered.push(inviteUrl);
+  };
+
+  assert.equal(
+    await finishClubniOnboarding(
+      payment,
+      repository,
+      createInvite,
+      sendFinal,
+    ),
+    "finished",
+  );
+  assert.equal(
+    await sendOrResumeClubniOnboarding(payment, repository, {
+      sendIntro: async () => {},
+      sendQuestionReminder: async () => {},
+      sendVideo2: async () => {},
+      createInvite,
+      sendFinal,
+    }),
+    "final",
+  );
+  assert.equal(
+    await finishClubniOnboarding(
+      payment,
+      repository,
+      createInvite,
+      sendFinal,
+    ),
+    "duplicate",
+  );
+  assert.equal(createdInvites, 1);
+  assert.deepEqual(delivered, [
+    "https://t.me/+custom-bot-invite",
+    "https://t.me/+custom-bot-invite",
+    "https://t.me/+custom-bot-invite",
+  ]);
 });
