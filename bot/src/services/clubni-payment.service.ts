@@ -82,6 +82,21 @@ export async function createClubniAccessInvite(
   return invite.invite_link;
 }
 
+type ClubniJoinRequestTelegram = {
+  approveChatJoinRequest(chatId: string, userId: number): Promise<unknown>;
+  revokeChatInviteLink(chatId: string, inviteLink: string): Promise<unknown>;
+};
+
+export async function approveClubniAccessJoinRequest(
+  telegram: ClubniJoinRequestTelegram,
+  chatId: string,
+  telegramUserId: number,
+  inviteLink: string,
+): Promise<void> {
+  await telegram.approveChatJoinRequest(chatId, telegramUserId);
+  await telegram.revokeChatInviteLink(chatId, inviteLink);
+}
+
 export const CLUBNI_PAYMENT_WELCOME_TEXT = [
   "Огонь, поздравляю, ты уже в клубе👌",
   "⠀",

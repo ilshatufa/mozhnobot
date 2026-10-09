@@ -3,6 +3,7 @@ import test from "node:test";
 import type { ClubEvent } from "@prisma/client";
 import {
   CLUBNI_PAYMENT_WELCOME_TEXT,
+  approveClubniAccessJoinRequest,
   clubniAccessInviteName,
   createClubniAccessInvite,
   clubniAccessJoinDecision,
@@ -125,6 +126,37 @@ test("unbans a returning member before creating the personal invite", async () =
           name: "Clubni 301474421",
           creates_join_request: true,
         },
+      },
+    },
+  ]);
+});
+
+test("revokes a personal invite after approving its intended member", async () => {
+  const calls: Array<{ method: string; payload: unknown }> = [];
+  await approveClubniAccessJoinRequest(
+    {
+      async approveChatJoinRequest(chatId, userId) {
+        calls.push({ method: "approve", payload: { chatId, userId } });
+      },
+      async revokeChatInviteLink(chatId, inviteLink) {
+        calls.push({ method: "revoke", payload: { chatId, inviteLink } });
+      },
+    },
+    "-1001234567890",
+    301474421,
+    "https://t.me/+personal",
+  );
+
+  assert.deepEqual(calls, [
+    {
+      method: "approve",
+      payload: { chatId: "-1001234567890", userId: 301474421 },
+    },
+    {
+      method: "revoke",
+      payload: {
+        chatId: "-1001234567890",
+        inviteLink: "https://t.me/+personal",
       },
     },
   ]);

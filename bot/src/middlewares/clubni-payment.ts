@@ -9,6 +9,7 @@ import {
   CLUBNI_ONBOARDING_QUESTION,
   CLUBNI_ONBOARDING_START_PREFIX,
   CLUBNI_PAYMENT_WELCOME_TEXT,
+  approveClubniAccessJoinRequest,
   createClubniAccessInvite,
   clubniAccessJoinDecision,
   clubniAccessInviteTarget,
@@ -148,9 +149,11 @@ export function clubniPaymentMiddleware(): MiddlewareFn<Context> {
         decision !== "ignore"
       ) {
         if (decision === "approve") {
-          await ctx.telegram.approveChatJoinRequest(
+          await approveClubniAccessJoinRequest(
+            ctx.telegram,
             config.clubGroupId,
             request.from.id,
+            request.invite_link!.invite_link,
           );
         } else {
           await ctx.telegram.declineChatJoinRequest(
