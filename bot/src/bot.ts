@@ -30,6 +30,7 @@ import {
 import { handleBotError } from "./error-handling.js";
 import { clubSearchHandler, webSearchHandler } from "./handlers/club-search.js";
 import { waitlistAdminHandler } from "./handlers/waitlist-admin.js";
+import { clubniPaymentMiddleware } from "./middlewares/clubni-payment.js";
 
 export function createBot(): Telegraf<AuthContext> {
   const bot = new Telegraf<AuthContext>(config.botToken);
@@ -38,6 +39,7 @@ export function createBot(): Telegraf<AuthContext> {
     void handleBotError(err, ctx);
   });
 
+  bot.use(clubniPaymentMiddleware());
   bot.use(eventLoggerMiddleware());
   bot.use(groupAccessMiddleware());
   bot.use(authMiddleware());

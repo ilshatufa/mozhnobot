@@ -4,6 +4,8 @@ const envSchema = z.object({
   BOT_TOKEN: z.string().min(1),
   CLUB_GROUP_ID: z.string().min(1),
   SEED_ADMIN_ID: z.string().min(1),
+  CLUBNI_SOURCE_BOT_TELEGRAM_ID: z.union([z.string().regex(/^\d+$/), z.literal("")]).default(""),
+  CLUBNI_PAYMENT_CLUB_ID: z.union([z.string().uuid(), z.literal("")]).default(""),
   GROUP_ACCESS_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   GROUP_ACCESS_MANAGED_CHAT_IDS_JSON: z.string().optional().default("[]"),
   GROUP_ACCESS_GRACE_HOURS: z.coerce.number().int().positive().default(24),
@@ -74,6 +76,16 @@ const envSchema = z.object({
   QWEN_TRANSCRIPT_CLEANUP_MODEL: z.string().min(1).default("qwen-max"),
   QWEN_TRANSCRIPT_CLEANUP_TIMEOUT_MS: z.coerce.number().int().positive().default(60000),
 }).superRefine((value, ctx) => {
+  const clubniSourceConfigured = Boolean(value.CLUBNI_SOURCE_BOT_TELEGRAM_ID);
+  const clubniClubConfigured = Boolean(value.CLUBNI_PAYMENT_CLUB_ID);
+  if (clubniSourceConfigured !== clubniClubConfigured) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [clubniSourceConfigured ? "CLUBNI_PAYMENT_CLUB_ID" : "CLUBNI_SOURCE_BOT_TELEGRAM_ID"],
+      message: "must be configured together with the other Clubni payment setting",
+    });
+  }
+
   if (!value.VPN_PAID_PAYMENTS_ENABLED) return;
   if (!value.VPN_PAID_TERMS_VERSION.trim()) {
     ctx.addIssue({
@@ -198,6 +210,13 @@ export const config = {
   botToken: env.BOT_TOKEN,
   clubGroupId: env.CLUB_GROUP_ID,
   seedAdminId: BigInt(env.SEED_ADMIN_ID),
+  clubniPayment: {
+    enabled: Boolean(env.CLUBNI_SOURCE_BOT_TELEGRAM_ID && env.CLUBNI_PAYMENT_CLUB_ID),
+    sourceBotTelegramId: env.CLUBNI_SOURCE_BOT_TELEGRAM_ID
+      ? BigInt(env.CLUBNI_SOURCE_BOT_TELEGRAM_ID)
+      : null,
+    clubId: env.CLUBNI_PAYMENT_CLUB_ID,
+  },
   groupAccess: {
     enabled: env.GROUP_ACCESS_ENABLED,
     managedChatIds: [...new Set(groupAccessManagedChatIds)],
