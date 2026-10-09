@@ -9,7 +9,7 @@ import {
   CLUBNI_ONBOARDING_QUESTION,
   CLUBNI_ONBOARDING_START_PREFIX,
   CLUBNI_PAYMENT_WELCOME_TEXT,
-  clubniAccessInviteName,
+  createClubniAccessInvite,
   clubniAccessJoinDecision,
   clubniAccessInviteTarget,
   deliverClubniPaymentWelcome,
@@ -89,11 +89,11 @@ async function createPersonalInvite(
   ctx: Context,
   event: ClubniPaymentEvent,
 ): Promise<string> {
-  const invite = await ctx.telegram.createChatInviteLink(config.clubGroupId, {
-    name: clubniAccessInviteName(event.telegramUserId),
-    creates_join_request: true,
-  });
-  return invite.invite_link;
+  return createClubniAccessInvite(
+    ctx.telegram,
+    config.clubGroupId,
+    event.telegramUserId,
+  );
 }
 
 async function sendFinal(

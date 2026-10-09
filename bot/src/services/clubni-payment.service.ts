@@ -55,6 +55,33 @@ export function clubniAccessJoinDecision(
     : "decline";
 }
 
+type ClubniAccessTelegram = {
+  unbanChatMember(
+    chatId: string,
+    userId: number,
+    extra: { only_if_banned: true },
+  ): Promise<unknown>;
+  createChatInviteLink(
+    chatId: string,
+    extra: { name: string; creates_join_request: true },
+  ): Promise<{ invite_link: string }>;
+};
+
+export async function createClubniAccessInvite(
+  telegram: ClubniAccessTelegram,
+  chatId: string,
+  telegramUserId: number,
+): Promise<string> {
+  await telegram.unbanChatMember(chatId, telegramUserId, {
+    only_if_banned: true,
+  });
+  const invite = await telegram.createChatInviteLink(chatId, {
+    name: clubniAccessInviteName(telegramUserId),
+    creates_join_request: true,
+  });
+  return invite.invite_link;
+}
+
 export const CLUBNI_PAYMENT_WELCOME_TEXT = [
   "Огонь, поздравляю, ты уже в клубе👌",
   "⠀",

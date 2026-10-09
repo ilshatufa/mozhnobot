@@ -4,6 +4,7 @@ import type { ClubEvent } from "@prisma/client";
 import {
   CLUBNI_PAYMENT_WELCOME_TEXT,
   clubniAccessInviteName,
+  createClubniAccessInvite,
   clubniAccessJoinDecision,
   clubniAccessInviteTarget,
   clubniOnboardingState,
@@ -88,6 +89,45 @@ test("binds a Clubni join-request link name to one Telegram user", () => {
   assert.equal(clubniAccessJoinDecision("Clubni 301474421", 301474421), "approve");
   assert.equal(clubniAccessJoinDecision("Clubni 301474421", 301474422), "decline");
   assert.equal(clubniAccessJoinDecision("Other 301474421", 301474421), "ignore");
+});
+
+test("unbans a returning member before creating the personal invite", async () => {
+  const calls: Array<{ method: string; payload: unknown }> = [];
+  const inviteUrl = await createClubniAccessInvite(
+    {
+      async unbanChatMember(chatId, userId, extra) {
+        calls.push({ method: "unban", payload: { chatId, userId, extra } });
+      },
+      async createChatInviteLink(chatId, extra) {
+        calls.push({ method: "invite", payload: { chatId, extra } });
+        return { invite_link: "https://t.me/+personal" };
+      },
+    },
+    "-1001234567890",
+    301474421,
+  );
+
+  assert.equal(inviteUrl, "https://t.me/+personal");
+  assert.deepEqual(calls, [
+    {
+      method: "unban",
+      payload: {
+        chatId: "-1001234567890",
+        userId: 301474421,
+        extra: { only_if_banned: true },
+      },
+    },
+    {
+      method: "invite",
+      payload: {
+        chatId: "-1001234567890",
+        extra: {
+          name: "Clubni 301474421",
+          creates_join_request: true,
+        },
+      },
+    },
+  ]);
 });
 
 test("records the payment and delivers the intro only once", async () => {
