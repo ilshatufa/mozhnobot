@@ -31,6 +31,11 @@ import { handleBotError } from "./error-handling.js";
 import { clubSearchHandler, webSearchHandler } from "./handlers/club-search.js";
 import { waitlistAdminHandler } from "./handlers/waitlist-admin.js";
 import { clubniPaymentMiddleware } from "./middlewares/clubni-payment.js";
+import {
+  CONTENT_REVIEW_ACTION_PATTERN,
+  contentReviewActionHandler,
+  contentReviewCorrectionHandler,
+} from "./handlers/content-review.js";
 
 export function createBot(): Telegraf<AuthContext> {
   const bot = new Telegraf<AuthContext>(config.botToken);
@@ -47,6 +52,7 @@ export function createBot(): Telegraf<AuthContext> {
   bot.command("start", startHandler);
   bot.action(CLUB_WAITLIST_ACTION, waitlistHandler);
   bot.action(CLUB_AVITO_GUIDE_ACTION, avitoGuideHandler);
+  bot.action(CONTENT_REVIEW_ACTION_PATTERN, contentReviewActionHandler);
   bot.command("help", helpHandler);
   bot.command("vpn", vpnHandler);
   bot.command("status", statusHandler);
@@ -65,6 +71,7 @@ export function createBot(): Telegraf<AuthContext> {
   bot.command("transcription_off", adminOnly(), transcriptionOffHandler);
   bot.command("transcription_status", adminOnly(), transcriptionStatusHandler);
   bot.on("photo", adminPhotoIdHandler);
+  bot.on("text", contentReviewCorrectionHandler);
 
   return bot;
 }
