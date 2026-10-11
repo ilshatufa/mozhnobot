@@ -37,6 +37,7 @@ import {
   contentReviewCorrectionHandler,
 } from "./handlers/content-review.js";
 import { installGroupActionLogging } from "./services/group-action-logger.service.js";
+import { clubniOnboardingVideoAdminHandler } from "./handlers/clubni-onboarding-admin.js";
 
 export function createBot(): Telegraf<AuthContext> {
   const bot = new Telegraf<AuthContext>(config.botToken);
@@ -72,6 +73,7 @@ export function createBot(): Telegraf<AuthContext> {
   bot.command("transcription_on", adminOnly(), transcriptionOnHandler);
   bot.command("transcription_off", adminOnly(), transcriptionOffHandler);
   bot.command("transcription_status", adminOnly(), transcriptionStatusHandler);
+  bot.on("video", clubniOnboardingVideoAdminHandler);
   bot.on("photo", adminPhotoIdHandler);
   bot.on("text", contentReviewCorrectionHandler);
 

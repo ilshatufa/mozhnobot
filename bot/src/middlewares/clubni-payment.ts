@@ -3,6 +3,7 @@ import { Input, type Context, type MiddlewareFn } from "telegraf";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
 import { clubEventRepository } from "../repositories/club-event.repository.js";
+import { sendClubniOnboardingVideo1 } from "../services/clubni-onboarding-media.service.js";
 import {
   CLUBNI_ONBOARDING_FINAL_TEXT,
   CLUBNI_ONBOARDING_NEXT_PREFIX,
@@ -51,12 +52,11 @@ async function sendIntro(ctx: Context, event: ClubniPaymentEvent): Promise<void>
 }
 
 async function sendVideo1(ctx: Context, event: ClubniPaymentEvent): Promise<void> {
-  await ctx.telegram.sendVideo(
+  await sendClubniOnboardingVideo1(
+    ctx.telegram,
     event.telegramUserId,
-    Input.fromLocalFile(VIDEO_1_PATH),
-    {
-      caption: `${CLUBNI_ONBOARDING_QUESTION}\n\nНапиши ответ одним сообщением.`,
-    },
+    VIDEO_1_PATH,
+    CLUBNI_ONBOARDING_QUESTION,
   );
 }
 

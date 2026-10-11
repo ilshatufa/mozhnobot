@@ -3,18 +3,27 @@ import { prisma } from "../database.js";
 const TRANSCRIPTION_ENABLED_KEY = "media.transcription.enabled";
 
 export class BotSettingRepository {
-  async getBoolean(key: string, defaultValue: boolean): Promise<boolean> {
+  async getString(key: string): Promise<string | null> {
     const setting = await prisma.botSetting.findUnique({ where: { key } });
-    if (!setting) return defaultValue;
-    return setting.value === "true";
+    return setting?.value ?? null;
+  }
+
+  async setString(key: string, value: string): Promise<void> {
+    await prisma.botSetting.upsert({
+      where: { key },
+      update: { value },
+      create: { key, value },
+    });
+  }
+
+  async getBoolean(key: string, defaultValue: boolean): Promise<boolean> {
+    const value = await this.getString(key);
+    if (value === null) return defaultValue;
+    return value === "true";
   }
 
   async setBoolean(key: string, value: boolean): Promise<void> {
-    await prisma.botSetting.upsert({
-      where: { key },
-      update: { value: value ? "true" : "false" },
-      create: { key, value: value ? "true" : "false" },
-    });
+    await this.setString(key, value ? "true" : "false");
   }
 
   async isTranscriptionEnabled(): Promise<boolean> {
