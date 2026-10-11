@@ -419,6 +419,15 @@ function contentDispositionHeader(): string {
   ].join("; ");
 }
 
+export function serverAddressResolveHeaders(): Record<string, string> {
+  if (!config.xraySubscription.serverAddressResolveEnabled) return {};
+  return {
+    "server-address-resolve-enable": "1",
+    "server-address-resolve-dns-domain": config.xraySubscription.serverAddressResolveDnsDomain,
+    "server-address-resolve-dns-ip": config.xraySubscription.serverAddressResolveDnsIp,
+  };
+}
+
 export class XraySubscriptionService {
   async render(
     token: string,
@@ -472,6 +481,7 @@ export class XraySubscriptionService {
         headers: {
           "Content-Type": "text/html; charset=utf-8",
           "Cache-Control": "no-store",
+          ...serverAddressResolveHeaders(),
         },
         meta: {
           userId: subscription.userId,
@@ -518,6 +528,7 @@ export class XraySubscriptionService {
         ].join("; "),
         "Content-Disposition": contentDispositionHeader(),
         "Cache-Control": "no-store",
+        ...serverAddressResolveHeaders(),
       },
       meta: {
         userId: subscription.userId,

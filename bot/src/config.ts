@@ -51,6 +51,12 @@ const envSchema = z.object({
   XRAY_SUBSCRIPTION_JSON_BLOCK_UDP_443: z.coerce.boolean().default(true),
   XRAY_SUBSCRIPTION_JSON_DIRECT_DOMAINS_JSON: z.string().optional().default(""),
   XRAY_SUBSCRIPTION_JSON_PRIVATE_IPS_JSON: z.string().optional().default(""),
+  XRAY_SUBSCRIPTION_SERVER_ADDRESS_RESOLVE_ENABLED: z.enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  XRAY_SUBSCRIPTION_SERVER_ADDRESS_RESOLVE_DNS_DOMAIN: z.string().url()
+    .default("https://common.dot.dns.yandex.net/dns-query"),
+  XRAY_SUBSCRIPTION_SERVER_ADDRESS_RESOLVE_DNS_IP: z.string().min(1).default("77.88.8.8"),
 
   DATABASE_URL: z.string().min(1),
 
@@ -297,6 +303,9 @@ export const config = {
     jsonBlockUdp443: env.XRAY_SUBSCRIPTION_JSON_BLOCK_UDP_443,
     jsonDirectDomains: parseStringArrayEnv(env.XRAY_SUBSCRIPTION_JSON_DIRECT_DOMAINS_JSON, defaultXrayDirectDomains, "XRAY_SUBSCRIPTION_JSON_DIRECT_DOMAINS_JSON"),
     jsonPrivateIps: parseStringArrayEnv(env.XRAY_SUBSCRIPTION_JSON_PRIVATE_IPS_JSON, defaultXrayPrivateIps, "XRAY_SUBSCRIPTION_JSON_PRIVATE_IPS_JSON"),
+    serverAddressResolveEnabled: env.XRAY_SUBSCRIPTION_SERVER_ADDRESS_RESOLVE_ENABLED,
+    serverAddressResolveDnsDomain: env.XRAY_SUBSCRIPTION_SERVER_ADDRESS_RESOLVE_DNS_DOMAIN,
+    serverAddressResolveDnsIp: env.XRAY_SUBSCRIPTION_SERVER_ADDRESS_RESOLVE_DNS_IP,
   },
 
   vpnAccessSync: {
