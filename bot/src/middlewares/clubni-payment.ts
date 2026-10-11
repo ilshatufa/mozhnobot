@@ -13,6 +13,7 @@ import {
   CLUBNI_ONBOARDING_START_PREFIX,
   CLUBNI_PAYMENT_WELCOME_TEXT,
   approveClubniAccessJoinRequest,
+  createClubniAccessInvite,
   clubniAccessJoinDecision,
   clubniAccessInviteTarget,
   deliverClubniPaymentWelcome,
@@ -90,14 +91,34 @@ async function sendVideo2(ctx: Context, event: ClubniPaymentEvent): Promise<void
   );
 }
 
+async function createPersonalInvite(
+  ctx: Context,
+  event: ClubniPaymentEvent,
+): Promise<string> {
+  return createClubniAccessInvite(
+    ctx.telegram,
+    config.clubGroupId,
+    event.telegramUserId,
+  );
+}
+
 async function sendFinal(
   ctx: Context,
   event: ClubniPaymentEvent,
+  inviteUrl: string,
 ): Promise<void> {
   await ctx.telegram.copyMessage(
     event.telegramUserId,
     CLUBNI_ONBOARDING_FINAL_POST_CHAT_ID,
     CLUBNI_ONBOARDING_FINAL_POST_MESSAGE_ID,
+    {
+      reply_markup: {
+        inline_keyboard: [[{
+          text: "Вступить в клуб",
+          url: inviteUrl,
+        }]],
+      },
+    },
   );
 }
 
@@ -220,7 +241,8 @@ export function clubniPaymentMiddleware(): MiddlewareFn<Context> {
           sendIntro: (payment) => sendIntro(ctx, payment),
           sendQuestionReminder: (payment) => sendQuestionReminder(ctx, payment),
           sendVideo2: (payment) => sendVideo2(ctx, payment),
-          sendFinal: (payment) => sendFinal(ctx, payment),
+          createInvite: (payment) => createPersonalInvite(ctx, payment),
+          sendFinal: (payment, inviteUrl) => sendFinal(ctx, payment, inviteUrl),
         });
       } catch (error) {
         await reportFinalPostError(ctx, event, error);
@@ -253,7 +275,8 @@ export function clubniPaymentMiddleware(): MiddlewareFn<Context> {
           await finishClubniOnboarding(
             event,
             clubEventRepository,
-            (payment) => sendFinal(ctx, payment),
+            (payment) => createPersonalInvite(ctx, payment),
+            (payment, inviteUrl) => sendFinal(ctx, payment, inviteUrl),
           );
         } catch (error) {
           await reportFinalPostError(ctx, event, error);

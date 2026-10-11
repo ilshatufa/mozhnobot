@@ -266,7 +266,9 @@ test("runs video, answer, video and final post in order and stores the answer", 
     await finishClubniOnboarding(
       payment,
       repository,
-      async () => {
+      async () => "https://t.me/+custom-bot-invite",
+      async (_event, inviteUrl) => {
+        assert.equal(inviteUrl, "https://t.me/+custom-bot-invite");
         delivered.push("final");
       },
     ),
@@ -283,10 +285,14 @@ test("runs video, answer, video and final post in order and stores the answer", 
     subscriptionId: payment.subscriptionId,
     answer: "Хочу системно развивать свой проект",
   });
-  assert.equal(
-    repository.events.some((event) => event.eventType === "clubni_onboarding_access"),
-    false,
+  const access = repository.events.find(
+    (event) => event.eventType === "clubni_onboarding_access",
   );
+  assert.deepEqual(access?.payload, {
+    clubId: payment.clubId,
+    subscriptionId: payment.subscriptionId,
+    inviteUrl: "https://t.me/+custom-bot-invite",
+  });
 });
 
 test("does not accept an answer before the first video or finish before the second", async () => {
@@ -303,6 +309,7 @@ test("does not accept an answer before the first video or finish before the seco
     await finishClubniOnboarding(
       payment,
       repository,
+      async () => "https://t.me/+unused",
       async () => {},
     ),
     "not_ready",
@@ -319,14 +326,20 @@ test("does not resend the final step when completed onboarding is resumed", asyn
   await saveClubniOnboardingAnswer(payment, "Ответ", repository, async () => {});
 
   const delivered: string[] = [];
-  const sendFinal = async () => {
-    delivered.push("final");
+  let createdInvites = 0;
+  const createInvite = async () => {
+    createdInvites += 1;
+    return "https://t.me/+custom-bot-invite";
+  };
+  const sendFinal = async (_event: ClubniPaymentEvent, inviteUrl: string) => {
+    delivered.push(inviteUrl);
   };
 
   assert.equal(
     await finishClubniOnboarding(
       payment,
       repository,
+      createInvite,
       sendFinal,
     ),
     "finished",
@@ -336,18 +349,21 @@ test("does not resend the final step when completed onboarding is resumed", asyn
       sendIntro: async () => {},
       sendQuestionReminder: async () => {},
       sendVideo2: async () => {},
+      createInvite,
       sendFinal,
     }),
     "final",
   );
-  assert.deepEqual(delivered, ["final"]);
+  assert.deepEqual(delivered, ["https://t.me/+custom-bot-invite"]);
   assert.equal(
     await finishClubniOnboarding(
       payment,
       repository,
+      createInvite,
       sendFinal,
     ),
     "duplicate",
   );
-  assert.deepEqual(delivered, ["final"]);
+  assert.equal(createdInvites, 1);
+  assert.deepEqual(delivered, ["https://t.me/+custom-bot-invite"]);
 });
