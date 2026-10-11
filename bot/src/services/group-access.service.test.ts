@@ -10,6 +10,7 @@ import {
 
 const SOURCE_CHAT_ID = "-1003393970920";
 const BERLIN_CHAT_ID = "-1003774482834";
+const VLADIVOSTOK_CHAT_ID = "-1003955404342";
 const USER_ID = 123456789;
 
 function member(status: string, isMember?: boolean) {
@@ -215,6 +216,39 @@ test("member not found completes a due clearance", async () => {
 
   assert.deepEqual(removed, [{ chatId: BERLIN_CHAT_ID, userId: USER_ID }]);
   assert.equal(repository.clearCalls, 1);
+});
+
+test("participant not found in one group does not block removal from later groups", async () => {
+  const repository = new FakeRepository();
+  repository.dueUsers = [repository.user];
+  const service = new GroupAccessService(repository, {
+    ...settings(),
+    managedChatIds: [BERLIN_CHAT_ID, VLADIVOSTOK_CHAT_ID],
+  });
+  const removed: Array<{ chatId: string | number; userId: number }> = [];
+  const api: GroupAccessTelegram = {
+    async getChatMember() {
+      return { status: "left" };
+    },
+    async unbanChatMember(chatId, userId) {
+      if (chatId === BERLIN_CHAT_ID) {
+        throw {
+          response: {
+            error_code: 400,
+            description: "Bad Request: PARTICIPANT_ID_INVALID",
+          },
+        };
+      }
+      removed.push({ chatId, userId });
+      return true;
+    },
+  };
+
+  await service.processDue(api);
+
+  assert.deepEqual(removed, [{ chatId: VLADIVOSTOK_CHAT_ID, userId: USER_ID }]);
+  assert.equal(repository.clearCalls, 1);
+  assert.equal(repository.user.clearAccessGroupAt, null);
 });
 
 test("Telegram failure keeps due clearance for the next retry", async () => {

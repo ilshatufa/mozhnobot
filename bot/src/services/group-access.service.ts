@@ -81,6 +81,19 @@ function isMemberNotFoundError(error: unknown): boolean {
   return response?.error_code === 400 && response.description?.endsWith("member not found") === true;
 }
 
+function isParticipantIdInvalidError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("response" in error)) return false;
+
+  const response = (error as {
+    response?: { error_code?: number; description?: string };
+  }).response;
+
+  return (
+    response?.error_code === 400 &&
+    response.description?.endsWith("PARTICIPANT_ID_INVALID") === true
+  );
+}
+
 async function getSourceMember(
   telegram: GroupAccessTelegram,
   sourceChatId: string,
@@ -280,7 +293,18 @@ export class GroupAccessService {
     telegramId: bigint,
   ): Promise<void> {
     const userId = toTelegramUserId(telegramId);
-    await telegram.unbanChatMember(chatId, userId, { only_if_banned: false });
+    try {
+      await telegram.unbanChatMember(chatId, userId, { only_if_banned: false });
+    } catch (error) {
+      if (isParticipantIdInvalidError(error)) {
+        logger.info("User is already absent from managed group", {
+          telegramId: telegramId.toString(),
+          chatId,
+        });
+        return;
+      }
+      throw error;
+    }
     logger.info("User removed from managed group with rejoin allowed", {
       telegramId: telegramId.toString(),
       chatId,
