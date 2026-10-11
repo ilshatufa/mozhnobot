@@ -36,9 +36,11 @@ import {
   contentReviewActionHandler,
   contentReviewCorrectionHandler,
 } from "./handlers/content-review.js";
+import { installGroupActionLogging } from "./services/group-action-logger.service.js";
 
 export function createBot(): Telegraf<AuthContext> {
   const bot = new Telegraf<AuthContext>(config.botToken);
+  installGroupActionLogging(bot.telegram);
 
   bot.catch((err, ctx) => {
     void handleBotError(err, ctx);
