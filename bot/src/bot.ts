@@ -38,6 +38,7 @@ import {
 } from "./handlers/content-review.js";
 import { installGroupActionLogging } from "./services/group-action-logger.service.js";
 import { clubniOnboardingVideoAdminHandler } from "./handlers/clubni-onboarding-admin.js";
+import { botInboxMiddleware } from "./middlewares/bot-inbox.js";
 
 export function createBot(): Telegraf<AuthContext> {
   const bot = new Telegraf<AuthContext>(config.botToken);
@@ -49,6 +50,7 @@ export function createBot(): Telegraf<AuthContext> {
 
   bot.use(clubniPaymentMiddleware());
   bot.use(eventLoggerMiddleware());
+  bot.use(botInboxMiddleware());
   bot.use(groupAccessMiddleware());
   bot.use(authMiddleware());
   bot.use(clubniOnboardingVideoAdminHandler);

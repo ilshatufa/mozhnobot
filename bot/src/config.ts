@@ -3,6 +3,7 @@ import { z } from "zod";
 const envSchema = z.object({
   BOT_TOKEN: z.string().min(1),
   CLUB_GROUP_ID: z.string().min(1),
+  BOT_INBOX_GROUP_ID: z.union([z.string().regex(/^-100\d+$/), z.literal("")]).default(""),
   SEED_ADMIN_ID: z.string().min(1),
   CLUBNI_SOURCE_BOT_TELEGRAM_ID: z.union([z.string().regex(/^\d+$/), z.literal("")]).default(""),
   CLUBNI_PAYMENT_CLUB_ID: z.union([z.string().uuid(), z.literal("")]).default(""),
@@ -215,6 +216,7 @@ for (const chatId of groupAccessManagedChatIds) {
 export const config = {
   botToken: env.BOT_TOKEN,
   clubGroupId: env.CLUB_GROUP_ID,
+  botInboxGroupId: env.BOT_INBOX_GROUP_ID || null,
   seedAdminId: BigInt(env.SEED_ADMIN_ID),
   clubniPayment: {
     enabled: Boolean(env.CLUBNI_SOURCE_BOT_TELEGRAM_ID && env.CLUBNI_PAYMENT_CLUB_ID),
