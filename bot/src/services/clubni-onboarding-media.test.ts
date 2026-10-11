@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildClubniTranscriptMessages,
+  parseStoredVideo,
   sendVideoWithTranscriptFallback,
 } from "./clubni-onboarding-media.service.js";
 import { isVideoForbiddenError } from "../telegram-errors.js";
@@ -17,6 +18,18 @@ test("formats the onboarding transcript as safe Telegram HTML with the question"
   assert.match(messages[0], /Второй &lt;важный&gt; абзац &amp; детали\./);
   assert.match(messages[0], /❓ <b>Вопрос<\/b>\nЧто тебе сейчас важно\?/);
   assert.ok(messages[0].length <= 4096);
+});
+
+test("keeps a configured onboarding video even before its transcript is ready", () => {
+  assert.deepEqual(parseStoredVideo(JSON.stringify({
+    fileId: "video-file-id",
+    fileUniqueId: "video-unique-id",
+    transcript: null,
+  })), {
+    fileId: "video-file-id",
+    fileUniqueId: "video-unique-id",
+    transcript: null,
+  });
 });
 
 test("splits a long onboarding transcript and asks the question only at the end", () => {

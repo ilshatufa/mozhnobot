@@ -15,7 +15,13 @@ const TRANSCRIPT_CHUNK_LIMIT = 3000;
 export type ClubniOnboardingVideo = {
   fileId: string;
   fileUniqueId: string;
-  transcript: string;
+  transcript: string | null;
+};
+
+export type ClubniOnboardingVideoConfiguration = {
+  video: ClubniOnboardingVideo;
+  transcriptPrepared: boolean;
+  transcriptionError: string | null;
 };
 
 type TelegramFile = {
@@ -79,21 +85,23 @@ export function buildClubniTranscriptMessages(
   });
 }
 
-function parseStoredVideo(value: string | null): ClubniOnboardingVideo | null {
+export function parseStoredVideo(value: string | null): ClubniOnboardingVideo | null {
   if (!value) return null;
   try {
     const parsed = JSON.parse(value) as Partial<ClubniOnboardingVideo>;
     if (
       typeof parsed.fileId !== "string" || !parsed.fileId ||
       typeof parsed.fileUniqueId !== "string" || !parsed.fileUniqueId ||
-      typeof parsed.transcript !== "string" || !parsed.transcript.trim()
+      (parsed.transcript !== null && typeof parsed.transcript !== "string")
     ) {
       return null;
     }
     return {
       fileId: parsed.fileId,
       fileUniqueId: parsed.fileUniqueId,
-      transcript: parsed.transcript.trim(),
+      transcript: typeof parsed.transcript === "string" && parsed.transcript.trim()
+        ? parsed.transcript.trim()
+        : null,
     };
   } catch {
     return null;
@@ -134,9 +142,20 @@ async function downloadTelegramVideo(
 export async function configureClubniOnboardingVideo1(
   telegram: Pick<Telegram, "getFile">,
   video: { fileId: string; fileUniqueId: string },
-): Promise<ClubniOnboardingVideo> {
+): Promise<ClubniOnboardingVideoConfiguration> {
+  const stored: ClubniOnboardingVideo = {
+    fileId: video.fileId,
+    fileUniqueId: video.fileUniqueId,
+    transcript: null,
+  };
+  await botSettingRepository.setString(VIDEO_1_SETTING_KEY, JSON.stringify(stored));
+
   if (!transcriptionProvider.isConfigured()) {
-    throw new Error("Transcription provider is not configured");
+    return {
+      video: stored,
+      transcriptPrepared: false,
+      transcriptionError: "Transcription provider is not configured",
+    };
   }
 
   let downloaded: { directory: string; filePath: string } | null = null;
@@ -144,13 +163,19 @@ export async function configureClubniOnboardingVideo1(
     downloaded = await downloadTelegramVideo(telegram, video.fileId);
     const raw = await transcriptionProvider.transcribe(downloaded.filePath);
     const transcript = await cleanTranscriptWithQwen(raw.text);
-    const stored: ClubniOnboardingVideo = {
-      fileId: video.fileId,
-      fileUniqueId: video.fileUniqueId,
-      transcript,
-    };
+    stored.transcript = transcript;
     await botSettingRepository.setString(VIDEO_1_SETTING_KEY, JSON.stringify(stored));
-    return stored;
+    return {
+      video: stored,
+      transcriptPrepared: true,
+      transcriptionError: null,
+    };
+  } catch (error) {
+    return {
+      video: stored,
+      transcriptPrepared: false,
+      transcriptionError: error instanceof Error ? error.message : String(error),
+    };
   } finally {
     if (downloaded) {
       await rm(downloaded.directory, { force: true, recursive: true });

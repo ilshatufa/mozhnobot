@@ -33,9 +33,9 @@ export const clubniOnboardingVideoAdminHandler: MiddlewareFn<AuthContext> = asyn
     return;
   }
 
-  const progress = await ctx.reply("Получил видео. Готовлю расшифровку…");
+  const progress = await ctx.reply("Сохраняю видео…");
   try {
-    const configured = await configureClubniOnboardingVideo1(ctx.telegram, {
+    const result = await configureClubniOnboardingVideo1(ctx.telegram, {
       fileId: video.file_id,
       fileUniqueId: video.file_unique_id,
     });
@@ -43,13 +43,23 @@ export const clubniOnboardingVideoAdminHandler: MiddlewareFn<AuthContext> = asyn
       ctx.chat.id,
       progress.message_id,
       undefined,
-      "Видео 1 сохранено. Расшифровка готова: если Telegram запретит видео, пользователь получит текст и сможет продолжить онбординг.",
+      result.transcriptPrepared
+        ? "Видео сохранено и установлено в онбординг. Расшифровка готова."
+        : "Видео сохранено и установлено в онбординг.",
     );
     logger.info("Clubni onboarding video 1 configured", {
       adminTelegramId: ctx.from?.id ?? null,
-      fileUniqueId: configured.fileUniqueId,
-      transcriptLength: configured.transcript.length,
+      fileUniqueId: result.video.fileUniqueId,
+      transcriptLength: result.video.transcript?.length ?? 0,
+      transcriptPrepared: result.transcriptPrepared,
     });
+    if (result.transcriptionError) {
+      logger.warn("Clubni onboarding video 1 transcript was not prepared", {
+        adminTelegramId: ctx.from?.id ?? null,
+        fileUniqueId: result.video.fileUniqueId,
+        error: result.transcriptionError,
+      });
+    }
   } catch (error) {
     logger.error("Failed to configure Clubni onboarding video 1", {
       adminTelegramId: ctx.from?.id ?? null,
@@ -59,7 +69,7 @@ export const clubniOnboardingVideoAdminHandler: MiddlewareFn<AuthContext> = asyn
       ctx.chat.id,
       progress.message_id,
       undefined,
-      "Не удалось сохранить видео или подготовить расшифровку. Предыдущее видео не изменено.",
+      "Не удалось сохранить видео.",
     );
   }
 };
