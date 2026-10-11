@@ -48,9 +48,9 @@ export function createBot(): Telegraf<AuthContext> {
     void handleBotError(err, ctx);
   });
 
-  bot.use(clubniPaymentMiddleware());
   bot.use(eventLoggerMiddleware());
   bot.use(botInboxMiddleware());
+  bot.use(clubniPaymentMiddleware());
   bot.use(groupAccessMiddleware());
   bot.use(authMiddleware());
   bot.use(clubniOnboardingVideoAdminHandler);
