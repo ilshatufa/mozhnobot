@@ -40,7 +40,7 @@ test("persists safe metadata for a successful bot action in a group", async () =
   assert.equal(JSON.stringify(events[0].payload).includes("private message text"), false);
 });
 
-test("persists a failed group action and rethrows the Telegram error", async () => {
+test("persists an already absent removal as skipped and rethrows for the caller", async () => {
   const events: ClubEventInput[] = [];
   const telegramError = {
     response: {
@@ -63,13 +63,37 @@ test("persists a failed group action and rethrows the Telegram error", async () 
   );
 
   assert.equal(events.length, 1);
-  assert.equal(events[0].eventType, "bot_group_action_failed");
+  assert.equal(events[0].eventType, "bot_group_action_skipped");
   assert.equal(events[0].targetUserTelegramId, 123456789n);
   assert.partialDeepStrictEqual(events[0].payload, {
     method: "unbanChatMember",
-    status: "failed",
+    status: "skipped",
     errorCode: 400,
     errorDescription: "Bad Request: PARTICIPANT_ID_INVALID",
+  });
+});
+
+test("persists an unexpected Telegram error as failed", async () => {
+  const events: ClubEventInput[] = [];
+  const telegramError = new Error("Telegram API unavailable");
+  const telegram = fakeTelegram(async () => {
+    throw telegramError;
+  });
+  installGroupActionLogging(telegram, recordingRepository(events));
+
+  await assert.rejects(
+    telegram.callApi("deleteMessage", {
+      chat_id: -1001234567890,
+      message_id: 77,
+    }),
+    (error) => error === telegramError,
+  );
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].eventType, "bot_group_action_failed");
+  assert.partialDeepStrictEqual(events[0].payload, {
+    method: "deleteMessage",
+    status: "failed",
   });
 });
 

@@ -55,6 +55,17 @@ function errorDetails(error: unknown): { errorCode?: number; errorDescription?: 
   };
 }
 
+function isExpectedAbsentResult(method: string, payload: unknown, error: unknown): boolean {
+  const params = asRecord(payload);
+  const details = errorDetails(error);
+  return (
+    method === "unbanChatMember" &&
+    params?.only_if_banned === false &&
+    details.errorCode === 400 &&
+    details.errorDescription?.endsWith("PARTICIPANT_ID_INVALID") === true
+  );
+}
+
 function resultMessageId(result: unknown): number | undefined {
   return integer(asRecord(result)?.message_id);
 }
@@ -63,7 +74,7 @@ function actionEvent(
   actionId: string,
   method: string,
   payload: unknown,
-  status: "succeeded" | "failed",
+  status: "succeeded" | "failed" | "skipped",
   result?: unknown,
   error?: unknown,
 ): ClubEventInput {
@@ -151,6 +162,18 @@ export function installGroupActionLogging(
       });
       return result;
     } catch (error) {
+      if (isExpectedAbsentResult(method, payload, error)) {
+        await persistAction(
+          repository,
+          actionEvent(actionId, method, payload, "skipped", undefined, error),
+        );
+        logger.info("Bot group action skipped; user is already absent", {
+          actionId,
+          method,
+          chatId: chatId.toString(),
+        });
+        throw error;
+      }
       await persistAction(
         repository,
         actionEvent(actionId, method, payload, "failed", undefined, error),
