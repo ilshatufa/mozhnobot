@@ -3,7 +3,10 @@ import { Input, type Context, type MiddlewareFn } from "telegraf";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
 import { clubEventRepository } from "../repositories/club-event.repository.js";
-import { sendClubniOnboardingVideo1 } from "../services/clubni-onboarding-media.service.js";
+import {
+  getClubniOnboardingVideo2,
+  sendClubniOnboardingVideo1,
+} from "../services/clubni-onboarding-media.service.js";
 import {
   CLUBNI_ONBOARDING_FINAL_TEXT,
   CLUBNI_ONBOARDING_NEXT_PREFIX,
@@ -71,9 +74,10 @@ async function sendQuestionReminder(
 }
 
 async function sendVideo2(ctx: Context, event: ClubniPaymentEvent): Promise<void> {
+  const configured = await getClubniOnboardingVideo2();
   await ctx.telegram.sendVideo(
     event.telegramUserId,
-    Input.fromLocalFile(VIDEO_2_PATH),
+    configured?.fileId ?? Input.fromLocalFile(VIDEO_2_PATH),
     {
       caption: "Спасибо, ответ сохранён👌 Посмотри второе короткое видео.",
       reply_markup: {

@@ -9,6 +9,7 @@ import { cleanTranscriptWithQwen } from "./transcript-cleaner.js";
 import { transcriptionProvider } from "./transcription-provider.js";
 
 const VIDEO_1_SETTING_KEY = "clubni.onboarding.video1";
+const VIDEO_2_SETTING_KEY = "clubni.onboarding.video2";
 const TELEGRAM_MESSAGE_LIMIT = 4096;
 const TRANSCRIPT_CHUNK_LIMIT = 3000;
 
@@ -110,6 +111,10 @@ export function parseStoredVideo(value: string | null): ClubniOnboardingVideo | 
 
 export async function getClubniOnboardingVideo1(): Promise<ClubniOnboardingVideo | null> {
   return parseStoredVideo(await botSettingRepository.getString(VIDEO_1_SETTING_KEY));
+}
+
+export async function getClubniOnboardingVideo2(): Promise<ClubniOnboardingVideo | null> {
+  return parseStoredVideo(await botSettingRepository.getString(VIDEO_2_SETTING_KEY));
 }
 
 async function downloadTelegramVideo(
