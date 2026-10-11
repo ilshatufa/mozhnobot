@@ -25,7 +25,7 @@ type TelegramChatLike = {
   type?: string;
 };
 
-type TelegramMessageLike = {
+export type TelegramMessageLike = {
   message_id: number;
   message_thread_id?: number;
   date: number;
@@ -47,7 +47,11 @@ type TelegramMessageLike = {
   general_forum_topic_unhidden?: Record<string, never>;
   new_chat_members?: TelegramUserLike[];
   left_chat_member?: TelegramUserLike;
-  photo?: unknown;
+  photo?: Array<{
+    file_id: string;
+    file_unique_id?: string;
+    file_size?: number;
+  }>;
   video?: {
     file_id: string;
     file_unique_id?: string;
@@ -62,8 +66,19 @@ type TelegramMessageLike = {
     mime_type?: string;
     file_size?: number;
   };
-  document?: unknown;
-  sticker?: unknown;
+  document?: {
+    file_id: string;
+    file_unique_id?: string;
+    file_size?: number;
+    mime_type?: string;
+    file_name?: string;
+  };
+  sticker?: {
+    file_id: string;
+    file_unique_id?: string;
+    file_size?: number;
+    emoji?: string;
+  };
   audio?: {
     file_id: string;
     file_unique_id?: string;
@@ -73,7 +88,14 @@ type TelegramMessageLike = {
     title?: string;
     performer?: string;
   };
-  animation?: unknown;
+  animation?: {
+    file_id: string;
+    file_unique_id?: string;
+    duration?: number;
+    file_size?: number;
+    mime_type?: string;
+    file_name?: string;
+  };
   video_note?: {
     file_id: string;
     file_unique_id?: string;
@@ -164,17 +186,18 @@ function getMessageType(message: TelegramMessageLike): string {
   if (message.photo) return "photo";
   if (message.video) return "video";
   if (message.voice) return "voice";
+  if (message.animation) return "animation";
   if (message.document) return "document";
   if (message.sticker) return "sticker";
   if (message.audio) return "audio";
-  if (message.animation) return "animation";
   if (message.video_note) return "video_note";
   return "other";
 }
 
-function getMediaInput(
+export function getMediaInput(
   message: TelegramMessageLike,
   messageIndexId: number,
+  includeNonTranscribable = false,
 ): ClubMediaInput | null {
   const base = {
     messageIndexId,
@@ -228,6 +251,55 @@ function getMediaInput(
       durationSeconds: message.video.duration,
       fileSize: message.video.file_size,
       mimeType: message.video.mime_type,
+    };
+  }
+
+  if (!includeNonTranscribable) return null;
+
+  if (message.photo && message.photo.length > 0) {
+    const photo = message.photo[message.photo.length - 1];
+    return {
+      ...base,
+      mediaType: "photo",
+      telegramFileId: photo.file_id,
+      telegramFileUniqueId: photo.file_unique_id,
+      fileSize: photo.file_size,
+    };
+  }
+
+  if (message.animation) {
+    return {
+      ...base,
+      mediaType: "animation",
+      telegramFileId: message.animation.file_id,
+      telegramFileUniqueId: message.animation.file_unique_id,
+      durationSeconds: message.animation.duration,
+      fileSize: message.animation.file_size,
+      mimeType: message.animation.mime_type,
+      title: message.animation.file_name,
+    };
+  }
+
+  if (message.document) {
+    return {
+      ...base,
+      mediaType: "document",
+      telegramFileId: message.document.file_id,
+      telegramFileUniqueId: message.document.file_unique_id,
+      fileSize: message.document.file_size,
+      mimeType: message.document.mime_type,
+      title: message.document.file_name,
+    };
+  }
+
+  if (message.sticker) {
+    return {
+      ...base,
+      mediaType: "sticker",
+      telegramFileId: message.sticker.file_id,
+      telegramFileUniqueId: message.sticker.file_unique_id,
+      fileSize: message.sticker.file_size,
+      title: message.sticker.emoji,
     };
   }
 
@@ -352,6 +424,10 @@ export class EventLoggerService {
         }
       }
 
+      await this.storeMessage(updateId, message, edited, {
+        includeNonTranscribableMedia: true,
+        createMediaProcessingJob: false,
+      });
       return;
     }
 
@@ -359,11 +435,30 @@ export class EventLoggerService {
 
     await this.upsertTopicFromMessage(message);
 
-    const authorTelegramId = message.from ? BigInt(message.from.id) : undefined;
     if (message.from) {
       await this.upsertUser(message.from, occurredAt);
       await userRepository.markMemberIfUnknown(BigInt(message.from.id), occurredAt);
     }
+
+    await this.storeMessage(updateId, message, edited, {
+      includeNonTranscribableMedia: false,
+      createMediaProcessingJob: true,
+    });
+
+    await this.logMessageServiceEvents(updateId, message, occurredAt);
+  }
+
+  private async storeMessage(
+    updateId: number,
+    message: TelegramMessageLike,
+    edited: boolean,
+    options: {
+      includeNonTranscribableMedia: boolean;
+      createMediaProcessingJob: boolean;
+    },
+  ): Promise<void> {
+    const occurredAt = toDate(edited ? message.edit_date : message.date);
+    const authorTelegramId = message.from ? BigInt(message.from.id) : undefined;
 
     const messageType = getMessageType(message);
     const messageIndex = await clubMessageIndexRepository.upsert({
@@ -379,13 +474,19 @@ export class EventLoggerService {
       editedAt: edited ? occurredAt : undefined,
     });
 
-    const mediaInput = getMediaInput(message, messageIndex.id);
+    const mediaInput = getMediaInput(
+      message,
+      messageIndex.id,
+      options.includeNonTranscribableMedia,
+    );
     let mediaJobStatus: MediaProcessingStatus | null = null;
     if (!edited && mediaInput) {
       const media = await clubMediaRepository.upsert(mediaInput);
-      const transcriptionEnabled = await botSettingRepository.isTranscriptionEnabled();
-      mediaJobStatus = transcriptionEnabled ? MediaProcessingStatus.PENDING : MediaProcessingStatus.DISABLED;
-      await mediaProcessingJobRepository.createIfNotExists(media.id, mediaJobStatus);
+      if (options.createMediaProcessingJob) {
+        const transcriptionEnabled = await botSettingRepository.isTranscriptionEnabled();
+        mediaJobStatus = transcriptionEnabled ? MediaProcessingStatus.PENDING : MediaProcessingStatus.DISABLED;
+        await mediaProcessingJobRepository.createIfNotExists(media.id, mediaJobStatus);
+      }
     }
 
     await clubEventRepository.createIfNotExists({
@@ -403,7 +504,8 @@ export class EventLoggerService {
         hasCaption: Boolean(message.caption),
         textLength: message.text?.length ?? null,
         captionLength: message.caption?.length ?? null,
-        hasMediaJob: Boolean(mediaInput),
+        hasMedia: Boolean(mediaInput),
+        hasMediaJob: Boolean(mediaInput && options.createMediaProcessingJob),
         mediaJobStatus,
       }),
     });
@@ -428,7 +530,6 @@ export class EventLoggerService {
       });
     }
 
-    await this.logMessageServiceEvents(updateId, message, occurredAt);
   }
 
   private async logMessageServiceEvents(

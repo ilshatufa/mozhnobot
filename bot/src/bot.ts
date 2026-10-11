@@ -51,6 +51,7 @@ export function createBot(): Telegraf<AuthContext> {
   bot.use(eventLoggerMiddleware());
   bot.use(groupAccessMiddleware());
   bot.use(authMiddleware());
+  bot.use(clubniOnboardingVideoAdminHandler);
 
   bot.command("start", startHandler);
   bot.action(CLUB_WAITLIST_ACTION, waitlistHandler);
@@ -73,7 +74,6 @@ export function createBot(): Telegraf<AuthContext> {
   bot.command("transcription_on", adminOnly(), transcriptionOnHandler);
   bot.command("transcription_off", adminOnly(), transcriptionOffHandler);
   bot.command("transcription_status", adminOnly(), transcriptionStatusHandler);
-  bot.on("video", clubniOnboardingVideoAdminHandler);
   bot.on("photo", adminPhotoIdHandler);
   bot.on("text", contentReviewCorrectionHandler);
 

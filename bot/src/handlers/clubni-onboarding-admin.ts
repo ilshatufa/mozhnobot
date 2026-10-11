@@ -8,11 +8,22 @@ const VIDEO_1_COMMAND = /^\/clubni_video1(?:@\w+)?\s*$/i;
 
 export const clubniOnboardingVideoAdminHandler: MiddlewareFn<AuthContext> = async (ctx, next) => {
   const message = ctx.message;
+  const command = message && "video" in message
+    ? message.caption ?? ""
+    : message && "text" in message
+      ? message.text
+      : "";
+  const video = message && "video" in message
+    ? message.video
+    : message && "reply_to_message" in message &&
+        message.reply_to_message && "video" in message.reply_to_message
+      ? message.reply_to_message.video
+      : null;
   if (
     ctx.chat?.type !== "private" ||
     !message ||
-    !("video" in message) ||
-    !VIDEO_1_COMMAND.test(message.caption ?? "")
+    !video ||
+    !VIDEO_1_COMMAND.test(command)
   ) {
     return next();
   }
@@ -25,8 +36,8 @@ export const clubniOnboardingVideoAdminHandler: MiddlewareFn<AuthContext> = asyn
   const progress = await ctx.reply("Получил видео. Готовлю расшифровку…");
   try {
     const configured = await configureClubniOnboardingVideo1(ctx.telegram, {
-      fileId: message.video.file_id,
-      fileUniqueId: message.video.file_unique_id,
+      fileId: video.file_id,
+      fileUniqueId: video.file_unique_id,
     });
     await ctx.telegram.editMessageText(
       ctx.chat.id,
