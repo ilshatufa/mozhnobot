@@ -41,7 +41,13 @@ export function shouldCopyToBotInbox(
     return !startsWithCommand && !hasCommandEntity;
   }
 
-  return "voice" in message || "video_note" in message;
+  return (
+    "voice" in message ||
+    "video_note" in message ||
+    "photo" in message ||
+    "video" in message ||
+    "document" in message
+  );
 }
 
 export function botInboxMiddleware(): MiddlewareFn<Context> {

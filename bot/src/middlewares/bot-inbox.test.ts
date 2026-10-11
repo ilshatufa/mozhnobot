@@ -23,10 +23,13 @@ test("header includes username, name and membership", () => {
   );
 });
 
-test("copies text, voice and video notes but skips commands and other media", () => {
+test("copies user content but skips commands and unsupported media", () => {
   assert.equal(shouldCopyToBotInbox({ message_id: 1, date: 1, chat: {} as never, text: "Привет" } as never), true);
   assert.equal(shouldCopyToBotInbox({ message_id: 2, date: 1, chat: {} as never, text: "/start" } as never), false);
   assert.equal(shouldCopyToBotInbox({ message_id: 3, date: 1, chat: {} as never, voice: {} } as never), true);
   assert.equal(shouldCopyToBotInbox({ message_id: 4, date: 1, chat: {} as never, video_note: {} } as never), true);
-  assert.equal(shouldCopyToBotInbox({ message_id: 5, date: 1, chat: {} as never, photo: [] } as never), false);
+  assert.equal(shouldCopyToBotInbox({ message_id: 5, date: 1, chat: {} as never, photo: [] } as never), true);
+  assert.equal(shouldCopyToBotInbox({ message_id: 6, date: 1, chat: {} as never, video: {} } as never), true);
+  assert.equal(shouldCopyToBotInbox({ message_id: 7, date: 1, chat: {} as never, document: {} } as never), true);
+  assert.equal(shouldCopyToBotInbox({ message_id: 8, date: 1, chat: {} as never, location: {} } as never), false);
 });
