@@ -21,6 +21,14 @@ test("header includes username, name and membership", () => {
     ),
     "Пользователь: @reader · Ирина Ильина\nВ клубе: есть",
   );
+  assert.equal(
+    botInboxHeader(
+      { id: 42, username: "reader", first_name: "Ирина" },
+      { clubStatus: ClubMembershipStatus.UNKNOWN, joinedAt: null },
+      true,
+    ),
+    "Пользователь: @reader · Ирина\nВ клубе: нет\nТег: #онбординг",
+  );
 });
 
 test("copies user content but skips commands and unsupported media", () => {

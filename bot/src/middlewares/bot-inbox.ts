@@ -2,7 +2,12 @@ import { ClubMembershipStatus, type User } from "@prisma/client";
 import { type Context, type MiddlewareFn } from "telegraf";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
+import { clubEventRepository } from "../repositories/club-event.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
+import {
+  clubniOnboardingState,
+  findLatestClubniPayment,
+} from "../services/clubni-payment.service.js";
 
 export function clubMembershipLabel(
   user: Pick<User, "clubStatus" | "joinedAt">,
@@ -21,12 +26,14 @@ export function clubMembershipLabel(
 export function botInboxHeader(
   from: { id: number; username?: string; first_name: string; last_name?: string },
   user: Pick<User, "clubStatus" | "joinedAt">,
+  onboarding = false,
 ): string {
   const username = from.username ? `@${from.username}` : "без @username";
   const name = [from.first_name, from.last_name].filter(Boolean).join(" ");
   return [
     `Пользователь: ${username}${name ? ` · ${name}` : ""}`,
     `В клубе: ${clubMembershipLabel(user)}`,
+    ...(onboarding ? ["Тег: #онбординг"] : []),
   ].join("\n");
 }
 
@@ -69,11 +76,22 @@ export function botInboxMiddleware(): MiddlewareFn<Context> {
     const user = await userRepository.findByTelegramId(BigInt(from.id));
     if (!user) return next();
 
+    let onboarding = false;
+    if (config.clubniPayment.enabled) {
+      const payment = await findLatestClubniPayment(
+        from.id,
+        config.clubniPayment.clubId,
+        clubEventRepository,
+      );
+      onboarding = payment !== null &&
+        await clubniOnboardingState(payment, clubEventRepository) !== "final";
+    }
+
     let headerMessageId: number | null = null;
     try {
       const header = await ctx.telegram.sendMessage(
         destination,
-        botInboxHeader(from, user),
+        botInboxHeader(from, user, onboarding),
       );
       headerMessageId = header.message_id;
       await ctx.telegram.copyMessage(
