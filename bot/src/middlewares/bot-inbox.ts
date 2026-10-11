@@ -1,4 +1,4 @@
-import { ClubMembershipStatus, Role, type User } from "@prisma/client";
+import { ClubMembershipStatus, type User } from "@prisma/client";
 import { type Context, type MiddlewareFn } from "telegraf";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
@@ -61,14 +61,13 @@ export function botInboxMiddleware(): MiddlewareFn<Context> {
       !from ||
       from.is_bot ||
       ctx.chat?.type !== "private" ||
-      !shouldCopyToBotInbox(message) ||
-      BigInt(from.id) === config.seedAdminId
+      !shouldCopyToBotInbox(message)
     ) {
       return next();
     }
 
     const user = await userRepository.findByTelegramId(BigInt(from.id));
-    if (!user || user.role === Role.ADMIN) return next();
+    if (!user) return next();
 
     let headerMessageId: number | null = null;
     try {
