@@ -8,13 +8,11 @@ import {
   sendClubniOnboardingVideo1,
 } from "../services/clubni-onboarding-media.service.js";
 import {
-  CLUBNI_ONBOARDING_FINAL_TEXT,
   CLUBNI_ONBOARDING_NEXT_PREFIX,
   CLUBNI_ONBOARDING_QUESTION,
   CLUBNI_ONBOARDING_START_PREFIX,
   CLUBNI_PAYMENT_WELCOME_TEXT,
   approveClubniAccessJoinRequest,
-  createClubniAccessInvite,
   clubniAccessJoinDecision,
   clubniAccessInviteTarget,
   deliverClubniPaymentWelcome,
@@ -33,6 +31,8 @@ const VIDEO_1_PATH = fileURLToPath(
 const VIDEO_2_PATH = fileURLToPath(
   new URL("../../assets/clubni-onboarding/video-2.mp4", import.meta.url),
 );
+const CLUBNI_ONBOARDING_FINAL_POST_CHAT_ID = 301474421;
+const CLUBNI_ONBOARDING_FINAL_POST_MESSAGE_ID = 4213;
 
 function isPrivateHumanUpdate(ctx: Context): boolean {
   return Boolean(
@@ -90,45 +90,30 @@ async function sendVideo2(ctx: Context, event: ClubniPaymentEvent): Promise<void
   );
 }
 
-async function createPersonalInvite(
-  ctx: Context,
-  event: ClubniPaymentEvent,
-): Promise<string> {
-  return createClubniAccessInvite(
-    ctx.telegram,
-    config.clubGroupId,
-    event.telegramUserId,
-  );
-}
-
 async function sendFinal(
   ctx: Context,
   event: ClubniPaymentEvent,
-  inviteUrl: string,
 ): Promise<void> {
-  await ctx.telegram.sendMessage(event.telegramUserId, CLUBNI_ONBOARDING_FINAL_TEXT, {
-    reply_markup: {
-      inline_keyboard: [[{
-        text: "Вступить в группу",
-        url: inviteUrl,
-      }]],
-    },
-  });
+  await ctx.telegram.copyMessage(
+    event.telegramUserId,
+    CLUBNI_ONBOARDING_FINAL_POST_CHAT_ID,
+    CLUBNI_ONBOARDING_FINAL_POST_MESSAGE_ID,
+  );
 }
 
-async function reportAccessError(
+async function reportFinalPostError(
   ctx: Context,
   event: ClubniPaymentEvent,
   error: unknown,
 ): Promise<void> {
-  logger.error("Failed to create Clubni group access", {
+  logger.error("Failed to send Clubni onboarding final post", {
     subscriptionId: event.subscriptionId,
     targetTelegramUserId: event.telegramUserId,
     error: error instanceof Error ? error.message : String(error),
   });
   await ctx.telegram.sendMessage(
     event.telegramUserId,
-    "Не удалось открыть доступ в группу. Попробуй ещё раз позже.",
+    "Не удалось отправить финальный пост. Попробуй ещё раз позже.",
   );
 }
 
@@ -235,11 +220,10 @@ export function clubniPaymentMiddleware(): MiddlewareFn<Context> {
           sendIntro: (payment) => sendIntro(ctx, payment),
           sendQuestionReminder: (payment) => sendQuestionReminder(ctx, payment),
           sendVideo2: (payment) => sendVideo2(ctx, payment),
-          createInvite: (payment) => createPersonalInvite(ctx, payment),
-          sendFinal: (payment, inviteUrl) => sendFinal(ctx, payment, inviteUrl),
+          sendFinal: (payment) => sendFinal(ctx, payment),
         });
       } catch (error) {
-        await reportAccessError(ctx, event, error);
+        await reportFinalPostError(ctx, event, error);
         return;
       }
       if (state === "final") return next();
@@ -269,11 +253,10 @@ export function clubniPaymentMiddleware(): MiddlewareFn<Context> {
           await finishClubniOnboarding(
             event,
             clubEventRepository,
-            (payment) => createPersonalInvite(ctx, payment),
-            (payment, inviteUrl) => sendFinal(ctx, payment, inviteUrl),
+            (payment) => sendFinal(ctx, payment),
           );
         } catch (error) {
-          await reportAccessError(ctx, event, error);
+          await reportFinalPostError(ctx, event, error);
         }
         return;
       }
