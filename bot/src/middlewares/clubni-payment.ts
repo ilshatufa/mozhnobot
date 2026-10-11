@@ -1,11 +1,12 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { Input, type Context, type MiddlewareFn } from "telegraf";
+import { type Context, type MiddlewareFn } from "telegraf";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
 import { clubEventRepository } from "../repositories/club-event.repository.js";
 import {
-  getClubniOnboardingVideo2,
   sendClubniOnboardingVideo1,
+  sendClubniOnboardingVideo2,
 } from "../services/clubni-onboarding-media.service.js";
 import {
   CLUBNI_ONBOARDING_NEXT_PREFIX,
@@ -31,6 +32,14 @@ const VIDEO_1_PATH = fileURLToPath(
 );
 const VIDEO_2_PATH = fileURLToPath(
   new URL("../../assets/clubni-onboarding/video-2.mp4", import.meta.url),
+);
+const VIDEO_1_TRANSCRIPT = readFileSync(
+  fileURLToPath(new URL("../../assets/clubni-onboarding/video-1-transcript.txt", import.meta.url)),
+  "utf8",
+);
+const VIDEO_2_TRANSCRIPT = readFileSync(
+  fileURLToPath(new URL("../../assets/clubni-onboarding/video-2-transcript.txt", import.meta.url)),
+  "utf8",
 );
 const CLUBNI_ONBOARDING_FINAL_POST_CHAT_ID = 301474421;
 const CLUBNI_ONBOARDING_FINAL_POST_MESSAGE_ID = 4213;
@@ -60,6 +69,7 @@ async function sendVideo1(ctx: Context, event: ClubniPaymentEvent): Promise<void
     ctx.telegram,
     event.telegramUserId,
     VIDEO_1_PATH,
+    VIDEO_1_TRANSCRIPT,
     CLUBNI_ONBOARDING_QUESTION,
   );
 }
@@ -75,19 +85,12 @@ async function sendQuestionReminder(
 }
 
 async function sendVideo2(ctx: Context, event: ClubniPaymentEvent): Promise<void> {
-  const configured = await getClubniOnboardingVideo2();
-  await ctx.telegram.sendVideo(
+  await sendClubniOnboardingVideo2(
+    ctx.telegram,
     event.telegramUserId,
-    configured?.fileId ?? Input.fromLocalFile(VIDEO_2_PATH),
-    {
-      caption: "Спасибо, ответ сохранён👌 Посмотри второе короткое видео.",
-      reply_markup: {
-        inline_keyboard: [[{
-          text: "Продолжить",
-          callback_data: `${CLUBNI_ONBOARDING_NEXT_PREFIX}${event.subscriptionId}`,
-        }]],
-      },
-    },
+    VIDEO_2_PATH,
+    VIDEO_2_TRANSCRIPT,
+    `${CLUBNI_ONBOARDING_NEXT_PREFIX}${event.subscriptionId}`,
   );
 }
 

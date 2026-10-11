@@ -192,6 +192,7 @@ export async function sendClubniOnboardingVideo1(
   telegram: VideoSender,
   telegramUserId: number,
   localFallbackPath: string,
+  localFallbackTranscript: string,
   question: string,
 ): Promise<"video" | "transcript"> {
   const configured = await getClubniOnboardingVideo1();
@@ -201,9 +202,73 @@ export async function sendClubniOnboardingVideo1(
     telegram,
     telegramUserId,
     source,
-    configured?.transcript ?? null,
+    configured?.transcript ?? localFallbackTranscript,
     question,
   );
+}
+
+export async function sendClubniOnboardingVideo2(
+  telegram: VideoSender,
+  telegramUserId: number,
+  localFallbackPath: string,
+  localFallbackTranscript: string,
+  continueCallbackData: string,
+): Promise<"video" | "transcript"> {
+  const configured = await getClubniOnboardingVideo2();
+  const source = configured?.fileId ?? Input.fromLocalFile(localFallbackPath);
+
+  return sendSecondVideoWithTranscriptFallback(
+    telegram,
+    telegramUserId,
+    source,
+    configured?.transcript ?? localFallbackTranscript,
+    continueCallbackData,
+  );
+}
+
+export async function sendSecondVideoWithTranscriptFallback(
+  telegram: VideoSender,
+  telegramUserId: number,
+  source: VideoSource,
+  transcript: string | null,
+  continueCallbackData: string,
+): Promise<"video" | "transcript"> {
+
+  try {
+    await telegram.sendVideo(telegramUserId, source, {
+      caption: "Спасибо, ответ сохранён👌 Посмотри второе короткое видео.",
+      reply_markup: {
+        inline_keyboard: [[{
+          text: "Продолжить",
+          callback_data: continueCallbackData,
+        }]],
+      },
+    });
+    return "video";
+  } catch (error) {
+    if (!transcript || !isVideoForbiddenError(error)) throw error;
+    const messages = splitTranscript(transcript);
+    for (const [index, chunk] of messages.entries()) {
+      await telegram.sendMessage(
+        telegramUserId,
+        `${index === 0 ? "🎬 <b>Второе видео — текстовая версия</b>" : "<b>Продолжение</b>"}\n\n${escapeHtml(chunk)}`,
+        {
+          parse_mode: "HTML",
+          ...(index === messages.length - 1
+            ? {
+              reply_markup: {
+                inline_keyboard: [[{
+                  text: "Продолжить",
+                  callback_data: continueCallbackData,
+                }]],
+              },
+            }
+            : {}),
+        },
+      );
+    }
+    return "transcript";
+  }
 }
 
 export async function sendVideoWithTranscriptFallback(

@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildClubniTranscriptMessages,
   parseStoredVideo,
+  sendSecondVideoWithTranscriptFallback,
   sendVideoWithTranscriptFallback,
 } from "./clubni-onboarding-media.service.js";
 import { isVideoForbiddenError } from "../telegram-errors.js";
@@ -82,4 +83,48 @@ test("sends the transcript and keeps onboarding usable when Telegram forbids vid
   assert.equal(sent[0].parseMode, "HTML");
   assert.match(sent[0].text ?? "", /Полная расшифровка видео\./);
   assert.match(sent[0].text ?? "", /Напиши ответ одним сообщением\./);
+});
+
+test("sends the second transcript with the continue button when Telegram forbids video", async () => {
+  const sent: Array<{
+    text: string;
+    replyMarkup?: { inline_keyboard: Array<Array<{ callback_data?: string }>> };
+  }> = [];
+  const telegram = {
+    async sendVideo() {
+      throw {
+        response: {
+          error_code: 403,
+          description: "Forbidden: VOICE_MESSAGES_FORBIDDEN",
+        },
+      };
+    },
+    async sendMessage(
+      _chatId: number,
+      text: string,
+      options: {
+        reply_markup?: { inline_keyboard: Array<Array<{ callback_data?: string }>> };
+      },
+    ) {
+      sent.push({ text, replyMarkup: options.reply_markup });
+      return {};
+    },
+  };
+
+  const result = await sendSecondVideoWithTranscriptFallback(
+    telegram as never,
+    301474421,
+    "video-file-id",
+    "🎥 Полная текстовая версия второго видео.",
+    "clubni_onboarding_next:subscription-id",
+  );
+
+  assert.equal(result, "transcript");
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].text, /^🎬 <b>Второе видео — текстовая версия<\/b>/);
+  assert.match(sent[0].text, /🎥 Полная текстовая версия второго видео\./);
+  assert.equal(
+    sent[0].replyMarkup?.inline_keyboard[0]?.[0]?.callback_data,
+    "clubni_onboarding_next:subscription-id",
+  );
 });
