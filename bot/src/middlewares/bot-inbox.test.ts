@@ -3,6 +3,7 @@ import test from "node:test";
 import { ClubMembershipStatus } from "@prisma/client";
 import {
   botInboxHeader,
+  botInboxRichMarkdown,
   clubMembershipLabel,
   shouldCopyToBotInbox,
 } from "./bot-inbox.js";
@@ -19,7 +20,7 @@ test("header includes username, name and membership", () => {
       { id: 42, username: "reader", first_name: "Ирина", last_name: "Ильина" },
       { clubStatus: ClubMembershipStatus.MEMBER, joinedAt: new Date() },
     ),
-    "Пользователь: @reader · Ирина Ильина\nВ клубе: есть",
+    "@reader · Ирина Ильина\nВ клубе: есть",
   );
   assert.equal(
     botInboxHeader(
@@ -27,7 +28,20 @@ test("header includes username, name and membership", () => {
       { clubStatus: ClubMembershipStatus.UNKNOWN, joinedAt: null },
       true,
     ),
-    "Пользователь: @reader · Ирина\nВ клубе: нет\nТег: #онбординг",
+    "@reader · Ирина\nВ клубе: нет · #онбординг",
+  );
+  assert.equal(
+    botInboxRichMarkdown(
+      { id: 42, username: "reader", first_name: "Ирина", last_name: "Ильина" },
+      { clubStatus: ClubMembershipStatus.MEMBER, joinedAt: new Date() },
+      true,
+      "Хочу разобраться с деньгами",
+    ),
+    [
+      "# [@reader](https://t.me/reader) · Ирина Ильина\n**В клубе:** есть · #онбординг",
+      "⠀",
+      "Хочу разобраться с деньгами",
+    ].join("\n\n"),
   );
 });
 

@@ -27,14 +27,84 @@ export function botInboxHeader(
   from: { id: number; username?: string; first_name: string; last_name?: string },
   user: Pick<User, "clubStatus" | "joinedAt">,
   onboarding = false,
+  body?: string,
 ): string {
   const username = from.username ? `@${from.username}` : "без @username";
   const name = [from.first_name, from.last_name].filter(Boolean).join(" ");
   return [
-    `Пользователь: ${username}${name ? ` · ${name}` : ""}`,
-    `В клубе: ${clubMembershipLabel(user)}`,
-    ...(onboarding ? ["Тег: #онбординг"] : []),
+    `${username}${name ? ` · ${name}` : ""}`,
+    `В клубе: ${clubMembershipLabel(user)}${onboarding ? " · #онбординг" : ""}`,
+    ...(body ? ["", body] : []),
   ].join("\n");
+}
+
+function escapeRichMarkdown(value: string): string {
+  return value.replace(/([\\`*_{}\[\]()<>#+.!|~-])/g, "\\$1");
+}
+
+export function botInboxRichMarkdown(
+  from: { id: number; username?: string; first_name: string; last_name?: string },
+  user: Pick<User, "clubStatus" | "joinedAt">,
+  onboarding = false,
+  body?: string,
+  mediaBlock?: string,
+): string {
+  const name = [from.first_name, from.last_name].filter(Boolean).join(" ");
+  const identity = from.username
+    ? `[@${from.username}](https://t.me/${from.username})${name ? ` · ${escapeRichMarkdown(name)}` : ""}`
+    : `[${escapeRichMarkdown(name || "Пользователь")}](tg://user?id=${from.id})`;
+  const blocks = [[
+    `# ${identity}`,
+    `**В клубе:** ${clubMembershipLabel(user)}${onboarding ? " · #онбординг" : ""}`,
+  ].join("\n")];
+  if (body) blocks.push("⠀", escapeRichMarkdown(body));
+  if (mediaBlock) blocks.push(mediaBlock);
+  return blocks.join("\n\n");
+}
+
+type RichMedia = {
+  markdownBlock: string;
+  media?: Array<{
+    id: string;
+    media: { type: string; media: string };
+  }>;
+};
+
+async function richMediaForMessage(
+  ctx: Context,
+  message: NonNullable<Context["message"]>,
+): Promise<RichMedia | null> {
+  const id = "content";
+  if ("photo" in message) {
+    const photo = message.photo.at(-1);
+    return photo ? {
+      markdownBlock: `![](tg://photo?id=${id})`,
+      media: [{ id, media: { type: "photo", media: photo.file_id } }],
+    } : null;
+  }
+  if ("video" in message) {
+    return {
+      markdownBlock: `![](tg://video?id=${id})`,
+      media: [{ id, media: { type: "video", media: message.video.file_id } }],
+    };
+  }
+  if ("document" in message) {
+    return {
+      markdownBlock: `![](tg://document?id=${id})`,
+      media: [{ id, media: { type: "document", media: message.document.file_id } }],
+    };
+  }
+  if ("voice" in message) {
+    return {
+      markdownBlock: `![](tg://audio?id=${id})`,
+      media: [{ id, media: { type: "voice_note", media: message.voice.file_id } }],
+    };
+  }
+  if ("video_note" in message) {
+    const link = await ctx.telegram.getFileLink(message.video_note.file_id);
+    return { markdownBlock: `![](${link.toString()})` };
+  }
+  return null;
 }
 
 export function shouldCopyToBotInbox(
@@ -87,23 +157,44 @@ export function botInboxMiddleware(): MiddlewareFn<Context> {
         await clubniOnboardingState(payment, clubEventRepository) !== "final";
     }
 
-    let headerMessageId: number | null = null;
     try {
-      const header = await ctx.telegram.sendMessage(
-        destination,
-        botInboxHeader(from, user, onboarding),
-      );
-      headerMessageId = header.message_id;
-      await ctx.telegram.copyMessage(
-        destination,
-        ctx.chat.id,
-        message.message_id,
-        { reply_parameters: { message_id: header.message_id } },
-      );
-    } catch (error) {
-      if (headerMessageId !== null) {
-        await ctx.telegram.deleteMessage(destination, headerMessageId).catch(() => undefined);
+      const body = "text" in message
+        ? message.text
+        : "caption" in message
+          ? message.caption
+          : undefined;
+      const richMedia = await richMediaForMessage(ctx, message);
+      try {
+        await ctx.telegram.callApi("sendRichMessage" as never, {
+          chat_id: destination,
+          rich_message: {
+            markdown: botInboxRichMarkdown(
+              from,
+              user,
+              onboarding,
+              body,
+              richMedia?.markdownBlock,
+            ),
+            ...(richMedia?.media ? { media: richMedia.media } : {}),
+          },
+        } as never) as { message_id: number };
+      } catch (error) {
+        logger.warn("Failed to send rich bot inbox message, using Telegram copy", {
+          telegramUserId: from.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        if ("text" in message) {
+          await ctx.telegram.sendMessage(
+            destination,
+            botInboxHeader(from, user, onboarding, message.text),
+          );
+        } else {
+          await ctx.telegram.copyMessage(destination, ctx.chat.id, message.message_id, {
+            caption: botInboxHeader(from, user, onboarding, body),
+          });
+        }
       }
+    } catch (error) {
       logger.error("Failed to copy private bot message to inbox group", {
         telegramUserId: from.id,
         telegramMessageId: message.message_id,
