@@ -9,7 +9,6 @@ import { config } from "../config.js";
 export type MembershipServiceMessageLike = {
   message_id: number;
   chat: { id: number };
-  from?: { id: number };
   new_chat_members?: { id: number }[];
   left_chat_member?: { id: number };
 };
@@ -21,7 +20,6 @@ type GroupAccessUpdateLike = {
 
 export function shouldDeleteMembershipServiceMessage(
   message: MembershipServiceMessageLike,
-  botId: number,
   clubChatId: string,
   managedChatIds: readonly string[],
 ): boolean {
@@ -29,14 +27,7 @@ export function shouldDeleteMembershipServiceMessage(
   const isJoin = Boolean(message.new_chat_members?.length);
   const isLeave = Boolean(message.left_chat_member);
   if (!isJoin && !isLeave) return false;
-  if (chatId === clubChatId) return true;
-
-  return Boolean(
-    managedChatIds.includes(chatId) &&
-      message.from?.id === botId &&
-      message.left_chat_member &&
-      message.left_chat_member.id !== botId,
-  );
+  return chatId === clubChatId || managedChatIds.includes(chatId);
 }
 
 export function groupAccessMiddleware(): MiddlewareFn<Context> {
@@ -48,7 +39,6 @@ export function groupAccessMiddleware(): MiddlewareFn<Context> {
       update.message &&
       shouldDeleteMembershipServiceMessage(
         update.message,
-        ctx.botInfo.id,
         config.clubGroupId,
         config.groupAccess.managedChatIds,
       )

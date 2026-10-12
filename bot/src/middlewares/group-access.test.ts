@@ -5,7 +5,6 @@ import {
   type MembershipServiceMessageLike,
 } from "./group-access.js";
 
-const BOT_ID = 1001;
 const CLUB_CHAT_ID = "-1003393970920";
 const BERLIN_CHAT_ID = "-1003774482834";
 
@@ -21,8 +20,7 @@ function serviceMessage(overrides: Partial<MembershipServiceMessageLike> = {}) {
 test("recognizes a member removal message in the club group", () => {
   assert.equal(
     shouldDeleteMembershipServiceMessage(
-      serviceMessage({ chat: { id: Number(CLUB_CHAT_ID) }, from: { id: 3003 } }),
-      BOT_ID,
+      serviceMessage({ chat: { id: Number(CLUB_CHAT_ID) } }),
       CLUB_CHAT_ID,
       [BERLIN_CHAT_ID],
     ),
@@ -38,7 +36,6 @@ test("recognizes a member join message in the club group", () => {
         left_chat_member: undefined,
         new_chat_members: [{ id: 3003 }],
       }),
-      BOT_ID,
       CLUB_CHAT_ID,
       [BERLIN_CHAT_ID],
     ),
@@ -46,11 +43,10 @@ test("recognizes a member join message in the club group", () => {
   );
 });
 
-test("keeps deleting the bot's own removal message in another managed group", () => {
+test("recognizes a member removal message in another managed group", () => {
   assert.equal(
     shouldDeleteMembershipServiceMessage(
-      serviceMessage({ from: { id: BOT_ID } }),
-      BOT_ID,
+      serviceMessage(),
       CLUB_CHAT_ID,
       [BERLIN_CHAT_ID],
     ),
@@ -58,15 +54,17 @@ test("keeps deleting the bot's own removal message in another managed group", ()
   );
 });
 
-test("keeps other membership messages in another managed group", () => {
+test("recognizes a member join message in another managed group", () => {
   assert.equal(
     shouldDeleteMembershipServiceMessage(
-      serviceMessage({ from: { id: 3003 } }),
-      BOT_ID,
+      serviceMessage({
+        left_chat_member: undefined,
+        new_chat_members: [{ id: 3003 }],
+      }),
       CLUB_CHAT_ID,
       [BERLIN_CHAT_ID],
     ),
-    false,
+    true,
   );
 });
 
@@ -74,7 +72,6 @@ test("keeps service messages outside managed groups", () => {
   assert.equal(
     shouldDeleteMembershipServiceMessage(
       serviceMessage({ chat: { id: -1009999999999 } }),
-      BOT_ID,
       CLUB_CHAT_ID,
       [BERLIN_CHAT_ID],
     ),
@@ -86,7 +83,6 @@ test("keeps ordinary messages", () => {
   assert.equal(
     shouldDeleteMembershipServiceMessage(
       serviceMessage({ left_chat_member: undefined }),
-      BOT_ID,
       CLUB_CHAT_ID,
       [BERLIN_CHAT_ID],
     ),
