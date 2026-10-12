@@ -25,6 +25,7 @@ function buildHelpText(role: Role): string {
 
     text += "\nАналитика клуба:\n";
     text += "/stats — статистика событий клуба за 7 дней\n";
+    text += "/sales — отчёт по текущему окну продаж\n";
 
     text += "\nНастройки бота:\n";
     text += "/transcription_on — включить обработку голосовых и аудио\n";

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { type Context } from "telegraf";
-import { isClubGroupSearchCommand } from "./auth.js";
+import { isBotInboxSalesCommand, isClubGroupSearchCommand } from "./auth.js";
 
 function groupContext(chatId: number, text: string): Context {
   return {
@@ -25,4 +25,16 @@ test("does not allow ordinary messages or other commands in the club group", () 
   assert.equal(isClubGroupSearchCommand(groupContext(-100123, "Кто сталкивался?"), clubGroupId), false);
   assert.equal(isClubGroupSearchCommand(groupContext(-100123, "/vpn"), clubGroupId), false);
   assert.equal(isClubGroupSearchCommand(groupContext(-100123, "/asking вопрос"), clubGroupId), false);
+});
+
+test("allows the sales report command only in the configured bot inbox group", () => {
+  const botInboxGroupId = "-100555";
+
+  assert.equal(isBotInboxSalesCommand(groupContext(-100555, "/sales"), botInboxGroupId), true);
+  assert.equal(
+    isBotInboxSalesCommand(groupContext(-100555, "/sales@MozhnoClub_Bot"), botInboxGroupId),
+    true,
+  );
+  assert.equal(isBotInboxSalesCommand(groupContext(-100555, "/stats"), botInboxGroupId), false);
+  assert.equal(isBotInboxSalesCommand(groupContext(-100999, "/sales"), botInboxGroupId), false);
 });

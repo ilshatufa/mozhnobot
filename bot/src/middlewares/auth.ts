@@ -44,6 +44,24 @@ export function isClubGroupSearchCommand(
   );
 }
 
+export function isBotInboxSalesCommand(
+  ctx: Context,
+  botInboxGroupId: string | null = config.botInboxGroupId,
+): boolean {
+  const message = ctx.message;
+  const chatType = ctx.chat?.type;
+
+  return Boolean(
+    botInboxGroupId &&
+      ctx.updateType === "message" &&
+      (chatType === "group" || chatType === "supergroup") &&
+      String(ctx.chat?.id) === botInboxGroupId &&
+      message &&
+      "text" in message &&
+      /^\/sales(?:@\w+)?(?:\s|$)/i.test(message.text),
+  );
+}
+
 export function authMiddleware(): MiddlewareFn<AuthContext> {
   return async (ctx, next) => {
     const telegramId = ctx.from?.id;
@@ -52,9 +70,10 @@ export function authMiddleware(): MiddlewareFn<AuthContext> {
     const isPrivateUpdate =
       ctx.chat?.type === "private" &&
       (ctx.updateType === "message" || ctx.updateType === "callback_query");
+    const isBotInboxSales = isBotInboxSalesCommand(ctx);
 
     // В клубной группе пропускаем только явно вызванные команды поиска.
-    if (!isPrivateUpdate && !isClubGroupSearchCommand(ctx)) {
+    if (!isPrivateUpdate && !isClubGroupSearchCommand(ctx) && !isBotInboxSales) {
       return;
     }
 
@@ -90,6 +109,16 @@ export function authMiddleware(): MiddlewareFn<AuthContext> {
         logger.info(`Seed admin assigned: ${tgId}`);
         return next();
       }
+    }
+
+    if (isBotInboxSales) {
+      ctx.dbUser = await userRepository.upsert(
+        tgId,
+        ctx.from?.username,
+        ctx.from?.first_name,
+      );
+      ctx.isClubMember = false;
+      return next();
     }
 
     try {
