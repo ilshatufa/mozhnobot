@@ -34,7 +34,7 @@ test("formats sales totals and paid users without membership as rich markdown", 
 
   assert.match(markdown, /\*\*Получили рассылку:\*\* 30/);
   assert.match(markdown, /\*\*Оплатили, но не вступили:\*\* 2/);
-  assert.match(markdown, /\[@test_user · Катя Тестова\]\(https:\/\/t\.me\/test_user\)/);
+  assert.match(markdown, /\[@test\\_user · Катя Тестова\]\(https:\/\/t\.me\/test_user\)/);
   assert.match(markdown, /\[Анна\]\(tg:\/\/user\?id=456\)/);
   assert.match(markdown, /12 октября 2026 г\\\. в 10:22/);
 });
