@@ -34,6 +34,7 @@ test("formats sales totals and paid users without membership as rich markdown ta
 
   assert.match(markdown, /\| Получили рассылку \| \*\*30\*\* \|/);
   assert.match(markdown, /\| Оплатили, но не вступили \| \*\*2\*\* \|/);
+  assert.match(markdown, /\| Вступили от рассылки \| \*\*6,7%\*\* \|/);
   assert.match(markdown, /\*\*Онбординг после оплаты\*\*/);
   assert.match(markdown, /\| Ответили на вопрос \| \*\*3\*\* \|/);
   assert.match(markdown, /\n\n⠀\n\n/);

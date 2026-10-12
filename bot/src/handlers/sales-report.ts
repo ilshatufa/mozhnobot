@@ -21,6 +21,10 @@ const reportDateFormatter = new Intl.DateTimeFormat("ru-RU", {
   minute: "2-digit",
 });
 
+const percentageFormatter = new Intl.NumberFormat("ru-RU", {
+  maximumFractionDigits: 1,
+});
+
 type PaymentWithoutMembership = {
   telegramId: bigint;
   username: string | null;
@@ -74,6 +78,9 @@ function countUsersByEvent(
 }
 
 export function buildSalesReportMarkdown(report: SalesReport): string {
+  const joinedFromDeliveryPercent = percentageFormatter.format(
+    (report.paidAndJoined / report.delivered) * 100,
+  );
   const salesTable = [
     "| Воронка | Людей |",
     "| :--- | ---: |",
@@ -81,6 +88,7 @@ export function buildSalesReportMarkdown(report: SalesReport): string {
     `| Оплатили | **${report.paid}** |`,
     `| Оплатили и вступили | **${report.paidAndJoined}** |`,
     `| Оплатили, но не вступили | **${report.paidWithoutMembership.length}** |`,
+    `| Вступили от рассылки | **${joinedFromDeliveryPercent}%** |`,
   ].join("\n");
 
   const onboardingTable = [
