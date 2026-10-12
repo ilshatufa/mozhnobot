@@ -1,6 +1,11 @@
 import { Telegraf } from "telegraf";
 import { config } from "./config.js";
-import { type AuthContext, authMiddleware, adminOnly } from "./middlewares/auth.js";
+import {
+  type AuthContext,
+  authMiddleware,
+  adminOnly,
+  salesReportOnly,
+} from "./middlewares/auth.js";
 import { eventLoggerMiddleware } from "./middlewares/event-logger.js";
 import { groupAccessMiddleware } from "./middlewares/group-access.js";
 import { startHandler } from "./handlers/start.js";
@@ -74,7 +79,7 @@ export function createBot(): Telegraf<AuthContext> {
   bot.command("users", adminOnly(), usersHandler);
   bot.command("waitlist", adminOnly(), waitlistAdminHandler);
   bot.command("stats", adminOnly(), statsHandler);
-  bot.command("sales", adminOnly(), salesReportHandler);
+  bot.command("sales", salesReportOnly(), salesReportHandler);
   bot.command("transcription_on", adminOnly(), transcriptionOnHandler);
   bot.command("transcription_off", adminOnly(), transcriptionOffHandler);
   bot.command("transcription_status", adminOnly(), transcriptionStatusHandler);

@@ -3,6 +3,7 @@ import { type AuthContext } from "../middlewares/auth.js";
 
 function buildHelpText(role: Role): string {
   const isAdmin = role === "ADMIN";
+  const canViewSales = isAdmin || role === "SUPPORT";
 
   let text = "Команды бота\n\n";
   text += "Основные:\n";
@@ -25,12 +26,16 @@ function buildHelpText(role: Role): string {
 
     text += "\nАналитика клуба:\n";
     text += "/stats — статистика событий клуба за 7 дней\n";
-    text += "/sales — отчёт по текущему окну продаж\n";
 
     text += "\nНастройки бота:\n";
     text += "/transcription_on — включить обработку голосовых и аудио\n";
     text += "/transcription_off — выключить обработку голосовых и аудио\n";
     text += "/transcription_status — проверить статус транскрибации\n";
+  }
+
+  if (canViewSales) {
+    text += "\nПродажи:\n";
+    text += "/sales — отчёт по текущему окну продаж\n";
   }
 
   return text;

@@ -174,3 +174,13 @@ export function adminOnly(): MiddlewareFn<AuthContext> {
     return next();
   };
 }
+
+export function salesReportOnly(): MiddlewareFn<AuthContext> {
+  return async (ctx, next) => {
+    if (ctx.dbUser?.role !== Role.ADMIN && ctx.dbUser?.role !== Role.SUPPORT) {
+      await ctx.reply("У вас нет прав для выполнения этой команды.");
+      return;
+    }
+    return next();
+  };
+}
