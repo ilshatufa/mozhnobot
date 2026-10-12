@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildSalesReportMarkdown, type SalesReport } from "./sales-report.js";
 
-test("formats sales totals and paid users without membership as rich markdown", () => {
+test("formats sales totals and paid users without membership as rich markdown tables", () => {
   const report: SalesReport = {
     startedAt: new Date("2026-10-11T18:36:23.000Z"),
     delivered: 30,
@@ -32,9 +32,33 @@ test("formats sales totals and paid users without membership as rich markdown", 
 
   const markdown = buildSalesReportMarkdown(report);
 
-  assert.match(markdown, /\*\*Получили рассылку:\*\* 30/);
-  assert.match(markdown, /\*\*Оплатили, но не вступили:\*\* 2/);
+  assert.match(markdown, /\| Получили рассылку \| \*\*30\*\* \|/);
+  assert.match(markdown, /\| Оплатили, но не вступили \| \*\*2\*\* \|/);
+  assert.match(markdown, /\*\*Онбординг после оплаты\*\*/);
+  assert.match(markdown, /\| Ответили на вопрос \| \*\*3\*\* \|/);
+  assert.match(markdown, /\n\n⠀\n\n/);
   assert.match(markdown, /\[@test\\_user · Катя Тестова\]\(https:\/\/t\.me\/test_user\)/);
   assert.match(markdown, /\[Анна\]\(tg:\/\/user\?id=456\)/);
-  assert.match(markdown, /12 октября 2026 г\\\. в 10:22/);
+  assert.match(markdown, /\| \[@test\\_user · Катя Тестова\]\(https:\/\/t\.me\/test_user\) \| 12 октября 2026 г\\\. в 10:22 \|/);
+  assert.doesNotMatch(markdown, /^# /m);
+});
+
+test("shows a compact empty state when every paying user joined", () => {
+  const report: SalesReport = {
+    startedAt: new Date("2026-10-11T18:36:23.000Z"),
+    delivered: 30,
+    paid: 8,
+    paidAndJoined: 8,
+    paidWithoutMembership: [],
+    onboardingStarted: 8,
+    onboardingAnswered: 8,
+    onboardingAccessGranted: 8,
+    onboardingCompleted: 8,
+  };
+
+  const markdown = buildSalesReportMarkdown(report);
+
+  assert.match(markdown, /\*\*Оплатили, но не вступили · 0\*\*/);
+  assert.match(markdown, /Все оплатившие вступили в клуб ✅/);
+  assert.doesNotMatch(markdown, /\| Пользователь \| Дата оплаты \|/);
 });

@@ -74,32 +74,50 @@ function countUsersByEvent(
 }
 
 export function buildSalesReportMarkdown(report: SalesReport): string {
-  const unpaidMembershipLines = report.paidWithoutMembership.map((person, index) =>
-    `${index + 1}\\. ${personLink(person)} — ${escapeRichMarkdown(reportDateFormatter.format(person.paidAt))}`,
-  );
+  const salesTable = [
+    "| Воронка | Людей |",
+    "| :--- | ---: |",
+    `| Получили рассылку | **${report.delivered}** |`,
+    `| Оплатили | **${report.paid}** |`,
+    `| Оплатили и вступили | **${report.paidAndJoined}** |`,
+    `| Оплатили, но не вступили | **${report.paidWithoutMembership.length}** |`,
+  ].join("\n");
+
+  const onboardingTable = [
+    "| Этап | Людей |",
+    "| :--- | ---: |",
+    `| Начали | **${report.onboardingStarted}** |`,
+    `| Ответили на вопрос | **${report.onboardingAnswered}** |`,
+    `| Получили доступ | **${report.onboardingAccessGranted}** |`,
+    `| Завершили | **${report.onboardingCompleted}** |`,
+  ].join("\n");
+
+  const paidWithoutMembershipBlock = report.paidWithoutMembership.length
+    ? [
+        `**Оплатили, но не вступили · ${report.paidWithoutMembership.length}**`,
+        "",
+        "| Пользователь | Дата оплаты |",
+        "| :--- | ---: |",
+        ...report.paidWithoutMembership.map((person) =>
+          `| ${personLink(person)} | ${escapeRichMarkdown(reportDateFormatter.format(person.paidAt))} |`,
+        ),
+      ].join("\n")
+    : [
+        "**Оплатили, но не вступили · 0**",
+        "",
+        "Все оплатившие вступили в клуб ✅",
+      ].join("\n");
 
   return [
-    "# Продажи",
-    "",
-    `**Период:** с ${escapeRichMarkdown(reportDateFormatter.format(report.startedAt))}`,
-    `**Получили рассылку:** ${report.delivered}`,
-    `**Оплатили:** ${report.paid}`,
-    `**Оплатили и вступили:** ${report.paidAndJoined}`,
-    `**Оплатили, но не вступили:** ${report.paidWithoutMembership.length}`,
-    "",
-    "## Онбординг после оплаты",
-    "",
-    `Начали: ${report.onboardingStarted}`,
-    `Ответили на вопрос: ${report.onboardingAnswered}`,
-    `Получили доступ: ${report.onboardingAccessGranted}`,
-    `Завершили: ${report.onboardingCompleted}`,
-    "",
-    "## Оплатили, но не вступили",
-    "",
-    ...(unpaidMembershipLines.length
-      ? unpaidMembershipLines
-      : ["Все оплатившие вступили в клуб ✅"]),
-  ].join("\n");
+    [
+      "**Продажи**",
+      "",
+      `**Период:** с ${escapeRichMarkdown(reportDateFormatter.format(report.startedAt))}`,
+    ].join("\n"),
+    salesTable,
+    ["**Онбординг после оплаты**", "", onboardingTable].join("\n"),
+    paidWithoutMembershipBlock,
+  ].join("\n\n\u2800\n\n");
 }
 
 async function loadSalesReport(): Promise<SalesReport | null> {
