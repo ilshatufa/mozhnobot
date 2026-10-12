@@ -6,25 +6,33 @@ import {
 } from "../services/group-access.service.js";
 import { config } from "../config.js";
 
-export type RemovalServiceMessageLike = {
+export type MembershipServiceMessageLike = {
   message_id: number;
   chat: { id: number };
   from?: { id: number };
+  new_chat_members?: { id: number }[];
   left_chat_member?: { id: number };
 };
 
 type GroupAccessUpdateLike = {
-  message?: RemovalServiceMessageLike;
+  message?: MembershipServiceMessageLike;
   chat_member?: ChatMemberUpdateLike;
 };
 
-export function isOwnRemovalServiceMessage(
-  message: RemovalServiceMessageLike,
+export function shouldDeleteMembershipServiceMessage(
+  message: MembershipServiceMessageLike,
   botId: number,
+  clubChatId: string,
   managedChatIds: readonly string[],
 ): boolean {
+  const chatId = String(message.chat.id);
+  const isJoin = Boolean(message.new_chat_members?.length);
+  const isLeave = Boolean(message.left_chat_member);
+  if (!isJoin && !isLeave) return false;
+  if (chatId === clubChatId) return true;
+
   return Boolean(
-    managedChatIds.includes(String(message.chat.id)) &&
+    managedChatIds.includes(chatId) &&
       message.from?.id === botId &&
       message.left_chat_member &&
       message.left_chat_member.id !== botId,
@@ -38,21 +46,24 @@ export function groupAccessMiddleware(): MiddlewareFn<Context> {
     if (
       config.groupAccess.enabled &&
       update.message &&
-      isOwnRemovalServiceMessage(
+      shouldDeleteMembershipServiceMessage(
         update.message,
         ctx.botInfo.id,
+        config.clubGroupId,
         config.groupAccess.managedChatIds,
       )
     ) {
       try {
         await ctx.telegram.deleteMessage(update.message.chat.id, update.message.message_id);
-        logger.info("Deleted bot-owned member removal service message", {
+        logger.info("Deleted membership service message", {
           chatId: String(update.message.chat.id),
           messageId: update.message.message_id,
-          removedUserId: String(update.message.left_chat_member?.id),
+          eventType: update.message.new_chat_members?.length ? "joined" : "left",
+          memberIds: update.message.new_chat_members?.map(({ id }) => String(id)) ??
+            [String(update.message.left_chat_member?.id)],
         });
       } catch (error) {
-        logger.error("Failed to delete bot-owned member removal service message", error);
+        logger.error("Failed to delete membership service message", error);
       }
     }
 

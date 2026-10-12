@@ -1,35 +1,69 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  isOwnRemovalServiceMessage,
-  type RemovalServiceMessageLike,
+  shouldDeleteMembershipServiceMessage,
+  type MembershipServiceMessageLike,
 } from "./group-access.js";
 
 const BOT_ID = 1001;
+const CLUB_CHAT_ID = "-1003393970920";
 const BERLIN_CHAT_ID = "-1003774482834";
 
-function removalMessage(overrides: Partial<RemovalServiceMessageLike> = {}) {
+function serviceMessage(overrides: Partial<MembershipServiceMessageLike> = {}) {
   return {
     message_id: 500,
     chat: { id: Number(BERLIN_CHAT_ID) },
-    from: { id: BOT_ID },
     left_chat_member: { id: 2002 },
     ...overrides,
   };
 }
 
-test("recognizes only the bot's own removal message in a managed group", () => {
+test("recognizes a member removal message in the club group", () => {
   assert.equal(
-    isOwnRemovalServiceMessage(removalMessage(), BOT_ID, [BERLIN_CHAT_ID]),
+    shouldDeleteMembershipServiceMessage(
+      serviceMessage({ chat: { id: Number(CLUB_CHAT_ID) }, from: { id: 3003 } }),
+      BOT_ID,
+      CLUB_CHAT_ID,
+      [BERLIN_CHAT_ID],
+    ),
     true,
   );
 });
 
-test("keeps a removal message created by another administrator", () => {
+test("recognizes a member join message in the club group", () => {
   assert.equal(
-    isOwnRemovalServiceMessage(
-      removalMessage({ from: { id: 3003 } }),
+    shouldDeleteMembershipServiceMessage(
+      serviceMessage({
+        chat: { id: Number(CLUB_CHAT_ID) },
+        left_chat_member: undefined,
+        new_chat_members: [{ id: 3003 }],
+      }),
       BOT_ID,
+      CLUB_CHAT_ID,
+      [BERLIN_CHAT_ID],
+    ),
+    true,
+  );
+});
+
+test("keeps deleting the bot's own removal message in another managed group", () => {
+  assert.equal(
+    shouldDeleteMembershipServiceMessage(
+      serviceMessage({ from: { id: BOT_ID } }),
+      BOT_ID,
+      CLUB_CHAT_ID,
+      [BERLIN_CHAT_ID],
+    ),
+    true,
+  );
+});
+
+test("keeps other membership messages in another managed group", () => {
+  assert.equal(
+    shouldDeleteMembershipServiceMessage(
+      serviceMessage({ from: { id: 3003 } }),
+      BOT_ID,
+      CLUB_CHAT_ID,
       [BERLIN_CHAT_ID],
     ),
     false,
@@ -38,20 +72,22 @@ test("keeps a removal message created by another administrator", () => {
 
 test("keeps service messages outside managed groups", () => {
   assert.equal(
-    isOwnRemovalServiceMessage(
-      removalMessage({ chat: { id: -1009999999999 } }),
+    shouldDeleteMembershipServiceMessage(
+      serviceMessage({ chat: { id: -1009999999999 } }),
       BOT_ID,
+      CLUB_CHAT_ID,
       [BERLIN_CHAT_ID],
     ),
     false,
   );
 });
 
-test("keeps ordinary messages from the bot", () => {
+test("keeps ordinary messages", () => {
   assert.equal(
-    isOwnRemovalServiceMessage(
-      removalMessage({ left_chat_member: undefined }),
+    shouldDeleteMembershipServiceMessage(
+      serviceMessage({ left_chat_member: undefined }),
       BOT_ID,
+      CLUB_CHAT_ID,
       [BERLIN_CHAT_ID],
     ),
     false,
