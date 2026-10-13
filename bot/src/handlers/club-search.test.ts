@@ -10,6 +10,7 @@ test("extracts questions from separate club and web commands", () => {
   assert.equal(extractSearchQuestion("/ask Кто сталкивался?"), "Кто сталкивался?");
   assert.equal(extractSearchQuestion("/web Что изменилось?", "web"), "Что изменилось?");
   assert.equal(extractSearchQuestion("/web@MozhnoClub_Bot   Где источник?", "web"), "Где источник?");
+  assert.equal(extractSearchQuestion("/search Ремонт квартиры", "search"), "Ремонт квартиры");
 });
 
 test("uses the replied message when the command has no question", () => {

@@ -40,7 +40,7 @@ export function isClubGroupSearchCommand(
       String(ctx.chat?.id) === clubGroupId &&
       message &&
       "text" in message &&
-      /^\/(?:ask|web)(?:@\w+)?(?:\s|$)/i.test(message.text),
+      /^\/(?:ask|search|web)(?:@\w+)?(?:\s|$)/i.test(message.text),
   );
 }
 

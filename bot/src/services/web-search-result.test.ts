@@ -40,3 +40,16 @@ test("does not show an ungrounded web answer without sources", () => {
   assert.doesNotMatch(result, /Непроверенный ответ/);
   assert.match(result, /не вернул ответа с проверяемыми источниками/);
 });
+
+test("shows question guidance without requiring web sources", () => {
+  const result = buildWebSearchResultRichMarkdown({
+    status: ClubSearchRequestStatus.COMPLETED,
+    question: "привет",
+    answer: "Привет! Напишите, что именно нужно найти в интернете.",
+    webSources: [],
+    errorCode: "QUESTION_REQUIRED",
+  });
+
+  assert.match(result, /Напишите, что именно нужно найти в интернете/);
+  assert.doesNotMatch(result, /не вернул ответа с проверяемыми источниками/);
+});

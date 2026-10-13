@@ -33,7 +33,11 @@ import {
   usersHandler,
 } from "./handlers/admin.js";
 import { handleBotError } from "./error-handling.js";
-import { clubSearchHandler, webSearchHandler } from "./handlers/club-search.js";
+import {
+  clubSearchHandler,
+  searchAliasHandler,
+  webSearchHandler,
+} from "./handlers/club-search.js";
 import { waitlistAdminHandler } from "./handlers/waitlist-admin.js";
 import { clubniPaymentMiddleware } from "./middlewares/clubni-payment.js";
 import {
@@ -69,6 +73,7 @@ export function createBot(): Telegraf<AuthContext> {
   bot.command("vpn", vpnHandler);
   bot.command("status", statusHandler);
   bot.command("ask", clubSearchHandler);
+  bot.command("search", searchAliasHandler);
   bot.command("web", webSearchHandler);
 
   bot.command("block", adminOnly(), blockHandler);

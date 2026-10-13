@@ -82,6 +82,11 @@ const envSchema = z.object({
   QWEN_TRANSCRIPTION_TIMEOUT_MS: z.coerce.number().int().positive().default(120000),
   QWEN_TRANSCRIPT_CLEANUP_MODEL: z.string().min(1).default("qwen-max"),
   QWEN_TRANSCRIPT_CLEANUP_TIMEOUT_MS: z.coerce.number().int().positive().default(60000),
+  SEARCH_PROCESSING_ENABLED: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
+  SEARCH_PROCESSING_INTERVAL_MS: z.coerce.number().int().positive().default(2000),
+  SEARCH_PROCESSING_TIMEOUT_MS: z.coerce.number().int().positive().default(90000),
+  SEARCH_PROCESSING_STALE_MS: z.coerce.number().int().positive().default(300000),
+  QWEN_SEARCH_MODEL: z.string().min(1).default("qwen3.8-flash"),
 }).superRefine((value, ctx) => {
   const clubniSourceConfigured = Boolean(value.CLUBNI_SOURCE_BOT_TELEGRAM_ID);
   const clubniClubConfigured = Boolean(value.CLUBNI_PAYMENT_CLUB_ID);
@@ -288,6 +293,16 @@ export const config = {
     qwenTranscriptionTimeoutMs: env.QWEN_TRANSCRIPTION_TIMEOUT_MS,
     qwenTranscriptCleanupModel: env.QWEN_TRANSCRIPT_CLEANUP_MODEL,
     qwenTranscriptCleanupTimeoutMs: env.QWEN_TRANSCRIPT_CLEANUP_TIMEOUT_MS,
+  },
+
+  search: {
+    processingEnabled: env.SEARCH_PROCESSING_ENABLED,
+    intervalMs: env.SEARCH_PROCESSING_INTERVAL_MS,
+    timeoutMs: env.SEARCH_PROCESSING_TIMEOUT_MS,
+    staleMs: env.SEARCH_PROCESSING_STALE_MS,
+    qwenApiKey: env.QWEN_API_KEY,
+    qwenBaseUrl: env.QWEN_BASE_URL.replace(/\/$/, ""),
+    qwenModel: env.QWEN_SEARCH_MODEL,
   },
 
   xraySubscription: {

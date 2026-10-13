@@ -65,7 +65,8 @@ function buildScreen(question: string, content: string): string {
 }
 
 export function buildSearchResultRichMarkdown(
-  request: Pick<ClubSearchRequest, "status" | "question" | "answer" | "sourceMessageIds">,
+  request: Pick<ClubSearchRequest, "status" | "question" | "answer" | "sourceMessageIds">
+    & { errorCode?: string | null },
   sourceMessages: ClubSearchSourceMessage[],
   clubGroupId: string,
 ): string {
@@ -74,6 +75,10 @@ export function buildSearchResultRichMarkdown(
       request.question,
       formatParagraph("Сейчас поиск недоступен. Попробуйте ещё раз позже."),
     );
+  }
+
+  if (request.errorCode === "QUESTION_REQUIRED" && request.answer?.trim()) {
+    return buildScreen(request.question, formatParagraph(request.answer.trim()));
   }
 
   const answer = request.answer?.trim();

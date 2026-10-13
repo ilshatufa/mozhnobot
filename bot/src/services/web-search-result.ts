@@ -64,13 +64,18 @@ function buildScreen(question: string, content: string): string {
 }
 
 export function buildWebSearchResultRichMarkdown(
-  request: Pick<ClubSearchRequest, "status" | "question" | "answer" | "webSources">,
+  request: Pick<ClubSearchRequest, "status" | "question" | "answer" | "webSources">
+    & { errorCode?: string | null },
 ): string {
   if (request.status === ClubSearchRequestStatus.FAILED) {
     return buildScreen(
       request.question,
       formatText("Сейчас веб-поиск недоступен. Попробуйте ещё раз позже."),
     );
+  }
+
+  if (request.errorCode === "QUESTION_REQUIRED" && request.answer?.trim()) {
+    return buildScreen(request.question, formatText(request.answer.trim()));
   }
 
   const answer = request.answer?.trim();

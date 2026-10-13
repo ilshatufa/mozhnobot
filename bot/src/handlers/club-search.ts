@@ -3,11 +3,12 @@ import { type Message } from "telegraf/types";
 import { type AuthContext } from "../middlewares/auth.js";
 import { clubSearchRequestRepository } from "../repositories/club-search-request.repository.js";
 import { logger } from "../logger.js";
+import { searchQuestionGuidance } from "../services/search-query.js";
 
 const MAX_QUESTION_LENGTH = 600;
 const MIN_QUESTION_LENGTH = 4;
 
-type SearchCommand = "ask" | "web";
+type SearchCommand = "ask" | "search" | "web";
 
 type SearchModeOptions = {
   command: SearchCommand;
@@ -60,6 +61,15 @@ async function searchHandler(ctx: AuthContext, options: SearchModeOptions): Prom
 
   if (question.length > MAX_QUESTION_LENGTH) {
     await ctx.reply(`Сократите вопрос до ${MAX_QUESTION_LENGTH} знаков.`, replyOptions);
+    return;
+  }
+
+  const guidance = searchQuestionGuidance(
+    question,
+    options.mode === ClubSearchRequestMode.WEB ? "web" : "club",
+  );
+  if (guidance) {
+    await ctx.reply(guidance, replyOptions);
     return;
   }
 
@@ -127,5 +137,15 @@ export async function webSearchHandler(ctx: AuthContext): Promise<void> {
     missingQuestionExample: "/web Какие сейчас ставки по вкладам?",
     progressText: "Ищу в интернете.",
     estimatedTimeText: "Это может занять пару минут.",
+  });
+}
+
+export async function searchAliasHandler(ctx: AuthContext): Promise<void> {
+  await searchHandler(ctx, {
+    command: "search",
+    mode: ClubSearchRequestMode.CLUB,
+    missingQuestionExample: "/search Кто уже делал ремонт в новостройке?",
+    progressText: "Ищу в истории клуба.",
+    estimatedTimeText: "Обычно это занимает до минуты.",
   });
 }

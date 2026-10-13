@@ -22,6 +22,7 @@ test("allows explicit search commands only in the configured club group", () => 
 
   assert.equal(isClubGroupSearchCommand(groupContext(-100123, "/ask Кто сталкивался?"), clubGroupId), true);
   assert.equal(isClubGroupSearchCommand(groupContext(-100123, "/web@MozhnoClub_Bot Что нового?"), clubGroupId), true);
+  assert.equal(isClubGroupSearchCommand(groupContext(-100123, "/search Кто делал ремонт?"), clubGroupId), true);
   assert.equal(isClubGroupSearchCommand(groupContext(-100999, "/ask Кто сталкивался?"), clubGroupId), false);
 });
 
