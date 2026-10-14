@@ -1,5 +1,9 @@
 import { Markup } from "telegraf";
 import { type AuthContext } from "../middlewares/auth.js";
+import {
+  CLUB_SALES_START_MARKDOWN,
+  isClubSalesOpen,
+} from "../messages/club-sales.js";
 import { clubInterestRepository } from "../repositories/club-interest.repository.js";
 import { CLUB_WAITLIST_ACTION } from "./club-interest.js";
 import { getHelpText } from "./help.js";
@@ -7,6 +11,14 @@ import { getHelpText } from "./help.js";
 export async function startHandler(ctx: AuthContext): Promise<void> {
   if (!ctx.isClubMember) {
     await clubInterestRepository.recordOpened(ctx.dbUser.id);
+    if (isClubSalesOpen()) {
+      await ctx.telegram.callApi("sendRichMessage" as never, {
+        chat_id: ctx.chat!.id,
+        rich_message: { markdown: CLUB_SALES_START_MARKDOWN },
+      } as never);
+      return;
+    }
+
     await ctx.reply(
       [
         "Привет! Спасибо за твой интерес к клубу «МОЖНО», где мы каждый день в теплом кругу:",
