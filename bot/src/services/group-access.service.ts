@@ -20,6 +20,7 @@ type ChatMemberLike = {
 export type ChatMemberUpdateLike = {
   chat: { id: number };
   date: number;
+  from: TelegramUserLike;
   old_chat_member: ChatMemberLike;
   new_chat_member: ChatMemberLike;
 };

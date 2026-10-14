@@ -25,6 +25,7 @@ function update(chatId: string, oldStatus: string, newStatus: string): ChatMembe
   return {
     chat: { id: Number(chatId) },
     date: 1_789_164_000,
+    from: { id: USER_ID, username: "member" },
     old_chat_member: member(oldStatus),
     new_chat_member: member(newStatus),
   };
