@@ -15,6 +15,7 @@ test("formats sales totals and paid users without membership as rich markdown ta
         firstName: "Катя",
         lastName: "Тестова",
         paidAt: new Date("2026-10-12T05:22:08.000Z"),
+        wave: "волна 1",
       },
       {
         telegramId: 456n,
@@ -22,6 +23,7 @@ test("formats sales totals and paid users without membership as rich markdown ta
         firstName: "Анна",
         lastName: null,
         paidAt: new Date("2026-10-12T06:00:00.000Z"),
+        wave: "волна 2",
       },
     ],
     onboardingStarted: 4,
@@ -40,7 +42,9 @@ test("formats sales totals and paid users without membership as rich markdown ta
   assert.match(markdown, /\n\n⠀\n\n/);
   assert.match(markdown, /\[@test\\_user · Катя Тестова\]\(https:\/\/t\.me\/test_user\)/);
   assert.match(markdown, /\[Анна\]\(tg:\/\/user\?id=456\)/);
-  assert.match(markdown, /\| \[@test\\_user · Катя Тестова\]\(https:\/\/t\.me\/test_user\) \| 12 октября 2026 г\\\. в 10:22 \|/);
+  assert.ok(markdown.includes(
+    "| [@test\\_user · Катя Тестова](https://t.me/test_user) | 12 октября 2026 г\\. в 10:22 \\(волна 1\\) |",
+  ));
   assert.doesNotMatch(markdown, /^# /m);
 });
 

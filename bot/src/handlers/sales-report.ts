@@ -1,13 +1,14 @@
+import type { Prisma } from "@prisma/client";
 import { config } from "../config.js";
 import { prisma } from "../database.js";
 import { type AuthContext } from "../middlewares/auth.js";
 
 const SALES_CAMPAIGN_EVENT_PREFIX = "waitlist_broadcast_";
 const SALES_CAMPAIGNS = [
-  "waitlist-club-launch-first30-2026-10-11",
-  "waitlist-club-launch-next100-2026-10-12",
-  "waitlist-club-launch-remaining-2026-10-13",
-  "waitlist-club-launch-wave4-final-2026-10-14",
+  { id: "waitlist-club-launch-first30-2026-10-11", wave: "волна 1" },
+  { id: "waitlist-club-launch-next100-2026-10-12", wave: "волна 2" },
+  { id: "waitlist-club-launch-remaining-2026-10-13", wave: "волна 3" },
+  { id: "waitlist-club-launch-wave4-final-2026-10-14", wave: "волна 4" },
 ] as const;
 const EXCLUDED_SALES_USER_IDS = new Set([
   "385886382", // aisylu_psy
@@ -41,6 +42,7 @@ type PaymentWithoutMembership = {
   firstName: string | null;
   lastName: string | null;
   paidAt: Date;
+  wave: string;
 };
 
 export type SalesReport = {
@@ -57,6 +59,12 @@ export type SalesReport = {
 
 function escapeRichMarkdown(value: string): string {
   return value.replace(/([\\`*_{}\[\]()<>#+.!|~-])/g, "\\$1");
+}
+
+function campaignFromPayload(payload: Prisma.JsonValue | null): string | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const campaign = (payload as Prisma.JsonObject).campaign;
+  return typeof campaign === "string" ? campaign : null;
 }
 
 function personLink(person: PaymentWithoutMembership): string {
@@ -111,7 +119,7 @@ export function buildSalesReportMarkdown(report: SalesReport): string {
         "| Пользователь | Дата оплаты |",
         "| :--- | ---: |",
         ...report.paidWithoutMembership.map((person) =>
-          `| ${personLink(person)} | ${escapeRichMarkdown(reportDateFormatter.format(person.paidAt))} |`,
+          `| ${personLink(person)} | ${escapeRichMarkdown(`${reportDateFormatter.format(person.paidAt)} (${person.wave})`)} |`,
         ),
       ].join("\n")
     : [
@@ -137,27 +145,30 @@ async function loadSalesReport(): Promise<SalesReport | null> {
     where: {
       eventType: { startsWith: SALES_CAMPAIGN_EVENT_PREFIX },
       OR: SALES_CAMPAIGNS.map((campaign) => ({
-        payload: { path: ["campaign"], equals: campaign },
+        payload: { path: ["campaign"], equals: campaign.id },
       })),
     },
     select: {
       eventType: true,
       targetUserTelegramId: true,
       occurredAt: true,
+      payload: true,
     },
     orderBy: { occurredAt: "asc" },
   });
   const startedAt = campaignEvents.at(0)?.occurredAt;
   if (!startedAt) return null;
 
-  const deliveredUserIds = new Set(
-    campaignEvents
-      .filter((event) => event.eventType === "waitlist_broadcast_sent")
-      .flatMap((event) => event.targetUserTelegramId === null
-        ? []
-        : [String(event.targetUserTelegramId)])
-      .filter((telegramId) => !EXCLUDED_SALES_USER_IDS.has(telegramId)),
-  );
+  const waveByTelegramId = new Map<string, string>();
+  for (const event of campaignEvents) {
+    if (event.eventType !== "waitlist_broadcast_sent" || event.targetUserTelegramId === null) continue;
+    const telegramId = String(event.targetUserTelegramId);
+    if (EXCLUDED_SALES_USER_IDS.has(telegramId)) continue;
+    const campaign = campaignFromPayload(event.payload);
+    const wave = SALES_CAMPAIGNS.find((item) => item.id === campaign)?.wave;
+    if (wave) waveByTelegramId.set(telegramId, wave);
+  }
+  const deliveredUserIds = new Set(waveByTelegramId.keys());
 
   const deliveredTelegramIds = [...deliveredUserIds].map((telegramId) => BigInt(telegramId));
 
@@ -217,12 +228,15 @@ async function loadSalesReport(): Promise<SalesReport | null> {
     .filter((payment) => !usersByTelegramId.get(String(payment.telegramId))?.joinedAt)
     .map((payment) => {
       const user = usersByTelegramId.get(String(payment.telegramId));
+      const wave = waveByTelegramId.get(String(payment.telegramId));
+      if (!wave) throw new Error(`Sales wave is missing for Telegram ID ${payment.telegramId}`);
       return {
         telegramId: payment.telegramId,
         username: user?.username ?? null,
         firstName: user?.firstName ?? null,
         lastName: user?.lastName ?? null,
         paidAt: payment.paidAt,
+        wave,
       };
     });
 
