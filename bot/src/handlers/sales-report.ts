@@ -1,9 +1,19 @@
-import type { Prisma } from "@prisma/client";
 import { config } from "../config.js";
 import { prisma } from "../database.js";
 import { type AuthContext } from "../middlewares/auth.js";
 
 const SALES_CAMPAIGN_EVENT_PREFIX = "waitlist_broadcast_";
+const SALES_CAMPAIGNS = [
+  "waitlist-club-launch-first30-2026-10-11",
+  "waitlist-club-launch-next100-2026-10-12",
+  "waitlist-club-launch-remaining-2026-10-13",
+  "waitlist-club-launch-wave4-final-2026-10-14",
+] as const;
+const EXCLUDED_SALES_USER_IDS = new Set([
+  "385886382", // aisylu_psy
+  "6058947423", // timur_tets
+  "5842794618", // developer135
+]);
 const PAYMENT_EVENT = "clubni_payment_succeeded";
 const ONBOARDING_EVENTS = [
   "clubni_onboarding_intro",
@@ -44,12 +54,6 @@ export type SalesReport = {
   onboardingAccessGranted: number;
   onboardingCompleted: number;
 };
-
-function campaignFromPayload(payload: Prisma.JsonValue | null): string | null {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  const campaign = (payload as Prisma.JsonObject).campaign;
-  return typeof campaign === "string" && campaign.length > 0 ? campaign : null;
-}
 
 function escapeRichMarkdown(value: string): string {
   return value.replace(/([\\`*_{}\[\]()<>#+.!|~-])/g, "\\$1");
@@ -129,18 +133,12 @@ export function buildSalesReportMarkdown(report: SalesReport): string {
 }
 
 async function loadSalesReport(): Promise<SalesReport | null> {
-  const latestDelivery = await prisma.clubEvent.findFirst({
-    where: { eventType: "waitlist_broadcast_sent" },
-    orderBy: { occurredAt: "desc" },
-    select: { payload: true },
-  });
-  const campaign = campaignFromPayload(latestDelivery?.payload ?? null);
-  if (!campaign) return null;
-
   const campaignEvents = await prisma.clubEvent.findMany({
     where: {
       eventType: { startsWith: SALES_CAMPAIGN_EVENT_PREFIX },
-      payload: { path: ["campaign"], equals: campaign },
+      OR: SALES_CAMPAIGNS.map((campaign) => ({
+        payload: { path: ["campaign"], equals: campaign },
+      })),
     },
     select: {
       eventType: true,
@@ -157,14 +155,18 @@ async function loadSalesReport(): Promise<SalesReport | null> {
       .filter((event) => event.eventType === "waitlist_broadcast_sent")
       .flatMap((event) => event.targetUserTelegramId === null
         ? []
-        : [String(event.targetUserTelegramId)]),
+        : [String(event.targetUserTelegramId)])
+      .filter((telegramId) => !EXCLUDED_SALES_USER_IDS.has(telegramId)),
   );
+
+  const deliveredTelegramIds = [...deliveredUserIds].map((telegramId) => BigInt(telegramId));
 
   const paymentEvents = await prisma.clubEvent.findMany({
     where: {
       eventType: PAYMENT_EVENT,
       occurredAt: { gte: startedAt },
-      targetUserTelegramId: { not: null },
+      targetUserTelegramId: { in: deliveredTelegramIds },
+      payload: { path: ["clubId"], equals: config.clubniPayment.clubId },
     },
     select: {
       targetUserTelegramId: true,
