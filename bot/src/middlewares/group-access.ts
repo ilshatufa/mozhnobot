@@ -2,6 +2,7 @@ import { type Context, type MiddlewareFn } from "telegraf";
 import { logger } from "../logger.js";
 import {
   groupAccessService,
+  isJoinTransition,
   isLeaveTransition,
   type ChatMemberUpdateLike,
 } from "../services/group-access.service.js";
@@ -19,6 +20,7 @@ const CLUB_EVENT_TIME_FORMATTER = new Intl.DateTimeFormat("ru-RU", {
 });
 
 export type ClubDepartureReason = "self" | "tribute" | "mozhno" | "clubni" | "other";
+export type ClubJoinReason = "invite_link" | "join_request" | "added" | "self";
 
 export type MembershipServiceMessageLike = {
   message_id: number;
@@ -61,6 +63,14 @@ export function classifyClubDeparture(
   return "other";
 }
 
+export function classifyClubJoin(update: ChatMemberUpdateLike): ClubJoinReason | null {
+  if (!isJoinTransition(update)) return null;
+  if (update.via_join_request) return "join_request";
+  if (update.invite_link || update.via_chat_folder_invite_link) return "invite_link";
+  if (update.from.id !== update.new_chat_member.user.id) return "added";
+  return "self";
+}
+
 function escapeHtml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
@@ -97,6 +107,31 @@ export function clubDepartureNotification(
           : `⛔️ <b>Удалён из клуба — ${actorLabel(update.from)}</b>`;
 
   return `${heading}\n\n${member}\n🕒 ${occurredAt} (Екатеринбург)`;
+}
+
+export function clubJoinNotification(
+  update: ChatMemberUpdateLike,
+  reason: ClubJoinReason,
+): string {
+  const member = telegramUserLabel(update.new_chat_member.user);
+  const occurredAt = CLUB_EVENT_TIME_FORMATTER.format(new Date(update.date * 1000));
+  const heading = reason === "invite_link"
+    ? "🔗 <b>Вступил в клуб по ссылке</b>"
+    : reason === "join_request"
+      ? "✅ <b>Вступил в клуб по заявке</b>"
+      : reason === "added"
+        ? "➕ <b>Добавлен в клуб</b>"
+        : "👋 <b>Вступил в клуб самостоятельно</b>";
+  const actor = reason === "added"
+    ? `\nДобавил: ${telegramUserLabel(update.from)}`
+    : reason === "join_request"
+      ? `\nОдобрил: ${telegramUserLabel(update.from)}`
+      : "";
+  const inviteName = reason === "invite_link" && update.invite_link?.name
+    ? `\nСсылка: ${escapeHtml(update.invite_link.name)}`
+    : "";
+
+  return `${heading}\n\n${member}${actor}${inviteName}\n🕒 ${occurredAt} (Екатеринбург)`;
 }
 
 export function groupAccessMiddleware(): MiddlewareFn<Context> {
@@ -137,19 +172,25 @@ export function groupAccessMiddleware(): MiddlewareFn<Context> {
         config.botInboxGroupId &&
         String(update.chat_member.chat.id) === config.clubGroupId
       ) {
-        const reason = classifyClubDeparture(update.chat_member, ctx.botInfo?.id);
-        if (reason) {
+        const departureReason = classifyClubDeparture(update.chat_member, ctx.botInfo?.id);
+        const joinReason = classifyClubJoin(update.chat_member);
+        const notification = departureReason
+          ? clubDepartureNotification(update.chat_member, departureReason)
+          : joinReason
+            ? clubJoinNotification(update.chat_member, joinReason)
+            : null;
+        if (notification) {
           try {
             await ctx.telegram.sendMessage(
               config.botInboxGroupId,
-              clubDepartureNotification(update.chat_member, reason),
+              notification,
               {
                 parse_mode: "HTML",
                 link_preview_options: { is_disabled: true },
               },
             );
           } catch (error) {
-            logger.error("Failed to send club departure notification", error);
+            logger.error("Failed to send club membership notification", error);
           }
         }
       }

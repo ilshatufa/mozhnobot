@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   classifyClubDeparture,
+  classifyClubJoin,
   clubDepartureNotification,
+  clubJoinNotification,
   shouldDeleteMembershipServiceMessage,
   type MembershipServiceMessageLike,
 } from "./group-access.js";
@@ -14,7 +16,7 @@ const MEMBER_ID = 2002;
 const MOZHNOBOT_ID = 8423623216;
 
 function memberUpdate(
-  newStatus: "left" | "kicked",
+  newStatus: "left" | "kicked" | "member",
   actor: ChatMemberUpdateLike["from"],
   oldStatus = "member",
 ): ChatMemberUpdateLike {
@@ -31,6 +33,13 @@ function memberUpdate(
       user: { id: MEMBER_ID, username: "member_name", first_name: "Имя" },
     },
   };
+}
+
+function joinUpdate(
+  actor: ChatMemberUpdateLike["from"],
+  extra: Partial<ChatMemberUpdateLike> = {},
+): ChatMemberUpdateLike {
+  return { ...memberUpdate("member", actor, "left"), ...extra };
 }
 
 function serviceMessage(overrides: Partial<MembershipServiceMessageLike> = {}) {
@@ -148,4 +157,39 @@ test("names another remover and ignores the second kicked-to-left update", () =>
     "kicked",
   );
   assert.equal(classifyClubDeparture(duplicate, MOZHNOBOT_ID), null);
+});
+
+test("classifies and formats a join through an invite link", () => {
+  const update = joinUpdate(
+    { id: MEMBER_ID, username: "member_name" },
+    {
+      invite_link: {
+        invite_link: "https://t.me/+secret",
+        name: "Клубни",
+        creator: { id: 9002, username: "admin_name" },
+      },
+    },
+  );
+  assert.equal(classifyClubJoin(update), "invite_link");
+  assert.match(clubJoinNotification(update, "invite_link"), /Вступил в клуб по ссылке/);
+  assert.match(clubJoinNotification(update, "invite_link"), /Ссылка: Клубни/);
+});
+
+test("classifies a member added by another user and shows who added them", () => {
+  const update = joinUpdate({ id: 9002, username: "admin_name", first_name: "Админ" });
+  assert.equal(classifyClubJoin(update), "added");
+  assert.match(clubJoinNotification(update, "added"), /Добавил:.*@admin_name/);
+});
+
+test("classifies an approved join request and a direct self join", () => {
+  const approved = joinUpdate(
+    { id: 9002, username: "admin_name" },
+    { via_join_request: true },
+  );
+  assert.equal(classifyClubJoin(approved), "join_request");
+  assert.match(clubJoinNotification(approved, "join_request"), /Одобрил:.*@admin_name/);
+
+  const self = joinUpdate({ id: MEMBER_ID, username: "member_name" });
+  assert.equal(classifyClubJoin(self), "self");
+  assert.match(clubJoinNotification(self, "self"), /Вступил в клуб самостоятельно/);
 });

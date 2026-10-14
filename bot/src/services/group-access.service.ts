@@ -21,6 +21,13 @@ export type ChatMemberUpdateLike = {
   chat: { id: number };
   date: number;
   from: TelegramUserLike;
+  invite_link?: {
+    invite_link: string;
+    name?: string;
+    creator: TelegramUserLike;
+  };
+  via_join_request?: boolean;
+  via_chat_folder_invite_link?: boolean;
   old_chat_member: ChatMemberLike;
   new_chat_member: ChatMemberLike;
 };
