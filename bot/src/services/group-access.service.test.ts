@@ -72,7 +72,7 @@ function settings() {
     enabled: true,
     sourceChatId: SOURCE_CHAT_ID,
     managedChatIds: [BERLIN_CHAT_ID],
-    graceHours: 24,
+    graceHours: 72,
     dueIntervalMs: 300_000,
   };
 }
@@ -115,7 +115,7 @@ function memberNotFoundTelegram() {
   return { api, removed };
 }
 
-test("club departure schedules clearance exactly 24 hours after the event", async () => {
+test("club departure schedules clearance exactly 72 hours after the event", async () => {
   const repository = new FakeRepository();
   const service = new GroupAccessService(repository, settings());
   const { api } = telegram("left");
@@ -125,7 +125,7 @@ test("club departure schedules clearance exactly 24 hours after the event", asyn
   assert.equal(repository.scheduleCalls.length, 1);
   assert.equal(
     repository.scheduleCalls[0].getTime(),
-    1_789_164_000_000 + 24 * 60 * 60 * 1000,
+    1_789_164_000_000 + 72 * 60 * 60 * 1000,
   );
 });
 
