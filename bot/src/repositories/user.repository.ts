@@ -205,6 +205,38 @@ export class UserRepository {
     return result.count > 0;
   }
 
+  async reschedulePendingGroupAccessClearances(graceHours: number): Promise<number> {
+    const pendingUsers = await prisma.user.findMany({
+      where: {
+        groupRemovalExempt: false,
+        clearAccessGroupAt: { not: null },
+        leftAt: { not: null },
+      },
+      select: {
+        telegramId: true,
+        leftAt: true,
+        clearAccessGroupAt: true,
+      },
+    });
+    const updates = pendingUsers.flatMap((user) => {
+      const clearAt = new Date(user.leftAt!.getTime() + graceHours * 60 * 60 * 1000);
+      if (user.clearAccessGroupAt!.getTime() === clearAt.getTime()) return [];
+      return [
+        prisma.user.updateMany({
+          where: {
+            telegramId: user.telegramId,
+            groupRemovalExempt: false,
+            clearAccessGroupAt: user.clearAccessGroupAt,
+          },
+          data: { clearAccessGroupAt: clearAt },
+        }),
+      ];
+    });
+    if (updates.length === 0) return 0;
+    const results = await prisma.$transaction(updates);
+    return results.reduce((count, result) => count + result.count, 0);
+  }
+
   async clearGroupAccessClearance(telegramId: bigint): Promise<void> {
     await prisma.user.updateMany({
       where: { telegramId },

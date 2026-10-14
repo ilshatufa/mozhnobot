@@ -39,6 +39,7 @@ class FakeRepository implements GroupAccessRepository {
   };
 
   scheduleCalls: Date[] = [];
+  rescheduleCalls: number[] = [];
   clearCalls = 0;
   dueUsers: GroupAccessUser[] = [];
 
@@ -57,6 +58,11 @@ class FakeRepository implements GroupAccessRepository {
     return true;
   }
 
+  async reschedulePendingGroupAccessClearances(graceHours: number): Promise<number> {
+    this.rescheduleCalls.push(graceHours);
+    return 0;
+  }
+
   async clearGroupAccessClearance(): Promise<void> {
     this.clearCalls += 1;
     this.user = { ...this.user, clearAccessGroupAt: null };
@@ -72,7 +78,7 @@ function settings() {
     enabled: true,
     sourceChatId: SOURCE_CHAT_ID,
     managedChatIds: [BERLIN_CHAT_ID],
-    graceHours: 72,
+    graceHours: 168,
     dueIntervalMs: 300_000,
   };
 }
@@ -115,7 +121,7 @@ function memberNotFoundTelegram() {
   return { api, removed };
 }
 
-test("club departure schedules clearance exactly 72 hours after the event", async () => {
+test("club departure schedules clearance exactly 168 hours after the event", async () => {
   const repository = new FakeRepository();
   const service = new GroupAccessService(repository, settings());
   const { api } = telegram("left");
@@ -125,8 +131,18 @@ test("club departure schedules clearance exactly 72 hours after the event", asyn
   assert.equal(repository.scheduleCalls.length, 1);
   assert.equal(
     repository.scheduleCalls[0].getTime(),
-    1_789_164_000_000 + 72 * 60 * 60 * 1000,
+    1_789_164_000_000 + 168 * 60 * 60 * 1000,
   );
+});
+
+test("due processing applies the current grace period to pending clearances first", async () => {
+  const repository = new FakeRepository();
+  const service = new GroupAccessService(repository, settings());
+  const { api } = telegram("left");
+
+  await service.processDue(api);
+
+  assert.deepEqual(repository.rescheduleCalls, [168]);
 });
 
 test("club rejoin cancels a pending clearance", async () => {

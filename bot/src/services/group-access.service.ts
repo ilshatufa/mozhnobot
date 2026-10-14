@@ -45,6 +45,7 @@ export interface GroupAccessRepository {
   findByTelegramId(telegramId: bigint): Promise<GroupAccessUser | null>;
   upsertFromTelegramUser(user: TelegramUserLike, seenAt: Date): Promise<GroupAccessUser>;
   scheduleGroupAccessClearance(telegramId: bigint, clearAt: Date): Promise<boolean>;
+  reschedulePendingGroupAccessClearances(graceHours: number): Promise<number>;
   clearGroupAccessClearance(telegramId: bigint): Promise<void>;
   findDueGroupAccessClearances(now: Date, limit?: number): Promise<GroupAccessUser[]>;
 }
@@ -236,6 +237,15 @@ export class GroupAccessService {
     this.running = true;
 
     try {
+      const rescheduled = await this.repository.reschedulePendingGroupAccessClearances(
+        this.settings.graceHours,
+      );
+      if (rescheduled > 0) {
+        logger.info("Pending group access clearances rescheduled", {
+          graceHours: this.settings.graceHours,
+          rescheduled,
+        });
+      }
       const users = await this.repository.findDueGroupAccessClearances(now);
       for (const user of users) {
         await this.processDueUser(telegram, user);
