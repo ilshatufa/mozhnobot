@@ -119,6 +119,7 @@ test("classifies a voluntary departure", () => {
   const update = memberUpdate("left", { id: MEMBER_ID, username: "member_name" });
   assert.equal(classifyClubDeparture(update, MOZHNOBOT_ID), "self");
   assert.match(clubDepartureNotification(update, "self"), /Вышел из клуба сам/);
+  assert.match(clubDepartureNotification(update, "self"), /12\.09\.2026, 03:00 \(Екатеринбург\)/);
 });
 
 test("classifies removals by Tribute, MozhnoBot and Clubni", () => {

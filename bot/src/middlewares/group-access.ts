@@ -8,6 +8,15 @@ import {
 import { config } from "../config.js";
 
 const TRIBUTE_TELEGRAM_ID = 6675346585;
+const CLUB_EVENT_TIME_FORMATTER = new Intl.DateTimeFormat("ru-RU", {
+  timeZone: "Asia/Yekaterinburg",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
 
 export type ClubDepartureReason = "self" | "tribute" | "mozhno" | "clubni" | "other";
 
@@ -76,6 +85,7 @@ export function clubDepartureNotification(
   reason: ClubDepartureReason,
 ): string {
   const member = telegramUserLabel(update.new_chat_member.user);
+  const occurredAt = CLUB_EVENT_TIME_FORMATTER.format(new Date(update.date * 1000));
   const heading = reason === "self"
     ? "🚪 <b>Вышел из клуба сам</b>"
     : reason === "tribute"
@@ -86,7 +96,7 @@ export function clubDepartureNotification(
           ? "🤖 <b>Удалён из клуба — Clubni</b>"
           : `⛔️ <b>Удалён из клуба — ${actorLabel(update.from)}</b>`;
 
-  return `${heading}\n\n${member}`;
+  return `${heading}\n\n${member}\n🕒 ${occurredAt} (Екатеринбург)`;
 }
 
 export function groupAccessMiddleware(): MiddlewareFn<Context> {
