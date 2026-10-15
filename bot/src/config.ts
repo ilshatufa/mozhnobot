@@ -7,6 +7,11 @@ const envSchema = z.object({
   SEED_ADMIN_ID: z.string().min(1),
   CLUBNI_SOURCE_BOT_TELEGRAM_ID: z.union([z.string().regex(/^\d+$/), z.literal("")]).default(""),
   CLUBNI_PAYMENT_CLUB_ID: z.union([z.string().uuid(), z.literal("")]).default(""),
+  CLUBNI_SALES_REPORT_URL: z.union([
+    z.string().url().refine((value) => value.startsWith("https://"), "must use HTTPS"),
+    z.literal(""),
+  ]).default(""),
+  CLUBNI_SALES_REPORT_TOKEN: z.string().optional().default(""),
   GROUP_ACCESS_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   GROUP_ACCESS_MANAGED_CHAT_IDS_JSON: z.string().optional().default("[]"),
   GROUP_ACCESS_GRACE_HOURS: z.coerce.number().int().positive().default(168),
@@ -95,6 +100,16 @@ const envSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: [clubniSourceConfigured ? "CLUBNI_PAYMENT_CLUB_ID" : "CLUBNI_SOURCE_BOT_TELEGRAM_ID"],
       message: "must be configured together with the other Clubni payment setting",
+    });
+  }
+
+  const clubniSalesUrlConfigured = Boolean(value.CLUBNI_SALES_REPORT_URL);
+  const clubniSalesTokenConfigured = Boolean(value.CLUBNI_SALES_REPORT_TOKEN);
+  if (clubniSalesUrlConfigured !== clubniSalesTokenConfigured) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [clubniSalesUrlConfigured ? "CLUBNI_SALES_REPORT_TOKEN" : "CLUBNI_SALES_REPORT_URL"],
+      message: "must be configured together with the other Clubni sales report setting",
     });
   }
 
@@ -229,6 +244,11 @@ export const config = {
       ? BigInt(env.CLUBNI_SOURCE_BOT_TELEGRAM_ID)
       : null,
     clubId: env.CLUBNI_PAYMENT_CLUB_ID,
+  },
+  clubniSalesReport: {
+    enabled: Boolean(env.CLUBNI_SALES_REPORT_URL && env.CLUBNI_SALES_REPORT_TOKEN),
+    url: env.CLUBNI_SALES_REPORT_URL,
+    token: env.CLUBNI_SALES_REPORT_TOKEN,
   },
   groupAccess: {
     enabled: env.GROUP_ACCESS_ENABLED,

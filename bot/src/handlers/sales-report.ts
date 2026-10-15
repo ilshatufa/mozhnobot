@@ -1,6 +1,8 @@
 import type { Prisma } from "@prisma/client";
+import { z } from "zod";
 import { config } from "../config.js";
 import { prisma } from "../database.js";
+import { logger } from "../logger.js";
 import { type AuthContext } from "../middlewares/auth.js";
 
 const SALES_CAMPAIGN_EVENT_PREFIX = "waitlist_broadcast_";
@@ -10,6 +12,7 @@ const SALES_CAMPAIGNS = [
   { id: "waitlist-club-launch-remaining-2026-10-13", wave: "волна 3" },
   { id: "waitlist-club-launch-wave4-final-2026-10-14", wave: "волна 4" },
 ] as const;
+const SALES_WAVE5_STARTED_AT = new Date("2026-10-14T09:01:03.988Z");
 const EXCLUDED_SALES_USER_IDS = new Set([
   "385886382", // aisylu_psy
   "6058947423", // timur_tets
@@ -48,6 +51,10 @@ type PaymentWithoutMembership = {
 export type SalesReport = {
   startedAt: Date;
   delivered: number;
+  cohort: number;
+  notAuthorized: number;
+  authorizedNotStarted: number;
+  pending: number;
   paid: number;
   paidAndJoined: number;
   paidWithoutMembership: PaymentWithoutMembership[];
@@ -56,6 +63,19 @@ export type SalesReport = {
   onboardingAccessGranted: number;
   onboardingCompleted: number;
 };
+
+type SalesCohortEntry = {
+  telegramId: bigint;
+  enteredAt: Date;
+  wave: string;
+};
+
+const clubniFunnelSchema = z.object({
+  cohort: z.number().int().nonnegative(),
+  notAuthorized: z.number().int().nonnegative(),
+  authorizedNotStarted: z.number().int().nonnegative(),
+  pending: z.number().int().nonnegative(),
+});
 
 function escapeRichMarkdown(value: string): string {
   return value.replace(/([\\`*_{}\[\]()<>#+.!|~-])/g, "\\$1");
@@ -90,17 +110,20 @@ function countUsersByEvent(
 }
 
 export function buildSalesReportMarkdown(report: SalesReport): string {
-  const joinedFromDeliveryPercent = percentageFormatter.format(
-    (report.paidAndJoined / report.delivered) * 100,
+  const paidFromCohortPercent = percentageFormatter.format(
+    report.cohort === 0 ? 0 : (report.paid / report.cohort) * 100,
   );
   const salesTable = [
     "| Воронка | Людей |",
     "| :--- | ---: |",
-    `| Получили рассылку | **${report.delivered}** |`,
+    `| Всего в воронке B1–B5 | **${report.cohort}** |`,
+    `| Не авторизовались | **${report.notAuthorized}** |`,
+    `| Авторизовались, но не начали оформление | **${report.authorizedNotStarted}** |`,
+    `| Ожидают оплату — pending | **${report.pending}** |`,
     `| Оплатили | **${report.paid}** |`,
     `| Оплатили и вступили | **${report.paidAndJoined}** |`,
     `| Оплатили, но не вступили | **${report.paidWithoutMembership.length}** |`,
-    `| Вступили от рассылки | **${joinedFromDeliveryPercent}%** |`,
+    `| Конверсия в оплату | **${paidFromCohortPercent}%** |`,
   ].join("\n");
 
   const onboardingTable = [
@@ -159,24 +182,51 @@ async function loadSalesReport(): Promise<SalesReport | null> {
   const startedAt = campaignEvents.at(0)?.occurredAt;
   if (!startedAt) return null;
 
-  const waveByTelegramId = new Map<string, string>();
+  const cohortByTelegramId = new Map<string, SalesCohortEntry>();
   for (const event of campaignEvents) {
     if (event.eventType !== "waitlist_broadcast_sent" || event.targetUserTelegramId === null) continue;
     const telegramId = String(event.targetUserTelegramId);
     if (EXCLUDED_SALES_USER_IDS.has(telegramId)) continue;
     const campaign = campaignFromPayload(event.payload);
     const wave = SALES_CAMPAIGNS.find((item) => item.id === campaign)?.wave;
-    if (wave) waveByTelegramId.set(telegramId, wave);
+    if (wave && !cohortByTelegramId.has(telegramId)) {
+      cohortByTelegramId.set(telegramId, {
+        telegramId: event.targetUserTelegramId,
+        enteredAt: event.occurredAt,
+        wave,
+      });
+    }
   }
-  const deliveredUserIds = new Set(waveByTelegramId.keys());
+  const deliveredUserIds = new Set(cohortByTelegramId.keys());
 
-  const deliveredTelegramIds = [...deliveredUserIds].map((telegramId) => BigInt(telegramId));
+  const wave5Entries = await prisma.clubInterest.findMany({
+    where: { openedAt: { gt: SALES_WAVE5_STARTED_AT } },
+    select: {
+      openedAt: true,
+      user: { select: { telegramId: true } },
+    },
+    orderBy: { openedAt: "asc" },
+  });
+  for (const entry of wave5Entries) {
+    const telegramId = String(entry.user.telegramId);
+    if (EXCLUDED_SALES_USER_IDS.has(telegramId) || cohortByTelegramId.has(telegramId)) continue;
+    cohortByTelegramId.set(telegramId, {
+      telegramId: entry.user.telegramId,
+      enteredAt: entry.openedAt,
+      wave: "волна 5",
+    });
+  }
+
+  const cohortEntries = [...cohortByTelegramId.values()];
+  const cohortTelegramIds = cohortEntries.map((entry) => entry.telegramId);
+
+  const funnel = await loadClubniFunnel(cohortEntries);
 
   const paymentEvents = await prisma.clubEvent.findMany({
     where: {
       eventType: PAYMENT_EVENT,
       occurredAt: { gte: startedAt },
-      targetUserTelegramId: { in: deliveredTelegramIds },
+      targetUserTelegramId: { in: cohortTelegramIds },
       payload: { path: ["clubId"], equals: config.clubniPayment.clubId },
     },
     select: {
@@ -189,6 +239,8 @@ async function loadSalesReport(): Promise<SalesReport | null> {
   for (const payment of paymentEvents) {
     if (payment.targetUserTelegramId === null) continue;
     const key = String(payment.targetUserTelegramId);
+    const cohortEntry = cohortByTelegramId.get(key);
+    if (!cohortEntry || payment.occurredAt < cohortEntry.enteredAt) continue;
     if (!firstPaymentByUser.has(key)) {
       firstPaymentByUser.set(key, {
         telegramId: payment.targetUserTelegramId,
@@ -228,7 +280,7 @@ async function loadSalesReport(): Promise<SalesReport | null> {
     .filter((payment) => !usersByTelegramId.get(String(payment.telegramId))?.joinedAt)
     .map((payment) => {
       const user = usersByTelegramId.get(String(payment.telegramId));
-      const wave = waveByTelegramId.get(String(payment.telegramId));
+      const wave = cohortByTelegramId.get(String(payment.telegramId))?.wave;
       if (!wave) throw new Error(`Sales wave is missing for Telegram ID ${payment.telegramId}`);
       return {
         telegramId: payment.telegramId,
@@ -243,6 +295,10 @@ async function loadSalesReport(): Promise<SalesReport | null> {
   return {
     startedAt,
     delivered: deliveredUserIds.size,
+    cohort: cohortEntries.length,
+    notAuthorized: funnel.notAuthorized,
+    authorizedNotStarted: funnel.authorizedNotStarted,
+    pending: funnel.pending,
     paid: firstPaymentByUser.size,
     paidAndJoined: firstPaymentByUser.size - paidWithoutMembership.length,
     paidWithoutMembership,
@@ -251,6 +307,35 @@ async function loadSalesReport(): Promise<SalesReport | null> {
     onboardingAccessGranted: countUsersByEvent(onboardingEvents, "clubni_onboarding_access"),
     onboardingCompleted: countUsersByEvent(onboardingEvents, "clubni_onboarding_final"),
   };
+}
+
+async function loadClubniFunnel(entries: SalesCohortEntry[]) {
+  if (!config.clubniSalesReport.enabled || !config.clubniPayment.clubId) {
+    throw new Error("Clubni sales report integration is not configured");
+  }
+  const response = await fetch(config.clubniSalesReport.url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.clubniSalesReport.token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      clubId: config.clubniPayment.clubId,
+      cohort: entries.map((entry) => ({
+        telegramUserId: String(entry.telegramId),
+        enteredAt: entry.enteredAt.toISOString(),
+      })),
+    }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) {
+    throw new Error(`Clubni sales report returned ${response.status}`);
+  }
+  const funnel = clubniFunnelSchema.parse(await response.json());
+  if (funnel.cohort !== entries.length) {
+    throw new Error("Clubni sales report cohort does not match MozhnoBot cohort");
+  }
+  return funnel;
 }
 
 async function sendRichReport(ctx: AuthContext, markdown: string): Promise<void> {
@@ -266,7 +351,16 @@ export async function salesReportHandler(ctx: AuthContext): Promise<void> {
     return;
   }
 
-  const report = await loadSalesReport();
+  let report: SalesReport | null;
+  try {
+    report = await loadSalesReport();
+  } catch (error) {
+    logger.error("Failed to build sales report", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    await ctx.reply("Не удалось получить данные Clubni. Повторите команду позже.");
+    return;
+  }
   if (!report) {
     await sendRichReport(ctx, "# Продажи\n\nДанные о кампании рассылки пока отсутствуют\\.");
     return;

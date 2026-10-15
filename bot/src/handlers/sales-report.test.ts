@@ -6,6 +6,10 @@ test("formats sales totals and paid users without membership as rich markdown ta
   const report: SalesReport = {
     startedAt: new Date("2026-10-11T18:36:23.000Z"),
     delivered: 30,
+    cohort: 36,
+    notAuthorized: 10,
+    authorizedNotStarted: 14,
+    pending: 8,
     paid: 4,
     paidAndJoined: 2,
     paidWithoutMembership: [
@@ -34,9 +38,12 @@ test("formats sales totals and paid users without membership as rich markdown ta
 
   const markdown = buildSalesReportMarkdown(report);
 
-  assert.match(markdown, /\| Получили рассылку \| \*\*30\*\* \|/);
+  assert.match(markdown, /\| Всего в воронке B1–B5 \| \*\*36\*\* \|/);
+  assert.match(markdown, /\| Не авторизовались \| \*\*10\*\* \|/);
+  assert.match(markdown, /\| Авторизовались, но не начали оформление \| \*\*14\*\* \|/);
+  assert.match(markdown, /\| Ожидают оплату — pending \| \*\*8\*\* \|/);
   assert.match(markdown, /\| Оплатили, но не вступили \| \*\*2\*\* \|/);
-  assert.match(markdown, /\| Вступили от рассылки \| \*\*6,7%\*\* \|/);
+  assert.match(markdown, /\| Конверсия в оплату \| \*\*11,1%\*\* \|/);
   assert.match(markdown, /\*\*Онбординг после оплаты\*\*/);
   assert.match(markdown, /\| Ответили на вопрос \| \*\*3\*\* \|/);
   assert.match(markdown, /\n\n⠀\n\n/);
@@ -52,6 +59,10 @@ test("shows a compact empty state when every paying user joined", () => {
   const report: SalesReport = {
     startedAt: new Date("2026-10-11T18:36:23.000Z"),
     delivered: 30,
+    cohort: 40,
+    notAuthorized: 10,
+    authorizedNotStarted: 14,
+    pending: 8,
     paid: 8,
     paidAndJoined: 8,
     paidWithoutMembership: [],
