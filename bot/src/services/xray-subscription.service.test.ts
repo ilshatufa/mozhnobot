@@ -3,6 +3,7 @@ import test from "node:test";
 import { VpnSubscriptionInboundStatus } from "@prisma/client";
 import {
   hasCompleteRequiredInbounds,
+  happRoutingHeaders,
   mapProviderLinksByInbound,
   outboundFromUri,
   rewriteNativeHtml,
@@ -36,6 +37,21 @@ test("publishes Incy bootstrap DoH headers", () => {
     "server-address-resolve-dns-domain": "https://common.dot.dns.yandex.net/dns-query",
     "server-address-resolve-dns-ip": "77.88.8.8",
   });
+});
+
+test("publishes direct Russian routing for Happ subscriptions", () => {
+  const headers = happRoutingHeaders("Happ/4.7.1/Android/11");
+  const link = headers.routing;
+
+  assert.ok(link?.startsWith("happ://routing/onadd/"));
+  const encoded = link.slice("happ://routing/onadd/".length);
+  const profile = JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as {
+    DirectSites: string[];
+    GlobalProxy: string;
+  };
+  assert.equal(profile.GlobalProxy, "true");
+  assert.ok(profile.DirectSites.includes("regexp:.*\\.ru$"));
+  assert.deepEqual(happRoutingHeaders("v2box/1.0"), {});
 });
 
 test("requires every active required inbound before rendering a subscription", () => {

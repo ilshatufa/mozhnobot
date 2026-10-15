@@ -419,6 +419,35 @@ function contentDispositionHeader(): string {
   ].join("; ");
 }
 
+export function happRoutingHeaders(userAgent: string): Record<string, string> {
+  if (!/\bHapp(?:\/|\s)/i.test(userAgent)) return {};
+
+  const profile = {
+    Name: "МОЖНО • Российские сайты напрямую",
+    GlobalProxy: "true",
+    RemoteDNSType: "DoH",
+    RemoteDNSDomain: config.xraySubscription.jsonRemoteDns,
+    RemoteDNSIP: "",
+    DomesticDNSType: "DoH",
+    DomesticDNSDomain: config.xraySubscription.jsonRuDns,
+    DomesticDNSIP: "",
+    Geoipurl: "",
+    Geositeurl: "",
+    LastUpdated: "",
+    DnsHosts: {},
+    DirectSites: config.xraySubscription.jsonDirectDomains,
+    DirectIp: config.xraySubscription.jsonPrivateIps,
+    ProxySites: [],
+    ProxyIp: [],
+    BlockSites: [],
+    BlockIp: [],
+    DomainStrategy: "IPIfNonMatch",
+    FakeDNS: "false",
+  };
+  const encoded = Buffer.from(JSON.stringify(profile), "utf8").toString("base64");
+  return { routing: `happ://routing/onadd/${encoded}` };
+}
+
 export function serverAddressResolveHeaders(): Record<string, string> {
   if (!config.xraySubscription.serverAddressResolveEnabled) return {};
   return {
@@ -528,6 +557,7 @@ export class XraySubscriptionService {
         ].join("; "),
         "Content-Disposition": contentDispositionHeader(),
         "Cache-Control": "no-store",
+        ...happRoutingHeaders(userAgent),
         ...serverAddressResolveHeaders(),
       },
       meta: {
