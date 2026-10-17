@@ -30,6 +30,8 @@ export const CLUB_SALES_WAITLIST_MARKDOWN = `# Клуб «МОЖНО» откр�
 
 Если хотелось присоединиться — выбирай подходящий тариф и заходи. Будем очень рады видеть тебя внутри!
 
+⠀
+
 [🔥 ВОЙТИ В КЛУБ «МОЖНО»](https://t.me/we_clubni_bot?startapp=club_a4bdeb8f-10b3-41a9-8d6a-cf145f5148d8)
 
 ⠀
