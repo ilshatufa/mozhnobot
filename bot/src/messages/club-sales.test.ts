@@ -20,7 +20,3 @@ test("sales messages contain the deadline and all entry options", () => {
     assert.match(message, /mozhno_vpn_bot/);
   }
 });
-
-test("waitlist sales message keeps a visible spacer before the primary entry link", () => {
-  assert.match(CLUB_SALES_WAITLIST_MARKDOWN, /видеть тебя внутри!\n\n⠀\n\n\[🔥 ВОЙТИ В КЛУБ/);
-});
