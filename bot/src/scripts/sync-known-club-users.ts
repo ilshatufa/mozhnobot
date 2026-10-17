@@ -20,9 +20,20 @@ type TelegramApiResponse<T> = {
   ok: boolean;
   result?: T;
   description?: string;
+  error_code?: number;
 };
 
 const MEMBER_STATUSES = new Set(["creator", "administrator", "member"]);
+
+class TelegramApiError extends Error {
+  constructor(
+    readonly errorCode: number | undefined,
+    message: string,
+  ) {
+    super(message);
+    this.name = "TelegramApiError";
+  }
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -49,10 +60,35 @@ async function telegramGet<T>(method: string, params: Record<string, string | nu
   const response = await fetch(url);
   const json = await response.json() as TelegramApiResponse<T>;
   if (!json.ok || json.result === undefined) {
-    throw new Error(json.description ?? `Telegram ${method} failed with HTTP ${response.status}`);
+    throw new TelegramApiError(
+      json.error_code,
+      json.description ?? `Telegram ${method} failed with HTTP ${response.status}`,
+    );
   }
 
   return json.result;
+}
+
+function requestedTelegramIds(args: string[]): bigint[] | null {
+  if (args.length === 0) return null;
+
+  const ids = new Set<string>();
+  for (const value of args) {
+    if (!/^\d+$/.test(value)) {
+      throw new Error(`Invalid Telegram user id: ${value}`);
+    }
+    ids.add(value);
+  }
+
+  return [...ids].map((id) => BigInt(id));
+}
+
+function parseArguments(args: string[]): { dryRun: boolean; requestedIds: bigint[] | null } {
+  const dryRun = args.includes("--dry-run");
+  return {
+    dryRun,
+    requestedIds: requestedTelegramIds(args.filter((value) => value !== "--dry-run")),
+  };
 }
 
 async function collectKnownTelegramIds(): Promise<bigint[]> {
@@ -90,7 +126,10 @@ async function collectKnownTelegramIds(): Promise<bigint[]> {
   return [...ids].map((id) => BigInt(id));
 }
 
-async function syncUser(telegramId: bigint): Promise<{ status: "updated" | "failed"; reason?: string }> {
+async function syncUser(
+  telegramId: bigint,
+  dryRun: boolean,
+): Promise<{ status: "updated" | "not_found" | "failed"; reason?: string }> {
   try {
     const member = await telegramGet<TelegramChatMember>("getChatMember", {
       chat_id: config.clubGroupId,
@@ -100,27 +139,43 @@ async function syncUser(telegramId: bigint): Promise<{ status: "updated" | "fail
     const user = member.user;
     const clubStatus = mapClubStatus(member);
 
-    await prisma.user.upsert({
-      where: { telegramId },
-      update: {
-        username: user.username,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        isBot: user.is_bot ?? false,
-        clubStatus,
-      },
-      create: {
-        telegramId,
-        username: user.username,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        isBot: user.is_bot ?? false,
-        clubStatus,
-      },
-    });
+    if (!dryRun) {
+      await prisma.user.upsert({
+        where: { telegramId },
+        update: {
+          username: user.username,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          isBot: user.is_bot ?? false,
+          clubStatus,
+        },
+        create: {
+          telegramId,
+          username: user.username,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          isBot: user.is_bot ?? false,
+          clubStatus,
+        },
+      });
+    }
 
     return { status: "updated" };
   } catch (error) {
+    if (
+      error instanceof TelegramApiError &&
+      error.errorCode === 400 &&
+      error.message === "Bad Request: member not found"
+    ) {
+      if (!dryRun) {
+        await prisma.user.updateMany({
+          where: { telegramId },
+          data: { clubStatus: ClubMembershipStatus.UNKNOWN },
+        });
+      }
+      return { status: "not_found" };
+    }
+
     return {
       status: "failed",
       reason: error instanceof Error ? error.message : String(error),
@@ -129,18 +184,24 @@ async function syncUser(telegramId: bigint): Promise<{ status: "updated" | "fail
 }
 
 async function main(): Promise<void> {
-  const ids = await collectKnownTelegramIds();
+  const { dryRun, requestedIds } = parseArguments(process.argv.slice(2));
+  const ids = requestedIds ?? await collectKnownTelegramIds();
   const summary = {
+    scope: requestedIds ? "requested" : "all_known",
+    dryRun,
     knownIds: ids.length,
     updated: 0,
+    notFoundMarkedUnknown: 0,
     failed: 0,
     failures: [] as Array<{ telegramId: string; reason: string }>,
   };
 
   for (const telegramId of ids) {
-    const result = await syncUser(telegramId);
+    const result = await syncUser(telegramId, dryRun);
     if (result.status === "updated") {
       summary.updated += 1;
+    } else if (result.status === "not_found") {
+      summary.notFoundMarkedUnknown += 1;
     } else {
       summary.failed += 1;
       summary.failures.push({
