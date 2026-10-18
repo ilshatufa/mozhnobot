@@ -11,6 +11,7 @@ const SALES_CAMPAIGNS = [
   { id: "waitlist-club-launch-next100-2026-10-12", wave: "волна 2" },
   { id: "waitlist-club-launch-remaining-2026-10-13", wave: "волна 3" },
   { id: "waitlist-club-launch-wave4-final-2026-10-14", wave: "волна 4" },
+  { id: "waitlist-club-launch-wave6-2026-10-17", wave: "волна 6" },
 ] as const;
 const SALES_WAVE5_STARTED_AT = new Date("2026-10-14T09:01:03.988Z");
 const EXCLUDED_SALES_USER_IDS = new Set([
@@ -116,7 +117,7 @@ export function buildSalesReportMarkdown(report: SalesReport): string {
   const salesTable = [
     "| Воронка | Людей |",
     "| :--- | ---: |",
-    `| Всего в воронке B1–B5 | **${report.cohort}** |`,
+    `| Всего в воронке B1–B6 | **${report.cohort}** |`,
     `| Не авторизовались | **${report.notAuthorized}** |`,
     `| Авторизовались, но не начали оформление | **${report.authorizedNotStarted}** |`,
     `| Ожидают оплату — pending | **${report.pending}** |`,

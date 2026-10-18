@@ -38,7 +38,7 @@ test("formats sales totals and paid users without membership as rich markdown ta
 
   const markdown = buildSalesReportMarkdown(report);
 
-  assert.match(markdown, /\| Всего в воронке B1–B5 \| \*\*36\*\* \|/);
+  assert.match(markdown, /\| Всего в воронке B1–B6 \| \*\*36\*\* \|/);
   assert.match(markdown, /\| Не авторизовались \| \*\*10\*\* \|/);
   assert.match(markdown, /\| Авторизовались, но не начали оформление \| \*\*14\*\* \|/);
   assert.match(markdown, /\| Ожидают оплату — pending \| \*\*8\*\* \|/);
