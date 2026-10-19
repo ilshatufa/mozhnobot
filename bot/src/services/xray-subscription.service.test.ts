@@ -8,6 +8,7 @@ import {
   outboundFromUri,
   rewriteNativeHtml,
   serverAddressResolveHeaders,
+  v2rayJsonConfig,
 } from "./xray-subscription.service.js";
 import {
   CLUB_NL_DIRECT_PUBLIC_PROFILE,
@@ -52,6 +53,52 @@ test("publishes direct Russian routing for Happ subscriptions", () => {
   assert.equal(profile.GlobalProxy, "true");
   assert.ok(profile.DirectSites.includes("regexp:.*\\.ru$"));
   assert.deepEqual(happRoutingHeaders("v2box/1.0"), {});
+});
+
+test("routes Apple TCP and UDP before the general UDP/443 block in Incy JSON", () => {
+  const profile = v2rayJsonConfig(SOURCE_LINK) as {
+    routing: { rules: Array<{ domain?: string[]; ip?: string[]; port?: string; network?: string; outboundTag: string }> };
+    dns: { servers: Array<{ domains?: string[] }> };
+  };
+  const rules = profile.routing.rules;
+  const appleDomains = rules.findIndex((rule) => rule.domain?.includes("domain:apple.com"));
+  const appleIps = rules.findIndex((rule) => rule.ip?.includes("17.0.0.0/8"));
+  const udpBlock = rules.findIndex((rule) => rule.network === "udp" && rule.port === "443" && rule.outboundTag === "block");
+
+  assert.ok(appleDomains >= 0 && appleDomains < udpBlock);
+  assert.ok(appleIps >= 0 && appleIps < udpBlock);
+  assert.equal(rules[appleDomains].outboundTag, "direct");
+  assert.equal(rules[appleIps].outboundTag, "direct");
+  assert.equal(rules[appleDomains].network, undefined);
+  assert.equal(rules[appleIps].network, undefined);
+  assert.equal(rules[appleDomains].port, undefined);
+  assert.equal(rules[appleIps].port, undefined);
+  for (const domain of ["domain:icloud.com", "domain:icloud-content.com", "domain:apple-dns.net", "full:apple-relay.cloudflare.com"]) {
+    assert.ok(rules[appleDomains].domain?.includes(domain), domain);
+    assert.ok(profile.dns.servers[0].domains?.includes(domain), `direct DNS: ${domain}`);
+  }
+  for (const ip of ["2403:300::/32", "2620:149::/32", "2a01:b740::/32"]) {
+    assert.ok(rules[appleIps].ip?.includes(ip), ip);
+  }
+  assert.ok(rules.some((rule) => rule.ip?.includes("192.168.0.0/16") && rule.outboundTag === "direct"));
+  assert.ok(rules.some((rule) => rule.domain?.includes("regexp:.*\\.ru$") && rule.outboundTag === "direct"));
+  assert.equal(rules.at(-1)?.outboundTag, "proxy");
+  assert.ok(!rules.some((rule) => rule.domain?.includes("domain:cloudflare.com")));
+  assert.ok(!rules.some((rule) => rule.domain?.includes("domain:edgesuite.net")));
+});
+
+test("includes Apple exceptions in the existing Happ routing profile too", () => {
+  const link = happRoutingHeaders("Happ/4.7.1/iOS").routing;
+  const profile = JSON.parse(Buffer.from(link.slice("happ://routing/onadd/".length), "base64").toString("utf8")) as {
+    DirectSites: string[];
+    DirectIp: string[];
+    GlobalProxy: string;
+  };
+  assert.ok(profile.DirectSites.includes("domain:apple.com"));
+  assert.ok(profile.DirectSites.includes("domain:icloud.com"));
+  assert.ok(profile.DirectIp.includes("17.0.0.0/8"));
+  assert.ok(profile.DirectIp.includes("192.168.0.0/16"));
+  assert.equal(profile.GlobalProxy, "true");
 });
 
 test("requires every active required inbound before rendering a subscription", () => {

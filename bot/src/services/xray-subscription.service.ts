@@ -15,6 +15,7 @@ import { vpnKeyRepository } from "../repositories/vpn-key.repository.js";
 import { xuiClient } from "./xui-client.js";
 import { renderVpnInboundProfile } from "./vpn-public-profile.js";
 import { resolveVpnEntitlement } from "./vpn-entitlement.js";
+import { APPLE_DIRECT_DOMAINS, APPLE_DIRECT_IPS } from "./vpn-apple-routing.js";
 
 type XuiKeyWithServer = VpnKey & {
   server: VpnServer | null;
@@ -204,6 +205,9 @@ function routingRules(): Array<Record<string, unknown>> {
   const rules: Array<Record<string, unknown>> = [
     { type: "field", port: "53", outboundTag: "dns-out" },
     { type: "field", ip: config.xraySubscription.jsonPrivateIps, outboundTag: "direct" },
+    // Apple uses UDP/443 too; its exceptions must precede the general block.
+    { type: "field", domain: APPLE_DIRECT_DOMAINS, outboundTag: "direct" },
+    { type: "field", ip: APPLE_DIRECT_IPS, outboundTag: "direct" },
   ];
 
   if (config.xraySubscription.jsonBlockUdp443) {
@@ -327,7 +331,7 @@ function remarksFromUri(line: string): string {
   }
 }
 
-function v2rayJsonConfig(line: string): Record<string, unknown> | null {
+export function v2rayJsonConfig(line: string): Record<string, unknown> | null {
   const proxy = outboundFromUri(line);
   if (!proxy) {
     return null;
@@ -362,7 +366,7 @@ function v2rayJsonConfig(line: string): Record<string, unknown> | null {
       servers: [
         {
           address: config.xraySubscription.jsonRuDns,
-          domains: config.xraySubscription.jsonDirectDomains,
+          domains: [...new Set([...config.xraySubscription.jsonDirectDomains, ...APPLE_DIRECT_DOMAINS])],
         },
         {
           address: config.xraySubscription.jsonRemoteDns,
@@ -435,8 +439,8 @@ export function happRoutingHeaders(userAgent: string): Record<string, string> {
     Geositeurl: "",
     LastUpdated: "",
     DnsHosts: {},
-    DirectSites: config.xraySubscription.jsonDirectDomains,
-    DirectIp: config.xraySubscription.jsonPrivateIps,
+    DirectSites: [...new Set([...config.xraySubscription.jsonDirectDomains, ...APPLE_DIRECT_DOMAINS])],
+    DirectIp: [...new Set([...config.xraySubscription.jsonPrivateIps, ...APPLE_DIRECT_IPS])],
     ProxySites: [],
     ProxyIp: [],
     BlockSites: [],
