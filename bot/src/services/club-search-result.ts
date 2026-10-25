@@ -1,4 +1,5 @@
 import { ClubSearchRequestStatus, type ClubSearchRequest } from "@prisma/client";
+import { GROUNDED_CLUB_ANSWER } from "./club-question-answer.service.js";
 
 const MAX_SEARCH_RESULT_LENGTH = 4_096;
 const MAX_SOURCE_PREVIEW_LENGTH = 220;
@@ -90,6 +91,14 @@ export function buildSearchResultRichMarkdown(
   }
 
   const uniqueSourceIds = [...new Set(request.sourceMessageIds)].slice(0, SOURCE_LIMIT);
+  if (request.errorCode === GROUNDED_CLUB_ANSWER) {
+    const content = formatParagraph(answer).replace(/\\\[(\d+)\\\]/g, (reference, rawIndex: string) => {
+      const messageId = uniqueSourceIds[Number(rawIndex) - 1];
+      if (!messageId) throw new Error("Club answer references an unknown source");
+      return `[${rawIndex}](${sourceLink(clubGroupId, messageId)})`;
+    });
+    return buildScreen(request.question, content);
+  }
   if (uniqueSourceIds.length === 0) {
     return buildScreen(request.question, formatAnswer(answer.slice(0, MAX_SEARCH_RESULT_LENGTH)));
   }

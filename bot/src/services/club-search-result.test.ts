@@ -2,6 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ClubSearchRequestStatus } from "@prisma/client";
 import { buildSearchResultRichMarkdown } from "./club-search-result.js";
+import { GROUNDED_CLUB_ANSWER } from "./club-question-answer.service.js";
+
+test("renders a direct grounded answer with per-claim links, without dumping candidate messages", () => {
+  const result = buildSearchResultRichMarkdown({
+    status: ClubSearchRequestStatus.COMPLETED,
+    question: "Кто из Твери?", answer: "Марина написала, что живёт в Твери. [1]",
+    sourceMessageIds: [42], errorCode: GROUNDED_CLUB_ANSWER,
+  }, [{ telegramMessageId: 42, text: "Не нужно дублировать полный фрагмент", caption: null }], "-100123456");
+  assert.match(result, /\[1\]\(https:\/\/t.me\/c\/123456\/42\)/);
+  assert.doesNotMatch(result, /Сообщения из клуба|Не нужно дублировать/);
+});
 
 test("renders rich previews before source links in requested order", () => {
   const result = buildSearchResultRichMarkdown(

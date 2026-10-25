@@ -4,9 +4,9 @@ import { logger } from "../logger.js";
 import { clubMessageSearchRepository } from "../repositories/club-message-search.repository.js";
 import { clubSearchRequestRepository } from "../repositories/club-search-request.repository.js";
 import { QwenWebSearchService } from "./qwen-web-search.service.js";
-import { extractSearchTerms, searchQuestionGuidance } from "./search-query.js";
+import { searchQuestionGuidance } from "./search-query.js";
+import { ClubQuestionAnswerService, GROUNDED_CLUB_ANSWER } from "./club-question-answer.service.js";
 
-const CLUB_SEARCH_RESULT_LIMIT = 8;
 const QUESTION_REQUIRED_CODE = "QUESTION_REQUIRED";
 
 function processingErrorCode(error: unknown): string {
@@ -29,6 +29,12 @@ export class ClubSearchProcessorService {
     model: config.search.qwenModel,
     timeoutMs: config.search.timeoutMs,
   });
+  private readonly clubSearch = new ClubQuestionAnswerService({
+    apiKey: config.search.qwenApiKey,
+    baseUrl: config.search.qwenBaseUrl,
+    model: config.search.qwenModel,
+    timeoutMs: config.search.timeoutMs,
+  }, clubMessageSearchRepository);
 
   async start(): Promise<void> {
     if (!config.search.processingEnabled || this.timer) return;
@@ -87,17 +93,10 @@ export class ClubSearchProcessorService {
         return;
       }
 
-      const terms = extractSearchTerms(request.question);
-      const candidates = await clubMessageSearchRepository.search(
-        BigInt(config.clubGroupId),
-        terms,
-        CLUB_SEARCH_RESULT_LIMIT,
-      );
+      const result = await this.clubSearch.search(BigInt(config.clubGroupId), request.question);
       await clubSearchRequestRepository.complete(request.id, {
-        answer: candidates.length > 0
-          ? "Нашёл сообщения, в которых участники клуба обсуждали эту тему."
-          : null,
-        sourceMessageIds: candidates.map((candidate) => candidate.telegramMessageId),
+        ...result,
+        resultCode: GROUNDED_CLUB_ANSWER,
       });
     } catch (error) {
       const errorCode = processingErrorCode(error);
