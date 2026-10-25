@@ -4,7 +4,6 @@ import { createBot } from "./bot.js";
 import { config } from "./config.js";
 import { registerProcessErrorHandlers } from "./error-handling.js";
 import { clubSearchDeliveryService } from "./services/club-search-delivery.service.js";
-import { clubSearchProcessorService } from "./services/club-search-processor.service.js";
 import { groupAccessService } from "./services/group-access.service.js";
 
 const STARTUP_RETRY_CODES = new Set([
@@ -103,13 +102,14 @@ async function main(): Promise<void> {
   logger.info("Database connected");
 
   const bot = createBot();
-  await clubSearchProcessorService.start();
+  // One queue has one processing owner: MozhnoAgent (Codex). A second local
+  // consumer can steal requests and replace grounded answers with keyword hits.
+  logger.info("Search processing delegated to MozhnoAgent");
   clubSearchDeliveryService.start(bot.telegram);
 
   const shutdown = async (signal: string) => {
     logger.info(`${signal} received, shutting down...`);
     bot.stop(signal);
-    clubSearchProcessorService.stop();
     clubSearchDeliveryService.stop();
     groupAccessService.stop();
     await prisma.$disconnect();

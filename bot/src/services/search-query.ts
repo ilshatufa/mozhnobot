@@ -29,32 +29,3 @@ export function searchQuestionGuidance(
   }
   return null;
 }
-
-const SEARCH_STOP_WORDS = new Set([
-  "без", "был", "была", "были", "быть", "вам", "вас", "весь", "вот",
-  "все", "где", "для", "его", "еще", "ещё", "здесь", "или", "как",
-  "когда", "кто", "мне", "может", "мой", "мы", "наш", "она", "они",
-  "оно", "под", "при", "про", "проходил", "проходила", "проходили",
-  "проходить", "сталкивался", "сталкивалась", "сталкивались", "так", "такое",
-  "там", "тебя", "тем", "то", "тоже", "уже", "через", "что", "эта",
-  "эти", "это", "этого", "этой", "этот", "есть", "если", "клуб",
-  "клубе", "история", "истории",
-]);
-
-export function extractSearchTerms(question: string): string[] {
-  const words = question
-    .normalize("NFKC")
-    .toLocaleLowerCase("ru-RU")
-    .match(/[\p{L}\p{N}]+/gu) ?? [];
-  const result: string[] = [];
-  const seen = new Set<string>();
-
-  for (const word of words) {
-    if (word.length < 3 || SEARCH_STOP_WORDS.has(word) || seen.has(word)) continue;
-    seen.add(word);
-    result.push(word);
-    if (result.length === 10) break;
-  }
-
-  return result;
-}
