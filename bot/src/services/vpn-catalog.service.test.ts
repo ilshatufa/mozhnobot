@@ -55,3 +55,13 @@ test("keeps club direct and whitelist traffic in separate client groups", () => 
   assert.equal(whitelist?.trafficLimitBytes, null);
   assert.equal(whitelist?.trafficResetDays, 30);
 });
+
+test("adds Netherlands 2 only to the club subscription on its dedicated port", () => {
+  const inbound = INITIAL_VPN_INBOUND_CATALOG.find((item) => item.code === "club-nl2-direct");
+  assert.equal(inbound?.serverCode, "nl2");
+  assert.equal(inbound?.port, 11443);
+  assert.deepEqual(inbound?.publicProfile, { host: "srv2.amneziya.mozhno.org", port: 11443 });
+  const products = INITIAL_VPN_PRODUCT_CATALOG.filter((product) =>
+    product.inbounds.some((item) => item.code === "club-nl2-direct"));
+  assert.deepEqual(products.map((product) => product.code), ["club"]);
+});

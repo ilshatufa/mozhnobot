@@ -71,6 +71,14 @@ export const INITIAL_VPN_INBOUND_CATALOG: readonly VpnInboundCatalogEntry[] = [
     port: 443,
   },
   {
+    code: "club-nl2-direct",
+    serverCode: "nl2",
+    providerInboundId: 1,
+    name: "🇳🇱 МОЖНО • Нидерланды 2",
+    port: 11443,
+    publicProfile: { host: "srv2.amneziya.mozhno.org", port: 11443 },
+  },
+  {
     code: "router-nl",
     serverCode: "nl",
     providerInboundId: 4,
@@ -134,6 +142,7 @@ export const INITIAL_VPN_PRODUCT_CATALOG: readonly VpnProductCatalogEntry[] = [
       productInbound("club-nl-yandex-cdn", "whitelist", null, 30),
       productInbound("club-de-direct"),
       productInbound("club-lv-direct"),
+      productInbound("club-nl2-direct"),
     ],
   },
   {
