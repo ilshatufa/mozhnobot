@@ -1,0 +1,13 @@
+[Unit]
+Description=Reload the Netherlands 2 certificate after Caddy renewal
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/mozhno-infra/infra/xray-nl2/reload-certificate.sh
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/xray-nl2
+PrivateTmp=true
+NoNewPrivileges=true

@@ -1,0 +1,11 @@
+[Unit]
+Description=Check the Netherlands 2 certificate hourly
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=300
+Persistent=true
+Unit=xray-nl2-certificate.service
+
+[Install]
+WantedBy=timers.target
