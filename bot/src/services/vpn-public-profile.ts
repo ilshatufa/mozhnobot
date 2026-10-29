@@ -6,6 +6,11 @@ export interface VpnPublicProfileOverride {
 }
 
 const NL_DIRECT_PUBLIC_HOST = "xraynl.vpn.mozhno.org";
+const YANDEX_CDN_MOSCOW_ADDRESS = "188.72.110.24";
+const YANDEX_CDN_PUBLIC_DOMAINS = new Set([
+  "mozhnoclub.yc.cdn.mozhno.org",
+  "paid.yc.cdn.mozhno.org",
+]);
 
 export const CLUB_NL_DIRECT_PUBLIC_PROFILE: VpnPublicProfileOverride = {
   host: NL_DIRECT_PUBLIC_HOST,
@@ -19,7 +24,7 @@ export const PAID_NL_DIRECT_PUBLIC_PROFILE: VpnPublicProfileOverride = {
 
 function yandexCdnPublicProfile(host: string): VpnPublicProfileOverride {
   return {
-    host,
+    host: YANDEX_CDN_MOSCOW_ADDRESS,
     port: 443,
     query: {
       type: "xhttp",
@@ -112,7 +117,11 @@ export function renderVpnInboundProfile(
   const parsed = new URL(sourceLink);
   const override = parseVpnPublicProfile(publicProfile);
   if (override) {
-    parsed.hostname = override.host;
+    // Existing catalog rows still contain the CDN domain. Pin their dial
+    // address too, while retaining the product's Host and TLS SNI below.
+    parsed.hostname = YANDEX_CDN_PUBLIC_DOMAINS.has(override.host)
+      ? YANDEX_CDN_MOSCOW_ADDRESS
+      : override.host;
     parsed.port = String(override.port);
     for (const [key, value] of Object.entries(override.query ?? {})) {
       parsed.searchParams.set(key, typeof value === "string" ? value : JSON.stringify(value));

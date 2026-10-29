@@ -125,17 +125,52 @@ test("requires every active required inbound before rendering a subscription", (
   }), false);
 });
 
-test("uses a separate Yandex CDN domain for the paid whitelist", () => {
+test("pins paid Yandex CDN to Moscow while retaining its separate TLS domain", () => {
   const paid = new URL(renderVpnInboundProfile(
     SOURCE_LINK.replace(":443", ":12443"),
     "🇷🇺 МОЖНО • Белые списки — Нидерланды",
     PAID_YANDEX_CDN_PUBLIC_PROFILE,
   ));
 
-  assert.equal(paid.hostname, "paid.yc.cdn.mozhno.org");
+  assert.equal(paid.hostname, "188.72.110.24");
   assert.equal(paid.port, "443");
   assert.equal(paid.searchParams.get("sni"), "paid.yc.cdn.mozhno.org");
   assert.equal(paid.searchParams.get("host"), "paid.yc.cdn.mozhno.org");
+});
+
+test("pins stored CDN metadata in both URI and Incy JSON without changing credentials", () => {
+  for (const [domain, canonical] of [
+    ["mozhnoclub.yc.cdn.mozhno.org", YANDEX_CDN_PUBLIC_PROFILE],
+    ["paid.yc.cdn.mozhno.org", PAID_YANDEX_CDN_PUBLIC_PROFILE],
+  ] as const) {
+    const link = renderVpnInboundProfile(SOURCE_LINK, "CDN", { ...canonical, host: domain });
+    const uri = new URL(link);
+    assert.equal(uri.hostname, "188.72.110.24");
+    assert.equal(uri.username, new URL(SOURCE_LINK).username);
+    assert.equal(uri.searchParams.get("sni"), domain);
+    assert.equal(uri.searchParams.get("host"), domain);
+
+    const profile = v2rayJsonConfig(link) as {
+      outbounds: Array<{
+        protocol: string;
+        settings: { vnext: Array<{ address: string; port: number; users: Array<{ id: string }> }> };
+        streamSettings: { tlsSettings: { serverName: string }; xhttpSettings: { headers: Record<string, string> } };
+      }>;
+    };
+    const proxy = profile.outbounds.find((item) => item.protocol === "vless")!;
+    assert.equal(proxy.settings.vnext[0].address, "188.72.110.24");
+    assert.equal(proxy.settings.vnext[0].port, 443);
+    assert.equal(proxy.settings.vnext[0].users[0].id, uri.username);
+    assert.equal(proxy.streamSettings.tlsSettings.serverName, domain);
+    assert.equal(proxy.streamSettings.xhttpSettings.headers.Host, domain);
+  }
+});
+
+test("keeps unrelated public profile destinations intact", () => {
+  const profile = { host: "custom.cdn.example.com", port: 443 };
+  const link = renderVpnInboundProfile(SOURCE_LINK, "Custom", profile);
+  assert.equal(new URL(link).hostname, profile.host);
+  assert.equal(new URL(link).searchParams.get("sni"), new URL(SOURCE_LINK).searchParams.get("sni"));
 });
 
 test("uses the public NL hostname for direct club and paid profiles", () => {
@@ -175,7 +210,7 @@ test("renders direct and CDN profiles from explicit inbound metadata", () => {
 
   const cdn = new URL(links[1]);
   assert.equal(cdn.username, "11111111-2222-3333-4444-555555555555");
-  assert.equal(cdn.hostname, "mozhnoclub.yc.cdn.mozhno.org");
+  assert.equal(cdn.hostname, "188.72.110.24");
   assert.equal(cdn.port, "443");
   assert.equal(cdn.searchParams.get("type"), "xhttp");
   assert.equal(cdn.searchParams.get("security"), "tls");
