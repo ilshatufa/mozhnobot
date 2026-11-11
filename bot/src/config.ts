@@ -143,6 +143,7 @@ const defaultXrayDirectDomains = [
   "domain:vkuservideo.net", "domain:mycdn.me", "domain:mradx.net",
   "domain:avito.ru", "domain:avito.st", "domain:2gis.com",
   "domain:2gis.ru", "domain:gismeteo.net", "domain:gismeteo.ru",
+  "domain:binance.com",
 ];
 
 const defaultXrayPrivateIps = [
