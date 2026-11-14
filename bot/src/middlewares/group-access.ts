@@ -7,6 +7,12 @@ import {
   type ChatMemberUpdateLike,
 } from "../services/group-access.service.js";
 import { config } from "../config.js";
+import { clubEventRepository } from "../repositories/club-event.repository.js";
+import {
+  deliverClubniRemovalNotice,
+  parseClubniRemovalCommand,
+  receiveClubniRemoval,
+} from "../services/clubni-removal.service.js";
 
 const TRIBUTE_TELEGRAM_ID = 6675346585;
 const CLUB_EVENT_TIME_FORMATTER = new Intl.DateTimeFormat("ru-RU", {
@@ -137,6 +143,25 @@ export function clubJoinNotification(
 export function groupAccessMiddleware(): MiddlewareFn<Context> {
   return async (ctx, next) => {
     const update = ctx.update as typeof ctx.update & GroupAccessUpdateLike;
+    const editRemovalNotice = (messageId: number, text: string) => ctx.telegram.editMessageText(
+      config.botInboxGroupId!, messageId, undefined, text,
+      { parse_mode: "HTML", link_preview_options: { is_disabled: true } },
+    );
+    if (config.clubniPayment.enabled && ctx.from?.is_bot &&
+        BigInt(ctx.from.id) === config.clubniPayment.sourceBotTelegramId &&
+        ctx.chat?.type === "private" && ctx.message && "text" in ctx.message &&
+        ctx.message.text.startsWith("/clubni_removal")) {
+      const event = parseClubniRemovalCommand(ctx.message.text);
+      if (!event || !config.botInboxGroupId) {
+        logger.warn("Invalid or unconfigured Clubni removal event ignored");
+        return;
+      }
+      await receiveClubniRemoval(event, config.clubniPayment.clubId, config.clubGroupId, {
+        repository: clubEventRepository, edit: editRemovalNotice,
+      });
+      logger.info("Clubni removal reason processed", { eventId: event.eventId, reason: event.reason });
+      return;
+    }
 
     if (
       config.groupAccess.enabled &&
@@ -181,6 +206,23 @@ export function groupAccessMiddleware(): MiddlewareFn<Context> {
             : null;
         if (notification) {
           try {
+            if (departureReason === "clubni" && config.clubniPayment.enabled &&
+                BigInt(update.chat_member.from.id) === config.clubniPayment.sourceBotTelegramId) {
+              await deliverClubniRemovalNotice({
+                clubId: config.clubniPayment.clubId,
+                chatId: String(update.chat_member.chat.id),
+                userId: update.chat_member.new_chat_member.user.id,
+                removedAt: new Date(update.chat_member.date * 1000),
+                text: notification,
+              }, {
+                repository: clubEventRepository,
+                send: (text) => ctx.telegram.sendMessage(config.botInboxGroupId!, text, {
+                  parse_mode: "HTML", link_preview_options: { is_disabled: true },
+                }),
+                edit: editRemovalNotice,
+              });
+              return next();
+            }
             await ctx.telegram.sendMessage(
               config.botInboxGroupId,
               notification,

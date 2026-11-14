@@ -55,6 +55,19 @@ export class ClubEventRepository {
       orderBy: { occurredAt: "desc" },
     });
   }
+
+  async findLatestForTargetInChat(
+    eventType: string,
+    targetUserTelegramId: bigint,
+    chatTelegramId: bigint,
+    since: Date,
+    until: Date,
+  ): Promise<ClubEvent | null> {
+    return prisma.clubEvent.findFirst({
+      where: { eventType, targetUserTelegramId, chatTelegramId, occurredAt: { gte: since, lte: until } },
+      orderBy: { occurredAt: "desc" },
+    });
+  }
 }
 
 export const clubEventRepository = new ClubEventRepository();
