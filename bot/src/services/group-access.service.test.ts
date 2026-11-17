@@ -69,7 +69,7 @@ class FakeRepository implements GroupAccessRepository {
     this.user = { ...this.user, clearAccessGroupAt: null };
   }
 
-  async findDueGroupAccessClearances(): Promise<GroupAccessUser[]> {
+  async findDueGroupAccessClearances(_now: Date): Promise<GroupAccessUser[]> {
     return this.dueUsers;
   }
 }
@@ -79,7 +79,7 @@ function settings() {
     enabled: true,
     sourceChatId: SOURCE_CHAT_ID,
     managedChatIds: [BERLIN_CHAT_ID],
-    graceHours: 168,
+    graceHours: 48,
     dueIntervalMs: 300_000,
   };
 }
@@ -122,7 +122,7 @@ function memberNotFoundTelegram() {
   return { api, removed };
 }
 
-test("club departure schedules clearance exactly 168 hours after the event", async () => {
+test("club departure schedules clearance exactly 48 hours after the event", async () => {
   const repository = new FakeRepository();
   const service = new GroupAccessService(repository, settings());
   const { api } = telegram("left");
@@ -132,7 +132,7 @@ test("club departure schedules clearance exactly 168 hours after the event", asy
   assert.equal(repository.scheduleCalls.length, 1);
   assert.equal(
     repository.scheduleCalls[0].getTime(),
-    1_789_164_000_000 + 168 * 60 * 60 * 1000,
+    1_789_164_000_000 + 48 * 60 * 60 * 1000,
   );
 });
 
@@ -143,7 +143,26 @@ test("due processing applies the current grace period to pending clearances firs
 
   await service.processDue(api);
 
-  assert.deepEqual(repository.rescheduleCalls, [168]);
+  assert.deepEqual(repository.rescheduleCalls, [48]);
+});
+
+test("additional groups are retained before 48 hours and cleared at the deadline", async () => {
+  const repository = new FakeRepository();
+  repository.findDueGroupAccessClearances = async (now: Date) =>
+    repository.user.clearAccessGroupAt && repository.user.clearAccessGroupAt <= now ? [repository.user] : [];
+  const service = new GroupAccessService(repository, settings());
+  const { api, removed } = telegram("left");
+  const departure = update(SOURCE_CHAT_ID, "member", "kicked");
+  await service.handleChatMember(departure, api);
+  const deadline = new Date(departure.date * 1000 + 48 * 60 * 60 * 1000);
+
+  await service.processDue(api, new Date(deadline.getTime() - 1));
+  assert.deepEqual(removed, []);
+  assert.equal(repository.clearCalls, 0);
+
+  await service.processDue(api, deadline);
+  assert.deepEqual(removed, [{ chatId: BERLIN_CHAT_ID, userId: USER_ID, onlyIfBanned: false }]);
+  assert.equal(repository.user.clearAccessGroupAt, null);
 });
 
 test("club rejoin cancels a pending clearance", async () => {
