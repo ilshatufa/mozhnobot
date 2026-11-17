@@ -21,14 +21,22 @@ afterEach(() => {
 
 test("rich table preserves all people, attempts, escaped names, contacts and Moscow deadlines without amounts", () => {
   const text = buildAutopayReportMarkdown(report);
-  assert.match(text, /\| Участник \| Telegram \| Попыток списания \| Доступ до, МСК \|/);
-  assert.ok(text.includes("Анна \\| \\[тест\\]"));
+  assert.match(text, /\| Участник \| Telegram \| Доступ до \|/);
+  assert.ok(text.includes("Анна \\| \\[тест\\] (3)"));
+  assert.ok(text.includes("| Мария (1) |"));
   assert.ok(text.includes("https://t.me/anna_test"));
   assert.match(text, /ID 456/);
-  assert.ok(text.includes("20\\.11\\.2026, 06:44"));
-  assert.ok(text.includes("22\\.11\\.2026, 01:00"));
+  assert.ok(text.includes("20 ноября<br/>06:44 МСК"));
+  assert.ok(text.includes("22 ноября<br/>01:00 МСК"));
   assert.equal(text.split("\n").filter(line => line.startsWith("| ")).length, 4);
-  assert.doesNotMatch(text, /₽|руб|Сумма/);
+  assert.doesNotMatch(text, /₽|руб|Сумма|Попыток списания|2026/);
+});
+
+test("uses an unpadded day, Russian month name and a separate Moscow time line", () => {
+  const text = buildAutopayReportMarkdown({ ...report, people: [{ ...report.people[0],
+    accessUntil: "2026-07-05T09:05:00.000Z" }] });
+  assert.ok(text.includes("5 июля<br/>12:05 МСК"));
+  assert.doesNotMatch(text, /05 июля|05\.07/);
 });
 
 test("empty report explains the result without an empty table", () => {

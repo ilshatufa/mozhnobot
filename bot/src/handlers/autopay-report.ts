@@ -17,22 +17,27 @@ const reportSchema = z.object({
 export type AutopayReport = z.infer<typeof reportSchema>;
 
 const dateFormatter = new Intl.DateTimeFormat("ru-RU", {
-  timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", year: "numeric",
+  timeZone: "Europe/Moscow", day: "numeric", month: "long",
+});
+const timeFormatter = new Intl.DateTimeFormat("ru-RU", {
+  timeZone: "Europe/Moscow",
   hour: "2-digit", minute: "2-digit", hourCycle: "h23",
 });
 const escape = (value: string) => value.replace(/([\\`*_{}\[\]()<>#+.!|~-])/g, "\\$1");
 
 export function buildAutopayReportMarkdown(report: AutopayReport): string {
-  const heading = `# МОЖНО · Проблемы с автопродлением\n\nДанные на ${escape(dateFormatter.format(new Date(report.generatedAt)))} МСК`;
+  const generatedAt = new Date(report.generatedAt);
+  const heading = `# МОЖНО · Проблемы с автопродлением\n\nДанные на ${escape(dateFormatter.format(generatedAt))}, ${timeFormatter.format(generatedAt)} МСК`;
   if (report.people.length === 0) return `${heading}\n\nПроблем с автопродлением нет.`;
   const table = [
-    "| Участник | Telegram | Попыток списания | Доступ до, МСК |",
-    "| :--- | :--- | ---: | :--- |",
+    "| Участник | Telegram | Доступ до |",
+    "| :--- | :--- | :--- |",
     ...report.people.map(person => {
       const contact = person.username
         ? `[@${escape(person.username)}](https://t.me/${person.username})`
         : `ID ${person.telegramId}`;
-      return `| ${escape(person.name)} | ${contact} | ${person.attempts} | ${escape(dateFormatter.format(new Date(person.accessUntil)))} |`;
+      const accessUntil = new Date(person.accessUntil);
+      return `| ${escape(person.name)} (${person.attempts}) | ${contact} | ${escape(dateFormatter.format(accessUntil))}<br/>${timeFormatter.format(accessUntil)} МСК |`;
     }),
   ].join("\n");
   return [heading, `Участников: **${report.people.length}**`, table,
