@@ -24,6 +24,7 @@ test("rich table preserves all people, attempts, escaped names, contacts and Mos
   assert.match(text, /\| Участник \| Telegram \| Доступ до \|/);
   assert.ok(text.includes("Анна \\| \\[тест\\] (3)"));
   assert.ok(text.includes("| Мария (1) |"));
+  assert.ok(text.endsWith("В скобках рядом с именем указано количество попыток списания."));
   assert.ok(text.includes("https://t.me/anna_test"));
   assert.match(text, /ID 456/);
   assert.ok(text.includes("20 ноября<br/>06:44 МСК"));
