@@ -49,6 +49,7 @@ import { installGroupActionLogging } from "./services/group-action-logger.servic
 import { clubniOnboardingVideoAdminHandler } from "./handlers/clubni-onboarding-admin.js";
 import { botInboxMiddleware } from "./middlewares/bot-inbox.js";
 import { salesReportHandler } from "./handlers/sales-report.js";
+import { autopayReportHandler } from "./handlers/autopay-report.js";
 
 export function createBot(): Telegraf<AuthContext> {
   const bot = new Telegraf<AuthContext>(config.botToken);
@@ -85,6 +86,7 @@ export function createBot(): Telegraf<AuthContext> {
   bot.command("waitlist", adminOnly(), waitlistAdminHandler);
   bot.command("stats", adminOnly(), statsHandler);
   bot.command("sales", salesReportOnly(), salesReportHandler);
+  bot.command("autopay", salesReportOnly(), autopayReportHandler);
   bot.command("transcription_on", adminOnly(), transcriptionOnHandler);
   bot.command("transcription_off", adminOnly(), transcriptionOffHandler);
   bot.command("transcription_status", adminOnly(), transcriptionStatusHandler);

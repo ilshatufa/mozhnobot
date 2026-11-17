@@ -68,3 +68,11 @@ test("allows sales reports for support and admins but not ordinary users", async
   });
   assert.equal(deniedMessage, "У вас нет прав для выполнения этой команды.");
 });
+
+test("autopay command is recognized only in the configured admin group", () => {
+  assert.equal(isBotInboxSalesCommand(groupContext(-100555, "/autopay"), "-100555"), true);
+  assert.equal(isBotInboxSalesCommand(groupContext(-100555, "/autopay@MozhnoClub_Bot"), "-100555"), true);
+  assert.equal(isBotInboxSalesCommand(groupContext(-100999, "/autopay"), "-100555"), false);
+  assert.equal(isBotInboxSalesCommand(groupContext(-100555, "/autopayment"), "-100555"), false);
+  assert.equal(isBotInboxSalesCommand(groupContext(-100555, "autopay"), "-100555"), false);
+});

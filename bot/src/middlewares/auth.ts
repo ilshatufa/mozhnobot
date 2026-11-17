@@ -58,7 +58,7 @@ export function isBotInboxSalesCommand(
       String(ctx.chat?.id) === botInboxGroupId &&
       message &&
       "text" in message &&
-      /^\/sales(?:@\w+)?(?:\s|$)/i.test(message.text),
+      /^\/(?:sales|autopay)(?:@\w+)?(?:\s|$)/i.test(message.text),
   );
 }
 

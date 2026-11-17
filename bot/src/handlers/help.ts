@@ -37,6 +37,7 @@ function buildHelpText(role: Role): string {
   if (canViewSales) {
     text += "\nПродажи:\n";
     text += "/sales — отчёт по текущему окну продаж\n";
+    text += "/autopay — проблемы автопродления (в админской группе)\n";
   }
 
   return text;
