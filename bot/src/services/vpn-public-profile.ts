@@ -131,3 +131,37 @@ export function renderVpnInboundProfile(
   parsed.hash = encodeURIComponent(name);
   return parsed.toString();
 }
+
+const moscowRelayRoutes = new Map<string, readonly [number, string]>([
+  ["club/club-nl-direct", [24443, NL_DIRECT_PUBLIC_HOST]],
+  ["club/club-de-direct", [24443, "srv2.xui.mozhno.org"]],
+  ["club/club-lv-direct", [24443, "srv3.xui.mozhno.org"]],
+  ["club/club-nl2-direct", [24443, "srv2.amneziya.mozhno.org"]],
+  ["paid/paid-nl-direct", [24444, NL_DIRECT_PUBLIC_HOST]],
+  ["paid/paid-de-direct", [24444, "srv2.xui.mozhno.org"]],
+  ["paid/paid-lv-direct", [24444, "srv3.xui.mozhno.org"]],
+  ["router/router-nl", [24445, NL_DIRECT_PUBLIC_HOST]],
+  ["router/router-de", [24445, "srv2.xui.mozhno.org"]],
+  ["router/router-lv", [24445, "srv3.xui.mozhno.org"]],
+]);
+
+export function subscriptionProfileVariants(
+  directLink: string,
+  name: string,
+  productCode: string,
+  inboundCode: string,
+): string[] {
+  const route = moscowRelayRoutes.get(productCode + "/" + inboundCode);
+  if (!route) return [directLink];
+
+  const [port, serverName] = route;
+  const viaMoscow = new URL(directLink);
+  if (viaMoscow.searchParams.get("security") !== "tls" ||
+      viaMoscow.searchParams.get("sni")?.toLowerCase() !== serverName) {
+    return [directLink];
+  }
+  viaMoscow.hostname = "194.190.152.83";
+  viaMoscow.port = String(port);
+  viaMoscow.hash = encodeURIComponent(name + " #2");
+  return [directLink, viaMoscow.toString()];
+}

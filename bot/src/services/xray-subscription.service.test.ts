@@ -15,6 +15,7 @@ import {
   PAID_NL_DIRECT_PUBLIC_PROFILE,
   PAID_YANDEX_CDN_PUBLIC_PROFILE,
   renderVpnInboundProfile,
+  subscriptionProfileVariants,
   YANDEX_CDN_PUBLIC_PROFILE,
 } from "./vpn-public-profile.js";
 
@@ -330,4 +331,30 @@ test("keeps router HTML limited to the router product links", () => {
   assert.deepEqual(pageData.links, routerLinks);
   assert.equal(new URL(pageData.links[0]).port, "10443");
   assert.equal(new URL(pageData.links[0]).hostname, "xraynl.vpn.mozhno.org");
+});
+
+test("appends a Moscow variant for the assigned product while preserving the original transport and key", () => {
+  const name = "🇳🇱 МОЖНО • Нидерланды 2";
+  const direct = renderVpnInboundProfile(SOURCE_LINK, name, null);
+  for (const [product, inbound, port] of [
+    ["club", "club-nl-direct", "24443"],
+    ["paid", "paid-nl-direct", "24444"],
+    ["router", "router-nl", "24445"],
+  ]) {
+    const [original, variant] = subscriptionProfileVariants(direct, name, product, inbound);
+    assert.equal(original, direct);
+    const uri = new URL(variant);
+    assert.equal(uri.hostname, "194.190.152.83");
+    assert.equal(uri.port, port);
+    assert.equal(uri.username, new URL(direct).username);
+    assert.equal(uri.search, new URL(direct).search);
+    assert.equal(decodeURIComponent(uri.hash.slice(1)), name + " #2");
+    assert.equal(v2rayJsonConfig(variant)?.remarks, name + " #2");
+  }
+  for (const [product, inbound] of [
+    ["club", "club-nl-yandex-cdn"], ["paid", "paid-nl-yandex-cdn"],
+    ["router", "club-nl-direct"], ["club", "club-de-direct"], ["new", "new-inbound"],
+  ]) {
+    assert.deepEqual(subscriptionProfileVariants(direct, name, product, inbound), [direct]);
+  }
 });

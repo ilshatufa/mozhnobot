@@ -13,7 +13,7 @@ import { prisma } from "../database.js";
 import { logger } from "../logger.js";
 import { vpnKeyRepository } from "../repositories/vpn-key.repository.js";
 import { xuiClient } from "./xui-client.js";
-import { renderVpnInboundProfile } from "./vpn-public-profile.js";
+import { renderVpnInboundProfile, subscriptionProfileVariants } from "./vpn-public-profile.js";
 import { resolveVpnEntitlement } from "./vpn-entitlement.js";
 import { APPLE_DIRECT_DOMAINS, APPLE_DIRECT_IPS } from "./vpn-apple-routing.js";
 
@@ -695,10 +695,12 @@ export class XraySubscriptionService {
       }
     }
 
-    return desired.map((item) => {
+    return desired.flatMap((item) => {
       const source = sourceByInboundId.get(item.inboundId);
       if (!source) throw new Error(`VPN inbound ${item.inbound.code} has no provider link`);
-      return renderVpnInboundProfile(source, item.inbound.name, item.inbound.publicProfile);
+      const { name, code, publicProfile } = item.inbound;
+      const directLink = renderVpnInboundProfile(source, name, publicProfile);
+      return subscriptionProfileVariants(directLink, name, subscription.product.code, code);
     });
   }
 
