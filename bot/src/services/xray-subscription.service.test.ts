@@ -125,27 +125,27 @@ test("requires every active required inbound before rendering a subscription", (
   }), false);
 });
 
-test("pins paid Yandex CDN to Moscow while retaining its separate TLS domain", () => {
+test("uses the paid CDN domain for DNS and TLS", () => {
   const paid = new URL(renderVpnInboundProfile(
     SOURCE_LINK.replace(":443", ":12443"),
     "🇷🇺 МОЖНО • Белые списки — Нидерланды",
     PAID_YANDEX_CDN_PUBLIC_PROFILE,
   ));
 
-  assert.equal(paid.hostname, "188.72.110.24");
+  assert.equal(paid.hostname, "paid.yc.cdn.mozhno.org");
   assert.equal(paid.port, "443");
   assert.equal(paid.searchParams.get("sni"), "paid.yc.cdn.mozhno.org");
   assert.equal(paid.searchParams.get("host"), "paid.yc.cdn.mozhno.org");
 });
 
-test("pins stored CDN metadata in both URI and Incy JSON without changing credentials", () => {
+test("restores the product domain in URI and Incy JSON for legacy pinned CDN profiles", () => {
   for (const [domain, canonical] of [
     ["mozhnoclub.yc.cdn.mozhno.org", YANDEX_CDN_PUBLIC_PROFILE],
     ["paid.yc.cdn.mozhno.org", PAID_YANDEX_CDN_PUBLIC_PROFILE],
   ] as const) {
-    const link = renderVpnInboundProfile(SOURCE_LINK, "CDN", { ...canonical, host: domain });
+    const link = renderVpnInboundProfile(SOURCE_LINK, "CDN", { ...canonical, host: "188.72.110.24" });
     const uri = new URL(link);
-    assert.equal(uri.hostname, "188.72.110.24");
+    assert.equal(uri.hostname, domain);
     assert.equal(uri.username, new URL(SOURCE_LINK).username);
     assert.equal(uri.searchParams.get("sni"), domain);
     assert.equal(uri.searchParams.get("host"), domain);
@@ -158,7 +158,7 @@ test("pins stored CDN metadata in both URI and Incy JSON without changing creden
       }>;
     };
     const proxy = profile.outbounds.find((item) => item.protocol === "vless")!;
-    assert.equal(proxy.settings.vnext[0].address, "188.72.110.24");
+    assert.equal(proxy.settings.vnext[0].address, domain);
     assert.equal(proxy.settings.vnext[0].port, 443);
     assert.equal(proxy.settings.vnext[0].users[0].id, uri.username);
     assert.equal(proxy.streamSettings.tlsSettings.serverName, domain);
@@ -210,7 +210,7 @@ test("renders direct and CDN profiles from explicit inbound metadata", () => {
 
   const cdn = new URL(links[1]);
   assert.equal(cdn.username, "11111111-2222-3333-4444-555555555555");
-  assert.equal(cdn.hostname, "188.72.110.24");
+  assert.equal(cdn.hostname, "mozhnoclub.yc.cdn.mozhno.org");
   assert.equal(cdn.port, "443");
   assert.equal(cdn.searchParams.get("type"), "xhttp");
   assert.equal(cdn.searchParams.get("security"), "tls");
