@@ -57,7 +57,7 @@ test("trial screen shows expiry, whitelist quota, and no charge", () => {
   });
   assert.match(text, /Списаний не будет/);
   assert.match(text, /128 МБ из 1 ГБ/);
-  assert.match(text, /Нидерланды, Германия и Латвия — без лимита/);
+  assert.match(text, /Нидерланды, Латвия и Швеция — без лимита/);
   assert.match(text, /Как подключиться/);
   assert.match(text, /30 дней за друга/);
   assert.doesNotMatch(text, /Если кнопка не сработает/);

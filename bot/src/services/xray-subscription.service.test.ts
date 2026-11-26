@@ -334,7 +334,7 @@ test("keeps router HTML limited to the router product links", () => {
 });
 
 test("appends a Moscow variant for the assigned product while preserving the original transport and key", () => {
-  const name = "🇳🇱 МОЖНО • Нидерланды 2";
+  const name = "🇳🇱 МОЖНО • Нидерланды";
   const direct = renderVpnInboundProfile(SOURCE_LINK, name, null);
   for (const [product, inbound, port] of [
     ["club", "club-nl-direct", "24443"],

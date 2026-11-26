@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { UNPUBLISHED_VPN_INBOUND_CODES } from "./vpn-public-profile.js";
 import {
   INITIAL_VPN_INBOUND_CATALOG,
   INITIAL_VPN_PRODUCT_CATALOG,
@@ -56,7 +57,7 @@ test("keeps club direct and whitelist traffic in separate client groups", () => 
   assert.equal(whitelist?.trafficResetDays, 30);
 });
 
-test("adds Netherlands 2 only to the club subscription on its dedicated port", () => {
+test("keeps the legacy Netherlands 2 club provisioning assignment on its dedicated port", () => {
   const inbound = INITIAL_VPN_INBOUND_CATALOG.find((item) => item.code === "club-nl2-direct");
   assert.equal(inbound?.serverCode, "nl2");
   assert.equal(inbound?.port, 11443);
@@ -64,6 +65,16 @@ test("adds Netherlands 2 only to the club subscription on its dedicated port", (
   const products = INITIAL_VPN_PRODUCT_CATALOG.filter((product) =>
     product.inbounds.some((item) => item.code === "club-nl2-direct"));
   assert.deepEqual(products.map((product) => product.code), ["club"]);
+});
+
+test("publishes only the Netherlands, Latvia and Sweden across all three products", () => {
+  const byCode = new Map(INITIAL_VPN_INBOUND_CATALOG.map((item) => [item.code, item.serverCode]));
+  for (const product of INITIAL_VPN_PRODUCT_CATALOG) {
+    const countries = product.inbounds
+      .filter((item) => !UNPUBLISHED_VPN_INBOUND_CODES.includes(item.code))
+      .map((item) => byCode.get(item.code));
+    assert.deepEqual([...new Set(countries)], ["nl", "lv", "se"]);
+  }
 });
 
 test("keeps Swedish profiles product-specific and preserves HTTP connection reuse", () => {

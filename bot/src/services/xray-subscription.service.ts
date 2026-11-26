@@ -13,7 +13,7 @@ import { prisma } from "../database.js";
 import { logger } from "../logger.js";
 import { vpnKeyRepository } from "../repositories/vpn-key.repository.js";
 import { xuiClient } from "./xui-client.js";
-import { renderVpnInboundProfile, subscriptionProfileVariants } from "./vpn-public-profile.js";
+import { renderVpnInboundProfile, subscriptionProfileVariants, UNPUBLISHED_VPN_INBOUND_CODES } from "./vpn-public-profile.js";
 import { resolveVpnEntitlement } from "./vpn-entitlement.js";
 import { APPLE_DIRECT_DOMAINS, APPLE_DIRECT_IPS } from "./vpn-apple-routing.js";
 
@@ -26,6 +26,7 @@ const renderableSubscriptionInclude = {
   product: {
     include: {
       inbounds: {
+        where: { inbound: { code: { notIn: UNPUBLISHED_VPN_INBOUND_CODES } } },
         include: { inbound: true },
         orderBy: { position: "asc" },
       },

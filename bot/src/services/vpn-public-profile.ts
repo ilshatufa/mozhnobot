@@ -132,16 +132,17 @@ export function renderVpnInboundProfile(
   return parsed.toString();
 }
 
+// The separate personal Moscow entry uses existing club credentials on DE and NL2.
+export const UNPUBLISHED_VPN_INBOUND_CODES = [
+  "club-de-direct", "paid-de-direct", "router-de", "club-nl2-direct",
+];
+
 const moscowRelayRoutes = new Map<string, readonly [number, string]>([
   ["club/club-nl-direct", [24443, NL_DIRECT_PUBLIC_HOST]],
-  ["club/club-de-direct", [24443, "srv2.xui.mozhno.org"]],
   ["club/club-lv-direct", [24443, "srv3.xui.mozhno.org"]],
-  ["club/club-nl2-direct", [24443, "srv2.amneziya.mozhno.org"]],
   ["paid/paid-nl-direct", [24444, NL_DIRECT_PUBLIC_HOST]],
-  ["paid/paid-de-direct", [24444, "srv2.xui.mozhno.org"]],
   ["paid/paid-lv-direct", [24444, "srv3.xui.mozhno.org"]],
   ["router/router-nl", [24445, NL_DIRECT_PUBLIC_HOST]],
-  ["router/router-de", [24445, "srv2.xui.mozhno.org"]],
   ["router/router-lv", [24445, "srv3.xui.mozhno.org"]],
 ]);
 

@@ -69,7 +69,7 @@ export function buildPaidVpnSubscriptionInvoiceLinkRequest(input: {
 }): PaidVpnSubscriptionInvoiceLinkRequest {
   return {
     title: "МОЖНО VPN — 30 дней",
-    description: "Нидерланды, Германия и Латвия без лимита; белые списки — 10 ГБ. Автопродление каждые 30 дней.",
+    description: "Нидерланды, Латвия и Швеция без лимита; белые списки — 10 ГБ. Автопродление каждые 30 дней.",
     payload: input.invoicePayload,
     currency: VPN_STARS_CURRENCY,
     prices: [{ label: "МОЖНО VPN — 30 дней", amount: input.amountStars }],
