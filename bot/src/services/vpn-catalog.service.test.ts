@@ -57,22 +57,11 @@ test("keeps club direct and whitelist traffic in separate client groups", () => 
   assert.equal(whitelist?.trafficResetDays, 30);
 });
 
-test("keeps the legacy Netherlands 2 club provisioning assignment on its dedicated port", () => {
-  const inbound = INITIAL_VPN_INBOUND_CATALOG.find((item) => item.code === "club-nl2-direct");
-  assert.equal(inbound?.serverCode, "nl2");
-  assert.equal(inbound?.port, 11443);
-  assert.deepEqual(inbound?.publicProfile, { host: "srv2.amneziya.mozhno.org", port: 11443 });
-  const products = INITIAL_VPN_PRODUCT_CATALOG.filter((product) =>
-    product.inbounds.some((item) => item.code === "club-nl2-direct"));
-  assert.deepEqual(products.map((product) => product.code), ["club"]);
-});
-
 test("publishes only the Netherlands, Latvia and Sweden across all three products", () => {
   const byCode = new Map(INITIAL_VPN_INBOUND_CATALOG.map((item) => [item.code, item.serverCode]));
   for (const product of INITIAL_VPN_PRODUCT_CATALOG) {
-    const countries = product.inbounds
-      .filter((item) => !UNPUBLISHED_VPN_INBOUND_CODES.includes(item.code))
-      .map((item) => byCode.get(item.code));
+    assert.ok(product.inbounds.every((item) => !UNPUBLISHED_VPN_INBOUND_CODES.includes(item.code)));
+    const countries = product.inbounds.map((item) => byCode.get(item.code));
     assert.deepEqual([...new Set(countries)], ["nl", "lv", "se"]);
   }
 });

@@ -83,13 +83,6 @@ export const INITIAL_VPN_INBOUND_CATALOG: readonly VpnInboundCatalogEntry[] = [
     publicProfile: YANDEX_CDN_PUBLIC_PROFILE as unknown as Prisma.InputJsonObject,
   },
   {
-    code: "club-de-direct",
-    serverCode: "de",
-    providerInboundId: 1,
-    name: "🇩🇪 МОЖНО • Германия",
-    port: 443,
-  },
-  {
     code: "club-lv-direct",
     serverCode: "lv",
     providerInboundId: 1,
@@ -97,25 +90,10 @@ export const INITIAL_VPN_INBOUND_CATALOG: readonly VpnInboundCatalogEntry[] = [
     port: 443,
   },
   {
-    code: "club-nl2-direct",
-    serverCode: "nl2",
-    providerInboundId: 1,
-    name: "🇳🇱 МОЖНО • Нидерланды 2",
-    port: 11443,
-    publicProfile: { host: "srv2.amneziya.mozhno.org", port: 11443 },
-  },
-  {
     code: "router-nl",
     serverCode: "nl",
     providerInboundId: 4,
     name: "🇳🇱 МОЖНО • Роутер — Нидерланды",
-    port: 10443,
-  },
-  {
-    code: "router-de",
-    serverCode: "de",
-    providerInboundId: 3,
-    name: "🇩🇪 МОЖНО • Роутер — Германия",
     port: 10443,
   },
   {
@@ -142,13 +120,6 @@ export const INITIAL_VPN_INBOUND_CATALOG: readonly VpnInboundCatalogEntry[] = [
     publicProfile: PAID_YANDEX_CDN_PUBLIC_PROFILE as unknown as Prisma.InputJsonObject,
   },
   {
-    code: "paid-de-direct",
-    serverCode: "de",
-    providerInboundId: 4,
-    name: "🇩🇪 МОЖНО • Германия",
-    port: 11443,
-  },
-  {
     code: "paid-lv-direct",
     serverCode: "lv",
     providerInboundId: 3,
@@ -166,9 +137,7 @@ export const INITIAL_VPN_PRODUCT_CATALOG: readonly VpnProductCatalogEntry[] = [
     inbounds: [
       productInbound("club-nl-direct", "direct"),
       productInbound("club-nl-yandex-cdn", "whitelist", null, 30),
-      productInbound("club-de-direct"),
       productInbound("club-lv-direct"),
-      productInbound("club-nl2-direct"),
       productInbound("club-se-direct"),
     ],
   },
@@ -179,7 +148,6 @@ export const INITIAL_VPN_PRODUCT_CATALOG: readonly VpnProductCatalogEntry[] = [
     isActive: true,
     inbounds: [
       productInbound("router-nl"),
-      productInbound("router-de"),
       productInbound("router-lv"),
       productInbound("router-se-direct"),
     ],
@@ -197,7 +165,6 @@ export const INITIAL_VPN_PRODUCT_CATALOG: readonly VpnProductCatalogEntry[] = [
         config.vpnAccessSync.paidWhitelistTrafficLimitBytes || null,
         config.vpnAccessSync.paidWhitelistTrafficResetDays,
       ),
-      productInbound("paid-de-direct", "direct"),
       productInbound("paid-lv-direct", "direct"),
       productInbound("paid-se-direct"),
     ],

@@ -132,7 +132,7 @@ export function renderVpnInboundProfile(
   return parsed.toString();
 }
 
-// The separate personal Moscow entry uses existing club credentials on DE and NL2.
+// Previously provisioned assignments may still exist while a deployment updates the catalog.
 export const UNPUBLISHED_VPN_INBOUND_CODES = [
   "club-de-direct", "paid-de-direct", "router-de", "club-nl2-direct",
 ];
