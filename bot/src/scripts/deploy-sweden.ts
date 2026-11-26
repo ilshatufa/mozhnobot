@@ -25,7 +25,7 @@ async function prepare() {
 
 async function main() {
   const stage = process.argv[2];
-  if (!["prepare", "provision", "check", "activate", "rollback"].includes(stage)) throw new Error("Choose prepare, provision, check, activate or rollback");
+  if (!["prepare", "stage", "provision", "check", "activate", "rollback"].includes(stage)) throw new Error("Choose prepare, stage, provision, check, activate or rollback");
   if (stage === "prepare") { await prepare(); return; }
   if (stage === "rollback") {
     await prisma.$transaction(async (tx) => {
@@ -39,7 +39,7 @@ async function main() {
     });
     return;
   }
-  const subscriptions = await vpnSubscriptionRepository.findManyForSync();
+  const subscriptions = stage === "stage" ? [] : await vpnSubscriptionRepository.findManyForSync();
   const products: { productId: number; inboundId: number }[] = [];
   const now = new Date();
   for (const { product: code } of SWEDEN_INBOUNDS) {
@@ -68,13 +68,19 @@ async function main() {
     if (missing) throw new Error("Swedish access is not ready for " + code);
     products.push({ productId: product.id, inboundId: inbound.id });
   }
-  if (stage === "activate") {
+  if (stage === "activate" || stage === "stage") {
     await prisma.$transaction(async (tx) => {
       for (const ids of products) {
-        if (await tx.vpnProductInbound.findUnique({ where: { productId_inboundId: ids } })) continue;
-        const last = await tx.vpnProductInbound.aggregate({ where: { productId: ids.productId }, _max: { position: true } });
-        await tx.vpnProductInbound.create({ data: { ...ids, clientGroup: "direct",
-          position: (last._max.position ?? 0) + 1, isRequired: true, trafficLimitBytes: null, trafficResetDays: 0 } });
+        const existing = await tx.vpnProductInbound.findUnique({ where: { productId_inboundId: ids } });
+        if (existing) {
+          if (existing.isRequired || stage === "stage") continue;
+          await tx.vpnProductInbound.update({ where: { productId_inboundId: ids }, data: { isRequired: true } });
+        } else {
+          if (stage === "activate") throw new Error("Stage Swedish access before requiring it");
+          const last = await tx.vpnProductInbound.aggregate({ where: { productId: ids.productId }, _max: { position: true } });
+          await tx.vpnProductInbound.create({ data: { ...ids, clientGroup: "direct",
+            position: (last._max.position ?? 0) + 1, isRequired: false, trafficLimitBytes: null, trafficResetDays: 0 } });
+        }
         await tx.vpnProduct.update({ where: { id: ids.productId }, data: { revision: { increment: 1 } } });
       }
     }, { isolationLevel: "Serializable" });
