@@ -1,5 +1,9 @@
+x-sweden-panel-hosts: &sweden-panel-hosts
+  - "xrayse.vpn.mozhno.org=45.138.102.145"
+
 services:
   bot:
+    extra_hosts: *sweden-panel-hosts
     build:
       context: ./bot
     command: ["sh", "-c", "[ -d node_modules/.bin ] || npm ci; npx prisma generate && npx prisma migrate deploy && npm run dev"]
@@ -42,6 +46,7 @@ services:
     restart: unless-stopped
 
   xray-subscription:
+    extra_hosts: *sweden-panel-hosts
     build:
       context: ./bot
     command: ["sh", "-c", "[ -d node_modules/.bin ] || npm ci; npx prisma generate && npx prisma migrate deploy && npm run dev:subscription"]
@@ -64,6 +69,7 @@ services:
     restart: unless-stopped
 
   vpn-bot:
+    extra_hosts: *sweden-panel-hosts
     image: mozhnobot-bot
     command: ["sh", "-c", "[ -d node_modules/.bin ] || npm ci; npx prisma generate && npx prisma migrate deploy && npm run dev:vpn-bot"]
     env_file: .env
