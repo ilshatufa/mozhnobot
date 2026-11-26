@@ -60,10 +60,12 @@ export class VpnAccessProvisioner {
     return { success: errors.length === 0, errors };
   }
 
-  private async ensureEligibleSubscription(
+  /** Provision the supplied eligible scope without changing the overall subscription revision. */
+  async ensureEligibleSubscription(
     subscription: VpnSubscriptionForSync,
     plan: VpnAccessSyncPlan,
   ): Promise<string[]> {
+    if (!plan.eligible) throw new Error("Cannot provision an ineligible subscription");
     const desiredInboundIds = new Set(
       subscription.product.inbounds
         .filter((item) => item.inbound.isActive)

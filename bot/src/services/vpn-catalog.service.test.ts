@@ -65,3 +65,17 @@ test("adds Netherlands 2 only to the club subscription on its dedicated port", (
     product.inbounds.some((item) => item.code === "club-nl2-direct"));
   assert.deepEqual(products.map((product) => product.code), ["club"]);
 });
+
+test("keeps Swedish profiles product-specific and preserves HTTP connection reuse", () => {
+  const expected = [["club", 1, 443], ["paid", 2, 11443], ["router", 3, 10443]] as const;
+  for (const [product, id, port] of expected) {
+    const entry = INITIAL_VPN_INBOUND_CATALOG.find((item) => item.code === product + "-se-direct");
+    assert.equal(entry?.providerInboundId, id);
+    assert.equal(entry.port, port);
+    const publicProfile = entry.publicProfile as { host: string; port: number; query: { extra: { xmux: { maxConnections: number } } } };
+    assert.equal(publicProfile.host, "xrayse.vpn.mozhno.org");
+    assert.equal(publicProfile.port, port);
+    assert.equal(publicProfile.query.extra.xmux.maxConnections, 1);
+    assert.deepEqual(INITIAL_VPN_PRODUCT_CATALOG.filter((p) => p.inbounds.some((i) => i.code === entry.code)).map((p) => p.code), [product]);
+  }
+});

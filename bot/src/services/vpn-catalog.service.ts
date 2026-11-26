@@ -39,7 +39,33 @@ function productInbound(
   return { code, clientGroup, trafficLimitBytes, trafficResetDays };
 }
 
+export const SWEDEN_INBOUNDS = [
+  { product: "club", id: 1, port: 443 },
+  { product: "paid", id: 2, port: 11443 },
+  { product: "router", id: 3, port: 10443 },
+] as const;
+
+function swedenInbound(product: string, id: number, port: number): VpnInboundCatalogEntry {
+  return {
+    code: product + "-se-direct",
+    serverCode: "se",
+    providerInboundId: id,
+    name: "🇸🇪 МОЖНО • Швеция",
+    port,
+    publicProfile: {
+      host: "xrayse.vpn.mozhno.org",
+      port,
+      query: {
+        type: "xhttp", security: "reality", fp: "chrome", mode: "packet-up",
+        extra: { xmux: { maxConnections: 1, cMaxReuseTimes: 4096, hMaxRequestTimes: 8192, hMaxReusableSecs: 3600 } },
+      },
+      removeQuery: ["flow"],
+    },
+  };
+}
+
 export const INITIAL_VPN_INBOUND_CATALOG: readonly VpnInboundCatalogEntry[] = [
+  ...SWEDEN_INBOUNDS.map(({ product, id, port }) => swedenInbound(product, id, port)),
   {
     code: "club-nl-direct",
     serverCode: "nl",
@@ -143,6 +169,7 @@ export const INITIAL_VPN_PRODUCT_CATALOG: readonly VpnProductCatalogEntry[] = [
       productInbound("club-de-direct"),
       productInbound("club-lv-direct"),
       productInbound("club-nl2-direct"),
+      productInbound("club-se-direct"),
     ],
   },
   {
@@ -154,6 +181,7 @@ export const INITIAL_VPN_PRODUCT_CATALOG: readonly VpnProductCatalogEntry[] = [
       productInbound("router-nl"),
       productInbound("router-de"),
       productInbound("router-lv"),
+      productInbound("router-se-direct"),
     ],
   },
   {
@@ -171,6 +199,7 @@ export const INITIAL_VPN_PRODUCT_CATALOG: readonly VpnProductCatalogEntry[] = [
       ),
       productInbound("paid-de-direct", "direct"),
       productInbound("paid-lv-direct", "direct"),
+      productInbound("paid-se-direct"),
     ],
   },
 ] as const;

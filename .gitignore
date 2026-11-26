@@ -8,3 +8,4 @@ postgres/db_data/*
 postgres/backups/*
 !postgres/backups/.gitkeep
 media/
+bot/.vpn-node-tls/
